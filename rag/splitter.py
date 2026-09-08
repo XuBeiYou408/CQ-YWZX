@@ -66,3 +66,57 @@ def md_qingxi(daichulimd):
             c_doc.metadata["dad_content"] = d_content
             son_docs.append(c_doc)
     return son_docs
+
+def docx_qingxi(daichulidocx):
+    dad_splitter = RecursiveCharacterTextSplitter(
+        chunk_size=800,
+        chunk_overlap=100,
+        separators=["\n\n", "。", "！", "？", ".\n", "\n", " ", ""]
+    )
+    son_qiefenguize = RecursiveCharacterTextSplitter(
+        chunk_size=300,
+        chunk_overlap=45,
+        separators=["\n\n", "。", "！", "？", ".\n", "\n", " ", ""]
+    )
+    son_docs = []
+    dad_docs = dad_splitter.split_documents(daichulidocx)
+    for idx, d_doc in enumerate(dad_docs):
+        content_hash = hashlib.md5(d_doc.page_content.encode('utf-8')).hexdigest()[:8]
+        d_id = f"docx_{idx}_{content_hash}"
+        d_content = d_doc.page_content
+        metadata = d_doc.metadata.copy()
+        metadata['dad_id'] = d_id
+        temp_docs = Document(page_content=d_content, metadata=metadata)
+        sub_chunks = son_qiefenguize.split_documents([temp_docs])
+        for s_doc in sub_chunks:
+            s_doc.metadata['dad_id'] = d_id
+            s_doc.metadata['dad_content'] = d_content
+            son_docs.append(s_doc)
+    return son_docs
+
+def txt_qingxi(daichulitxt):
+    dad_splitter = RecursiveCharacterTextSplitter(
+        chunk_size=800,
+        chunk_overlap=100,
+        separators=["\n\n", "。", "！", "？", ".\n", "\n", " ", ""]
+    )
+    son_qiefenguize = RecursiveCharacterTextSplitter(
+        chunk_size=300,
+        chunk_overlap=45,
+        separators=["\n\n", "。", "！", "？", ".\n", "\n", " ", ""]
+    )
+    son_docs = []
+    dad_docs = dad_splitter.split_documents(daichulitxt)
+    for idx, d_doc in enumerate(dad_docs):
+        content_hash = hashlib.md5(d_doc.page_content.encode('utf-8')).hexdigest()[:8]
+        d_id = f"txt_{idx}_{content_hash}"
+        d_content = d_doc.page_content
+        metadata = d_doc.metadata.copy()
+        metadata['dad_id'] = d_id
+        temp_docs = Document(page_content=d_content, metadata=metadata)
+        sub_chunks = son_qiefenguize.split_documents([temp_docs])
+        for s_doc in sub_chunks:
+            s_doc.metadata['dad_id'] = d_id
+            s_doc.metadata['dad_content'] = d_content
+            son_docs.append(s_doc)
+    return son_docs

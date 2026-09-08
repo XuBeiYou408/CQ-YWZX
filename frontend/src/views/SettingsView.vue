@@ -6,7 +6,8 @@ import { ElMessage } from 'element-plus'
 const modelStore = useModelStore()
 
 const localModels = ref([])
-const isOllamaConnected = ref(false)
+const isLocalConnected = ref(false)
+const localServiceInfo = ref({ service: 'LM Studio', url: 'http://127.0.0.1:1234/v1' })
 const testingConnection = ref(false)
 
 const cloudOptions = [
@@ -19,13 +20,14 @@ const cloudOptions = [
 ]
 
 const presetLocalModels = [
-  'qwen2.5:7b',
-  'deepseek-r1:7b',
-  'qwen2.5:3b',
-  'qwen2.5:1.5b'
+  'qwen3.8-27b',
+  'qwen3.6-35b-a3b',
+  'deepseek-v4-flash-0731',
+  'minimax-h3_ggufs',
+  'qwen2.5:7b'
 ]
 
-async function checkLocalOllama() {
+async function checkLocalService(manual = false) {
   testingConnection.value = true
   try {
     const res = await fetch('/models/local')
@@ -33,7 +35,11 @@ async function checkLocalOllama() {
       const json = await res.json()
       const data = json.data || {}
       if (data.status === 'connected') {
-        isOllamaConnected.value = true
+        isLocalConnected.value = true
+        localServiceInfo.value = {
+          service: data.service || 'LM Studio',
+          url: data.url || 'http://127.0.0.1:1234/v1'
+        }
         if (data.models && data.models.length > 0) {
           localModels.value = data.models
           if (!localModels.value.includes(modelStore.localModel)) {
@@ -42,34 +48,63 @@ async function checkLocalOllama() {
         } else {
           localModels.value = presetLocalModels
         }
-        ElMessage.success('已成功连接到本地 Ollama 服务 (11434 端口)')
+        if (manual) {
+          ElMessage({
+            message: `已成功连接到本地大模型服务 (${localServiceInfo.value.service})`,
+            type: 'success',
+            offset: 70
+          })
+        }
       } else {
-        isOllamaConnected.value = false
+        isLocalConnected.value = false
         localModels.value = presetLocalModels
-        ElMessage.warning('未能检测到本地 Ollama 服务，请确认 Ollama 已启动')
+        if (manual) {
+          ElMessage({
+            message: '未能检测到本地大模型服务，请确认本地服务已启动 (127.0.0.1:1234)',
+            type: 'warning',
+            offset: 70
+          })
+        }
       }
     }
   } catch (e) {
-    isOllamaConnected.value = false
+    isLocalConnected.value = false
     localModels.value = presetLocalModels
-    ElMessage.error('连接本地服务检测异常: ' + e.message)
+    if (manual) {
+      ElMessage({
+        message: '连接本地服务检测异常: ' + e.message,
+        type: 'error',
+        offset: 70
+      })
+    }
   } finally {
     testingConnection.value = false
   }
 }
 
 onMounted(() => {
-  checkLocalOllama()
+  checkLocalService(false) // 静默检测，不主动弹窗
 })
 
 function handleProviderChange(val) {
   modelStore.setProvider(val)
-  ElMessage.info(`已切换为【${val === 'cloud' ? '云端 API 模式' : '本地 Ollama 模式'}】`)
+  if (val === 'local') {
+    checkLocalService(false)
+  }
+  ElMessage({
+    message: `已切换为【${val === 'cloud' ? '云端 API 模式' : '本地部署模式'}】`,
+    type: 'info',
+    offset: 70
+  })
 }
 
 function handleSave() {
   modelStore.saveConfig()
-  ElMessage.success('模型与端云配置已成功保存！新对话将立即应用该配置。')
+  ElMessage({
+    message: '模型与端云配置已成功保存！新对话将立即应用该配置。',
+    type: 'success',
+    offset: 70
+  })
 }
 </script>
 
@@ -78,7 +113,7 @@ function handleSave() {
     <div class="settings-header">
       <h1 class="page-title">⚙️ 模型管理与端云模式切换</h1>
       <p class="page-subtitle">
-        灵活配置大模型服务提供商 (Cloud API vs 本地 Ollama)，支持端侧数据离线隐私与云端高并发推理。
+        灵活配置大模型服务提供商 (云端 API vs 本地部署模式)，支持本地端侧数据离线隐私与云端高并发推理。
       </p>
     </div>
 
@@ -88,7 +123,7 @@ function handleSave() {
         <div class="card-header">
           <span class="header-title">1. 选择模型运行模式 (Provider Mode)</span>
           <el-tag :type="modelStore.provider === 'cloud' ? 'primary' : 'success'" effect="dark">
-            当前生效: {{ modelStore.provider === 'cloud' ? '☁️ 云端 API' : '🏠 本地 Ollama' }}
+            当前生效: {{ modelStore.provider === 'cloud' ? '☁️ 云端 API' : '🏠 本地部署模式' }}
           </el-tag>
         </div>
       </template>
@@ -122,13 +157,14 @@ function handleSave() {
         >
           <div class="option-icon">🏠</div>
           <div class="option-content">
-            <div class="option-title">本地部署模式 (Local Ollama)</div>
+            <div class="option-title">本地部署模式</div>
             <div class="option-desc">
-              基于本地硬件平台纯离线推理，数据 100% 隐私安全，零 Token 运营成本。
+              基于本地硬件平台纯离线推理（LM Studio / 本地大模型），数据 100% 隐私安全，零 Token 运营成本。
             </div>
             <div class="option-tags">
               <span class="mini-tag success">数据离线私密</span>
               <span class="mini-tag success">零 Token 成本</span>
+              <span class="mini-tag success">LM Studio 引擎</span>
             </div>
           </div>
           <div class="option-radio">
@@ -170,28 +206,82 @@ function handleSave() {
               支持直接选择常用云端模型标识，或手动输入任意符合 OpenAI 兼容标准的模型名称。
             </div>
           </el-form-item>
+
+          <el-row :gutter="16" style="margin-top: 12px;">
+            <el-col :span="12">
+              <el-form-item label="🔑 云端 API Key (可选设置)">
+                <el-input 
+                  v-model="modelStore.cloudApiKey" 
+                  type="password" 
+                  show-password
+                  placeholder="sk-xxxx (留空则默认读取系统 .env 中的 DEEPSEEK_API_KEY)"
+                  clearable
+                  @change="modelStore.saveConfig()"
+                />
+                <div class="form-tip">
+                  支持在此覆盖配置个人 API 密钥，保存在本地浏览器中。
+                </div>
+              </el-form-item>
+            </el-col>
+            <el-col :span="12">
+              <el-form-item label="🌐 API Base URL (可选设置)">
+                <el-input 
+                  v-model="modelStore.cloudBaseUrl" 
+                  placeholder="https://api.deepseek.com (留空则使用默认接口地址)"
+                  clearable
+                  @change="modelStore.saveConfig()"
+                />
+                <div class="form-tip">
+                  支持配置 OneAPI / NewAPI 或自定义代理转发地址。
+                </div>
+              </el-form-item>
+            </el-col>
+          </el-row>
         </el-form>
       </div>
 
       <!-- 本地设置项 -->
       <div v-else class="setting-group">
-        <div class="ollama-status-bar" :class="{ online: isOllamaConnected }">
+        <div class="local-status-bar" :class="{ online: isLocalConnected }">
           <div class="status-left">
             <span class="status-dot"></span>
-            <span>本地 Ollama 服务状态: <strong>{{ isOllamaConnected ? '服务就绪 (http://127.0.0.1:11434)' : '未连接或未启动' }}</strong></span>
+            <span>本地模型服务状态: <strong>{{ isLocalConnected ? `服务就绪 (${localServiceInfo.url} - ${localServiceInfo.service})` : '未连接或未在后台启动' }}</strong></span>
           </div>
           <el-button 
             type="primary" 
             link 
             :loading="testingConnection"
-            @click="checkLocalOllama"
+            @click="checkLocalService(true)"
           >
             刷新测试连接
           </el-button>
         </div>
 
+        <!-- 本地服务未就绪时的引导卡片 -->
+        <div v-if="!isLocalConnected" class="local-unready-card">
+          <div class="unready-title">
+            <span>💡 本地端侧大模型未检测到后台运行实例</span>
+          </div>
+          <p class="unready-desc">
+            本地部署模式依赖本地大模型推理引擎（如 <strong>LM Studio</strong>）。当前系统尚未在 <code>127.0.0.1:1234</code> 检测到响应。
+          </p>
+          <div class="unready-steps">
+            <div><strong>① 若使用 LM Studio：</strong>请打开 LM Studio，在左侧进入 <code>Developer / Local Server</code> 页面，并点击 <strong>Start Server</strong>；</div>
+            <div><strong>② 加载所需模型：</strong>请在 LM Studio 顶部加载您已下载的本地大模型；</div>
+            <div><strong>③ 若暂无本地模型环境：</strong>建议直接一键切换至【云端 API 模式】，零门槛直接问答。</div>
+          </div>
+          <div class="unready-actions">
+            <el-button type="primary" @click="handleProviderChange('cloud')">
+              ☁️ 一键切换回云端 API 模式
+            </el-button>
+            <el-button :loading="testingConnection" @click="checkLocalService(true)">
+              🔄 启动后点此重新检测
+            </el-button>
+          </div>
+        </div>
+
         <el-form label-position="top" style="margin-top: 16px;">
-          <el-form-item label="🏠 选择或指定本地 Ollama 模型">
+          <el-form-item label="🏠 选择或指定本地大模型">
             <el-select 
               v-model="modelStore.localModel" 
               placeholder="选择本地模型"
@@ -209,12 +299,12 @@ function handleSave() {
               >
                 <div class="model-option-item">
                   <span>{{ model }}</span>
-                  <span v-if="model.includes('7b')" class="model-badge">推荐模型</span>
+                  <span v-if="model.includes('qwen') || model.includes('deepseek')" class="model-badge">推荐模型</span>
                 </div>
               </el-option>
             </el-select>
             <div class="form-tip">
-              可直接选择下拉列表中已下载的模型，或手动输入新的 Ollama 模型标识。
+              系统已自动动态拉取本地大模型服务 (LM Studio) 的可用模型列表；亦可直接手动输入任意模型名。
             </div>
           </el-form-item>
         </el-form>
@@ -252,7 +342,7 @@ function handleSave() {
 
 <style scoped>
 .settings-container {
-  padding: 32px;
+  padding: 44px 32px 32px;
   max-width: 900px;
   margin: 0 auto;
 }
@@ -359,7 +449,7 @@ function handleSave() {
   right: 16px;
 }
 
-.ollama-status-bar {
+.local-status-bar {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -371,7 +461,7 @@ function handleSave() {
   color: #991b1b;
 }
 
-.ollama-status-bar.online {
+.local-status-bar.online {
   background-color: #f0fdf4;
   border-color: #bbf7d0;
   color: #166534;
@@ -390,8 +480,58 @@ function handleSave() {
   background-color: #ef4444;
 }
 
-.ollama-status-bar.online .status-dot {
+.local-status-bar.online .status-dot {
   background-color: #22c55e;
+}
+
+.local-unready-card {
+  background-color: #fffbeb;
+  border: 1px solid #fed7aa;
+  border-left: 4px solid #f59e0b;
+  border-radius: 8px;
+  padding: 16px 20px;
+  margin-top: 14px;
+}
+
+.unready-title {
+  font-weight: 600;
+  font-size: 14px;
+  color: #92400e;
+  margin-bottom: 6px;
+}
+
+.unready-desc {
+  font-size: 13px;
+  color: #78350f;
+  line-height: 1.5;
+  margin-bottom: 10px;
+}
+
+.unready-steps {
+  font-size: 12px;
+  color: #92400e;
+  background-color: rgba(255, 255, 255, 0.7);
+  border-radius: 6px;
+  padding: 10px 14px;
+  margin-bottom: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.unready-steps code {
+  background-color: #fef3c7;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: monospace;
+  font-weight: 600;
+  color: #b45309;
+}
+
+.unready-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
 }
 
 .form-tip {

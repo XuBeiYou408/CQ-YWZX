@@ -104,8 +104,10 @@ async def global_exception_handler(request: Request, exc: Exception):
         content=APIResponse(code=500, message="服务器内部异常，请稍后重试").model_dump()
     )
 
-from app.routes.ask import router
-app.include_router(router)
+from app.routes.ask import router as ask_router
+from app.routes.documents import router as documents_router
+app.include_router(ask_router)
+app.include_router(documents_router)
 
 STATIC_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend", "dist")
 if os.path.isdir(STATIC_DIR):

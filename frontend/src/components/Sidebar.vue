@@ -11,8 +11,8 @@ const emit = defineEmits(['newChat'])
 <template>
   <div class="sidebar">
     <div class="sidebar-brand">
-      <div class="brand-title">RAG 系统</div>
-      <div class="brand-subtitle">智能知识库</div>
+      <div class="brand-title">企业本地知识库</div>
+      <div class="brand-subtitle">智能问答 Agent 协同系统</div>
     </div>
 
     <div class="sidebar-action">
@@ -38,9 +38,9 @@ const emit = defineEmits(['newChat'])
         <el-icon><ChatDotRound /></el-icon>
         <span>问答</span>
       </el-menu-item>
-      <el-menu-item index="/evaluation">
-        <el-icon><DataAnalysis /></el-icon>
-        <span>评估</span>
+      <el-menu-item index="/knowledge">
+        <el-icon><FolderOpened /></el-icon>
+        <span>知识库</span>
       </el-menu-item>
       <el-menu-item index="/history">
         <el-icon><Clock /></el-icon>

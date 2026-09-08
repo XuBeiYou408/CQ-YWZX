@@ -23,17 +23,41 @@ luyou_prompt = ChatPromptTemplate([
 ])
 
 # ==================== 系统路由逻辑 (T9: 渐进式重试与自愈降级) ====================
-@with_retry(max_retries=2, timeout=10.0, fallback="agent")
-async def xitong_luyou(question: str) -> Literal["simple_rag", "summarize", "agent"]:
+@with_retry(max_retries=1, timeout=3.0, fallback="simple_rag")
+async def _call_router_llm(question: str, target_llm=None) -> str:
+    use_llm = target_llm or rewrite_llm
+    luyou_chain = luyou_prompt | use_llm | StrOutputParser()
+    return await luyou_chain.ainvoke({"question": question})
+
+async def xitong_luyou(question: str, target_llm=None) -> Literal["simple_rag", "summarize", "agent", "system_meta"]:
     """
-    轻量快速的意图分类路由器，带 3 层容灾保护。
+    轻量快速的意图分类路由器，支持传入当前运行时 target_llm，内建零延迟规则过滤与自愈降级。
     """
-    luyou_chain = luyou_prompt | rewrite_llm | StrOutputParser()
-    res = await luyou_chain.ainvoke({"question": question})
-    
-    category = res.strip().lower().replace("'", "").replace('"', "").replace("`", "")
-    for cat in ["simple_rag", "summarize", "agent"]:
-        if cat in category:
-            return cat
-            
-    return "agent"
+    q_lower = (question or "").strip().lower()
+    if any(k in q_lower for k in ["你是谁", "你叫什么", "你的名字", "模型版本", "什么模型", "运行模式", "系统信息", "你是哪个模型", "介绍一下自己"]):
+        return "system_meta"
+    if any(k in q_lower for k in ["总结一下", "系统概括", "梳理大纲", "整理一下所有", "全文概括", "归纳总结"]):
+        return "summarize"
+    if any(k in q_lower for k in ["计算器", "等于多少", "计算", "算一下", "联网搜索", "最新新闻", "今天天气", "天气预报"]):
+        return "agent"
+
+    # 本地大模型模式直接直通 simple_rag，消除多余 LLM 调用带来的 3~6 秒延迟与排队
+    is_local = False
+    if target_llm:
+        endpoint = str(getattr(target_llm, "openai_api_base", "") or getattr(target_llm, "base_url", ""))
+        if "1234" in endpoint or "11434" in endpoint or "localhost" in endpoint or "127.0.0.1" in endpoint:
+            is_local = True
+
+    if is_local:
+        return "simple_rag"
+
+    try:
+        res = await _call_router_llm(question, target_llm)
+        category = (res or "").strip().lower().replace("'", "").replace('"', "").replace("`", "")
+        for cat in ["summarize", "agent", "simple_rag"]:
+            if cat in category:
+                return cat
+    except Exception as e:
+        logger.debug(f"路由分类降级至 simple_rag: {e}")
+
+    return "simple_rag"

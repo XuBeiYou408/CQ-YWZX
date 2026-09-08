@@ -38,7 +38,10 @@ def _faiss_save(xiangliangshujuku: FAISS, folder_path: str, index_name: str = "x
         pass
     idx_path = os.path.join(folder_path, f"{index_name}.faiss")
     pkl_path = os.path.join(folder_path, f"{index_name}.pkl")
-    faiss.write_index(cpu_index, idx_path)
+    # 修复 Windows 中文路径下 C++ fopen 崩溃问题：使用 Python 原生宽字符流写入
+    index_bytes = faiss.serialize_index(cpu_index)
+    with open(idx_path, "wb") as f:
+        f.write(index_bytes)
     
     pkl_bytes = pickle.dumps((xiangliangshujuku.docstore, xiangliangshujuku.index_to_docstore_id))
     with open(pkl_path, "wb") as f:
@@ -52,9 +55,13 @@ def _faiss_save(xiangliangshujuku: FAISS, folder_path: str, index_name: str = "x
 
 def _faiss_load(folder_path: str, index_name: str = "xby") -> FAISS:
     import faiss
+    import numpy as np
     idx_path = os.path.join(folder_path, f"{index_name}.faiss")
     pkl_path = os.path.join(folder_path, f"{index_name}.pkl")
-    index = faiss.read_index(idx_path)
+    # 修复 Windows 中文路径下 C++ fopen 崩溃问题：使用 Python 原生宽字符流读取
+    with open(idx_path, "rb") as f:
+        index_bytes = f.read()
+    index = faiss.deserialize_index(np.frombuffer(index_bytes, dtype=np.uint8))
     
     with open(pkl_path, "rb") as f:
         pkl_bytes = f.read()
@@ -88,7 +95,7 @@ def sao_miao_geng_xin(target_folder: str) -> Dict[str, Dict[str, Any]]:
         return states
     for root, _, files in os.walk(target_folder):
         for file in files:
-            if file.endswith(('.pdf', '.md')):
+            if file.endswith(('.pdf', '.md', '.docx', '.txt')):
                 full_path = os.path.abspath(os.path.join(root, file))
                 states[full_path] = {
                     'hash': xiu_gai_jian_ce(full_path),
@@ -100,13 +107,17 @@ def sao_miao_geng_xin(target_folder: str) -> Dict[str, Dict[str, Any]]:
 def quan_liang_chong_jian(current_states: Dict[str, Dict[str, Any]]) -> Tuple[FAISS, List[Document]]:
     logger.info("正在全量重建向量数据库...")
     from rag.loader import load_all_documents
-    pdf_list, md_list, _ = load_all_documents()
+    from rag.splitter import docx_qingxi, txt_qingxi
+    pdf_list, md_list, docx_list, txt_list, _ = load_all_documents()
     result_pdf = pdf_qingxi(pdf_list)
     result_md = md_qingxi(md_list)
-    result_all = result_pdf + result_md
+    result_docx = docx_qingxi(docx_list)
+    result_txt = txt_qingxi(txt_list)
+    result_all = result_pdf + result_md + result_docx + result_txt
     safe_docs = [d for d in result_all if d.page_content and d.page_content.strip()]
     if not safe_docs:
-        raise ValueError("未检测到有效的文档，取消重构")
+        logger.info("当前知识库暂无文档，生成初始占位分块...")
+        safe_docs = [Document(page_content="企业本地知识库初始化成功，暂无上传文档。请前往知识库页面上传业务资料。", metadata={"source": "system_init", "file_type": "txt"})]
     db = FAISS.from_documents(safe_docs, embeddings)
     _faiss_save(db, LOCAL_DB_PATH)
     with open(ANIFEST_PATH, "w", encoding="utf-8") as f:
@@ -116,15 +127,12 @@ def quan_liang_chong_jian(current_states: Dict[str, Dict[str, Any]]) -> Tuple[FA
 def zeng_liang_zhui_jia(added_files: List[str], current_states: Dict[str, Dict[str, Any]], old_manifest: Dict[str, Any]) -> FAISS:
     logger.info(f"发现 {len(added_files)} 个新入库的文件，正在更新数据库")
     db = _faiss_load(LOCAL_DB_PATH)
+    from rag.loader import load_and_split_single_file
     new_chunks = []
     for file_path in added_files:
         try:
-            if file_path.endswith('.pdf'):
-                loader = PyMuPDFLoader(file_path)
-                new_chunks.extend(pdf_qingxi(loader.load()))
-            elif file_path.endswith('.md'):
-                loader = TextLoader(file_path, encoding='utf-8')
-                new_chunks.extend(md_qingxi(loader.load()))
+            chunks = load_and_split_single_file(file_path)
+            new_chunks.extend(chunks)
         except Exception as e:
             logger.warning(f"新文件加入失败 {os.path.basename(file_path)}: {e}")
             
@@ -132,7 +140,7 @@ def zeng_liang_zhui_jia(added_files: List[str], current_states: Dict[str, Dict[s
     if safe_new_chunks:
         db.add_documents(safe_new_chunks)
         _faiss_save(db, LOCAL_DB_PATH)
-        logger.info(f"更新向量数据库成功，已加入 {len(safe_new_chunks)} 个新文件")
+        logger.info(f"更新向量数据库成功，已加入 {len(safe_new_chunks)} 个新分块")
         
     for f in added_files:
         old_manifest[f] = current_states[f]
@@ -157,6 +165,9 @@ def qi_dong_lu_jin() -> Tuple[FAISS, List[Document]]:
     deleted_files = [f for f in old_manifest if f not in current_states]
     modified_files = [f for f in current_states if f in old_manifest and old_manifest[f]['hash'] != current_states[f]['hash']]
     
+    from rag.loader import load_all_documents
+    from rag.splitter import docx_qingxi, txt_qingxi
+
     if not db_exists or modified_files or deleted_files:
         db, safe_docs = quan_liang_chong_jian(current_states)
     elif added_files:
@@ -167,9 +178,10 @@ def qi_dong_lu_jin() -> Tuple[FAISS, List[Document]]:
             logger.warning(f"增量更新失败（{e}），触发全量重建自愈机制...")
             db, safe_docs = quan_liang_chong_jian(current_states)
             return db, safe_docs
-        from rag.loader import load_all_documents
-        pdf_list, md_list, _ = load_all_documents()
-        safe_docs = pdf_qingxi(pdf_list) + md_qingxi(md_list)
+        pdf_list, md_list, docx_list, txt_list, _ = load_all_documents()
+        safe_docs = pdf_qingxi(pdf_list) + md_qingxi(md_list) + docx_qingxi(docx_list) + txt_qingxi(txt_list)
+        if not safe_docs:
+            safe_docs = [Document(page_content="企业本地知识库初始化成功，暂无上传文档。", metadata={"source": "system_init", "file_type": "txt"})]
     else:
         logger.info("向量数据库已存在且无需更新，尝试加载...")
         try:
@@ -180,9 +192,10 @@ def qi_dong_lu_jin() -> Tuple[FAISS, List[Document]]:
             db, safe_docs = quan_liang_chong_jian(current_states)
             return db, safe_docs
             
-        from rag.loader import load_all_documents
-        pdf_list, md_list, _ = load_all_documents()
-        safe_docs = pdf_qingxi(pdf_list) + md_qingxi(md_list)
+        pdf_list, md_list, docx_list, txt_list, _ = load_all_documents()
+        safe_docs = pdf_qingxi(pdf_list) + md_qingxi(md_list) + docx_qingxi(docx_list) + txt_qingxi(txt_list)
+        if not safe_docs:
+            safe_docs = [Document(page_content="企业本地知识库初始化成功，暂无上传文档。", metadata={"source": "system_init", "file_type": "txt"})]
         
     return db, safe_docs
 
@@ -201,6 +214,13 @@ def get_vector_store() -> Tuple[FAISS, List[Document]]:
         with _vs_lock:
             if _db_instance is None or _safe_docs_cache is None:
                 _db_instance, _safe_docs_cache = qi_dong_lu_jin()
+    return _db_instance, _safe_docs_cache
+
+def reload_vector_store() -> Tuple[FAISS, List[Document]]:
+    """强制重新检测素材目录并刷新全局向量库及BM25缓存"""
+    global _db_instance, _safe_docs_cache
+    with _vs_lock:
+        _db_instance, _safe_docs_cache = qi_dong_lu_jin()
     return _db_instance, _safe_docs_cache
 
 # 动态属性/魔术加载以兼容原有的全局变量引用

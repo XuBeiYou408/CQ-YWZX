@@ -14,7 +14,7 @@ rewrite_prompt = ChatPromptTemplate([
 
 # ==================== LLM的提示词工厂 ====================
 def huode_llm_prompt(provider: str = "cloud", model_name: str = "deepseek-chat"):
-    prov_label = "本地 Ollama 端侧部署" if (provider or "").lower() == "local" else "云端 API"
+    prov_label = "本地部署" if (provider or "").lower() == "local" else "云端 API"
     m_name = model_name or "deepseek-chat"
     
     sys_prompt = (
@@ -22,7 +22,8 @@ def huode_llm_prompt(provider: str = "cloud", model_name: str = "deepseek-chat")
         f"【系统运行状态】：当前后端大语言模型运行在 [{prov_label}] 模式，调用模型标识为 [{m_name}]。\n\n"
         f"回答指导原则：\n"
         f"1. 优先结合下方【参考资料】中检索到的知识库内容解答。\n"
-        f"2. 若【参考资料】为空、未直接覆盖提问、或者用户提问属于系统能力/模型版本/通用技术/日常问候，请结合系统运行状态与你自身强大的通用知识库直接精准回答，禁止机械回答未找到！\n\n"
+        f"2. 若【参考资料】为空、未直接覆盖提问、或者用户提问属于系统能力/模型版本/通用技术/日常问候，请结合系统运行状态与你自身强大的通用知识库直接精准回答，禁止机械回答未找到！\n"
+        f"3. 请直接给出核心结论与要点清单，文字精炼，条理分明，杜绝冗余重复废话。\n\n"
         f"【参考资料】:\n{{context}}"
     )
     return ChatPromptTemplate([

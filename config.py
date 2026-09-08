@@ -3,6 +3,9 @@ import subprocess
 import sys
 from dotenv import load_dotenv
 
+# ==================== 国内模型镜像源加速与环境自愈 ====================
+os.environ.setdefault("HF_ENDPOINT", "https://hf-mirror.com")
+
 # ==================== CUDA 安全检测与自动降级 ====================
 def _jian_ce_cuda_anquan() -> bool:
     if "ANTIGRAVITY_TRAJECTORY_ID" in os.environ:
@@ -32,8 +35,28 @@ os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
 # ==================== 本地数据的读取 ====================
 load_dotenv()
-folder_path = os.getenv('YUAN_SUCAI_PATH')
-LOCAL_DB_PATH = os.getenv('LOCAL_DB_PATH', './faiss-db')
+_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+_raw_folder = os.getenv('YUAN_SUCAI_PATH')
+folder_path = os.path.join(_BASE_DIR, 'data', 'documents')
+if _raw_folder:
+    try:
+        os.makedirs(_raw_folder, exist_ok=True)
+        folder_path = _raw_folder
+    except Exception:
+        pass
+os.makedirs(folder_path, exist_ok=True)
+
+_raw_db = os.getenv('LOCAL_DB_PATH')
+LOCAL_DB_PATH = os.path.join(_BASE_DIR, 'data', 'faiss_db')
+if _raw_db:
+    try:
+        os.makedirs(_raw_db, exist_ok=True)
+        LOCAL_DB_PATH = _raw_db
+    except Exception:
+        pass
+os.makedirs(LOCAL_DB_PATH, exist_ok=True)
+
 REDIS_URL = os.getenv('REDIS_URL', None)
 CACHE_HMAC_KEY = os.getenv('CACHE_HMAC_KEY', '')
 
@@ -44,10 +67,11 @@ AUTH_ENABLED = os.getenv('AUTH_ENABLED', '').strip().lower() in ('1', 'true', 'y
 # 启动校验 (项目 3 修复: 校验关键环境变量)
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
 DEEPSEEK_API_URL = os.getenv("DEEPSEEK_API_URL", "https://api.deepseek.com")
-FIRECRAWL_API_KEY = os.getenv("FIRECRAWL_API_KEY", "fc-b1659da2e7bf49c7b1d275084ecc1092")
+FIRECRAWL_API_KEY = os.getenv("FIRECRAWL_API_KEY", "")
+LOCAL_LLM_URL = os.getenv("LOCAL_LLM_URL", "http://127.0.0.1:1234/v1")
 if not DEEPSEEK_API_KEY:
     import warnings
-    warnings.warn("警告：缺少环境变量 DEEPSEEK_API_KEY，大模型请求可能会失败！", UserWarning)
+    warnings.warn("警告：缺少环境变量 DEEPSEEK_API_KEY，如使用云端模型请在设置页面或 .env 中配置", UserWarning)
 
 # ==================== 统一系统超参数配置区 ====================
 # 检索链路配置

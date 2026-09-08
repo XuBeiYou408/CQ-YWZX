@@ -115,13 +115,26 @@ function getTodayLabel() {
     month: 'long', day: 'numeric', weekday: 'long',
   })
 }
+
+// 网页标签页固定显示“企业本地知识库”
+document.title = '企业本地知识库'
 </script>
 
 <template>
   <div class="chat-view">
     <header class="chat-header">
       <div class="header-left">
-        <h1 class="chat-title">RAG 问答系统</h1>
+        <h1 class="chat-title" :title="store.fullChatTitle">
+          <el-tooltip
+            v-if="store.currentChatTitle !== '新建对话'"
+            :content="store.fullChatTitle"
+            placement="bottom-start"
+            :show-after="300"
+          >
+            <span>{{ store.currentChatTitle }}</span>
+          </el-tooltip>
+          <span v-else>{{ store.currentChatTitle }}</span>
+        </h1>
         <div class="chat-subtitle-box">
           <span class="chat-subtitle">LangChain + BGE + FAISS</span>
           <el-tag
@@ -157,7 +170,7 @@ function getTodayLabel() {
             <path d="M8 9h8M8 13h6" stroke-linecap="round"/>
           </svg>
         </div>
-        <p class="empty-title">欢迎使用 RAG 问答系统</p>
+        <p class="empty-title">欢迎使用企业本地知识库</p>
         <p class="empty-hint">基于知识库的智能问答，支持混合检索与流式输出</p>
       </div>
 
@@ -216,10 +229,19 @@ function getTodayLabel() {
   flex-shrink: 0;
 }
 
+.header-left {
+  min-width: 0;
+  flex: 1;
+}
+
 .chat-title {
   font: var(--text-section);
   color: #303133;
   margin: 0;
+  max-width: 680px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .chat-subtitle {

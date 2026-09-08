@@ -46,11 +46,25 @@ Thumbs.db
 *.log
 
 # ============================================
-# 运行时数据
+# 运行时数据与大模型权重文件 (超大体积禁止推送 GitHub)
 # ============================================
 *.db
 *.sqlite3
 *.pkl
 *.index
+*.faiss
+*.sig
 faiss_index/
 faiss-db/
+data/faiss_db/
+data/models/
+*.bin
+*.safetensors
+*.pt
+*.pth
+*.onnx
+*.gguf
+
+# 保留企业知识库制度与资料文档
+!data/documents/
+!data/documents/**

@@ -18,9 +18,13 @@ class BGEEmbeddings(Embeddings):
             from sentence_transformers import SentenceTransformer
             model_name = self.model_name
             if model_name is None:
-                model_name = os.getenv('BGE_MODEL_PATH', 'BAAI/bge-base-zh-v1.5')
+                local_dir = os.path.abspath(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data', 'models', 'bge-base-zh-v1.5'))
+                if os.path.isdir(local_dir):
+                    model_name = local_dir
+                else:
+                    model_name = os.getenv('BGE_MODEL_PATH', 'BAAI/bge-base-zh-v1.5')
             self.model = SentenceTransformer(model_name, device=self.device)
-            logger.info(f"本地 BGE Embedding 模型已成功加载到内存中 (设备: {self.device})。")
+            logger.info(f"本地 BGE Embedding 模型已成功加载到内存中 (设备: {self.device}, 路径: {model_name})。")
 
     def embed_documents(self, texts: List[str]) -> List[List[float]]:
         """

@@ -13,7 +13,9 @@ function loadSavedConfig() {
   return {
     provider: 'cloud',
     cloudModel: 'deepseek-chat',
-    localModel: 'qwen2.5:7b',
+    localModel: 'qwen3.8-27b',
+    cloudApiKey: '',
+    cloudBaseUrl: '',
     temperature: 0.7
   }
 }
@@ -23,7 +25,9 @@ export const useModelStore = defineStore('model', () => {
   
   const provider = ref(initial.provider || 'cloud')
   const cloudModel = ref(initial.cloudModel || 'deepseek-chat')
-  const localModel = ref(initial.localModel || 'qwen2.5:7b')
+  const localModel = ref(initial.localModel || 'qwen3.8-27b')
+  const cloudApiKey = ref(initial.cloudApiKey || '')
+  const cloudBaseUrl = ref(initial.cloudBaseUrl || '')
   const temperature = ref(initial.temperature ?? 0.7)
 
   const activeModelName = computed(() => {
@@ -36,6 +40,8 @@ export const useModelStore = defineStore('model', () => {
         provider: provider.value,
         cloudModel: cloudModel.value,
         localModel: localModel.value,
+        cloudApiKey: cloudApiKey.value,
+        cloudBaseUrl: cloudBaseUrl.value,
         temperature: temperature.value
       }))
     } catch (e) {
@@ -62,6 +68,8 @@ export const useModelStore = defineStore('model', () => {
     provider,
     cloudModel,
     localModel,
+    cloudApiKey,
+    cloudBaseUrl,
     temperature,
     activeModelName,
     setProvider,

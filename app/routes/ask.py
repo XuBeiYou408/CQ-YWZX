@@ -37,27 +37,49 @@ def health():
 @router.get("/api/models/local", response_model=APIResponse)
 async def get_local_models():
     """
-    检查本地 Ollama 服务是否运行，并返回本地已安装模型列表
+    检查本地大模型服务 (优先探测 LM Studio: 1234 端口，兼容 11434 端口) 并动态返回模型列表
     """
     import urllib.request
+    # 1. 优先探测 LM Studio (http://127.0.0.1:1234/v1/models)
+    try:
+        req = urllib.request.Request("http://127.0.0.1:1234/v1/models", headers={"User-Agent": "FastAPI"})
+        with urllib.request.urlopen(req, timeout=3) as resp:
+            if resp.status == 200:
+                data = json.loads(resp.read().decode("utf-8"))
+                models = [
+                    m.get("id") for m in data.get("data", [])
+                    if m.get("id") and "embed" not in m.get("id", "").lower()
+                ]
+                return APIResponse(data={
+                    "status": "connected",
+                    "url": "http://127.0.0.1:1234/v1",
+                    "service": "LM Studio",
+                    "models": models
+                })
+    except Exception as e:
+        logger.debug(f"LM Studio 服务未检测到: {str(e)}")
+
+    # 2. 兼容探测其他本地服务 (11434 端口)
     try:
         req = urllib.request.Request("http://127.0.0.1:11434/api/tags", headers={"User-Agent": "FastAPI"})
-        with urllib.request.urlopen(req, timeout=3) as resp:
+        with urllib.request.urlopen(req, timeout=2) as resp:
             if resp.status == 200:
                 data = json.loads(resp.read().decode("utf-8"))
                 models = [m.get("name") for m in data.get("models", [])]
                 return APIResponse(data={
                     "status": "connected",
-                    "url": "http://127.0.0.1:11434",
+                    "url": "http://127.0.0.1:11434/v1",
+                    "service": "Local LLM",
                     "models": models
                 })
-    except Exception as e:
-        logger.warning(f"Ollama 本地服务检测未就绪: {str(e)}")
+    except Exception:
+        pass
         
     return APIResponse(data={
         "status": "disconnected",
-        "url": "http://127.0.0.1:11434",
-        "models": ["qwen2.5:7b", "deepseek-r1:7b", "qwen2.5:1.5b"] # 默认候选提示
+        "url": "http://127.0.0.1:1234/v1",
+        "service": "LM Studio",
+        "models": ["qwen3.8-27b", "minimax-h3_ggufs", "deepseek-v4-flash-0731", "qwen2.5:7b"]
     })
 
 # ==================== 普通问答接口 (T13: 响应结构规范化) ====================
@@ -66,7 +88,7 @@ async def ask(req: QueryRequest):
     start_time = time.time()
     try:
         logger.info(f"收到同步问答提问: {_sanitize(req.question)}, 模式: {req.provider}, 模型: {req.model_name}")
-        dyn_llm = huode_dongtai_llm(req.provider, req.model_name, streaming=False)
+        dyn_llm = huode_dongtai_llm(req.provider, req.model_name, streaming=False, api_key=req.api_key, base_url=req.api_base)
         dyn_qa_chain = create_qa_chain(dyn_llm, req.provider, req.model_name)
         result = await dyn_qa_chain.ainvoke({
             "input": req.question
@@ -78,8 +100,23 @@ async def ask(req: QueryRequest):
             "cost_time": cost
         })
     except Exception as e:
-        logger.error(f"问答接口发生异常: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="服务内部错误，请稍后重试")
+        err_text = str(e)
+        logger.error(f"问答接口发生异常: {err_text}", exc_info=True)
+        cost = round(time.time() - start_time, 2)
+        if "1234" in err_text or "11434" in err_text or "Connection refused" in err_text or "ConnectError" in err_text:
+            return APIResponse(data={
+                "answer": "⚠️ **无法连接到本地大模型服务 (http://127.0.0.1:1234)**\n\n请排查：\n1. 请确认本地 LM Studio（或本地推理服务）已启动并开启 Local Server；\n2. 若暂无本地模型环境，请前往【⚙️ 设置】页面切换为【☁️ 云端 API 模式】。",
+                "cost_time": cost
+            })
+        elif "api_key" in err_text.lower() or "401" in err_text or "authentication" in err_text.lower():
+            return APIResponse(data={
+                "answer": "⚠️ **云端 API 认证失败**：请前往【⚙️ 设置】页面配置有效的 API Key，或在项目根目录 `.env` 中配置 `DEEPSEEK_API_KEY`。",
+                "cost_time": cost
+            })
+        return APIResponse(data={
+            "answer": f"⚠️ **调用异常**：{err_text}",
+            "cost_time": cost
+        })
 
 # ==================== 统一 SSE 流式分流接口 (T12) ====================
 @router.post("/stream")
@@ -93,59 +130,78 @@ async def stream(req: AgentQueryRequest):
     async def generate():
         logger.info(f"收到统一 SSE 流式请求: '{_sanitize(req.question)}', 会话ID: {req.session_id}, 模式: {req.provider}, 模型: {req.model_name}")
         
-        # 实例化前端选择的端/云 LLM 实例
-        dyn_stream_llm = huode_dongtai_llm(req.provider, req.model_name, streaming=True)
-        dyn_rewrite_llm = huode_dongtai_llm(req.provider, req.model_name, streaming=False)
-        dyn_qa_chain = create_qa_chain(dyn_stream_llm, req.provider, req.model_name)
-        dyn_agent_executor = create_dynamic_agent_executor(dyn_stream_llm)
+        try:
+            # 实例化前端选择的端/云 LLM 实例
+            dyn_stream_llm = huode_dongtai_llm(req.provider, req.model_name, streaming=True, api_key=req.api_key, base_url=req.api_base)
+            dyn_rewrite_llm = huode_dongtai_llm(req.provider, req.model_name, streaming=False, api_key=req.api_key, base_url=req.api_base)
+            dyn_qa_chain = create_qa_chain(dyn_stream_llm, req.provider, req.model_name)
+            dyn_agent_executor = create_dynamic_agent_executor(dyn_stream_llm)
 
-        # 1. 意图分流
-        intent = await xitong_luyou(req.question)
-        yield f"data: {_sse({'type': 'route', 'intent': intent})}\n\n"
-        
-        if intent == "system_meta":
-            prov_label = "🏠 本地部署" if req.provider == "local" else "☁️ 云端 API"
-            fast_meta_resp = f"我是运行在 **[{prov_label}]** 环境下的 **{req.model_name}** 大语言模型！结合企业级 RAG 知识库与 Agent 工具箱为您提供智能技术支持。"
-            yield f"data: {_sse({'type': 'content', 'content': fast_meta_resp})}\n\n"
-        elif intent == "simple_rag":
-            output_has_content = False
-            async for chunk in dyn_qa_chain.astream({"input": req.question}):
-                if chunk:
-                    output_has_content = True
-                    yield f"data: {_sse({'type': 'content', 'content': chunk})}\n\n"
-            if not output_has_content:
-                # 降级退回由包含丰富知识库的 Agent 兜底回答
-                async for chunk in dyn_stream_llm.astream(req.question):
-                    yield f"data: {_sse({'type': 'content', 'content': chunk.content})}\n\n"
-        else:
-            lock = get_session_lock(req.session_id)
-            async with lock:
-                history = await asyncio.to_thread(huode_huibao_jiliu, req.session_id)
-                messages = await asyncio.to_thread(lambda: history.messages)
-                chat_history_str = await compact_history(messages, dyn_rewrite_llm)
-                
-                final_output = ""
-                async for chunk in dyn_agent_executor.astream({
-                    "input": req.question,
-                    "chat_history": chat_history_str
-                }):
-                    if "actions" in chunk:
-                        for action in chunk["actions"]:
-                            yield f"data: {_sse({'type': 'thought', 'content': action.log})}\n\n"
-                    elif "steps" in chunk:
-                        for step in chunk["steps"]:
-                            yield f"data: {_sse({'type': 'observation', 'content': str(step.observation)})}\n\n"
-                    elif "output" in chunk:
-                        final_output = chunk["output"]
-                        if "Agent stopped due to iteration limit" in final_output or "time limit" in final_output:
-                            final_output = "已为您完成知识库深度检索与分析。"
-                        yield f"data: {_sse({'type': 'output', 'content': final_output})}\n\n"
-                        
-                if final_output:
-                    await asyncio.to_thread(history.add_user_message, req.question)
-                    await asyncio.to_thread(history.add_ai_message, final_output)
-                
-        yield f"data: [DONE]\n\n"
+            # 1. 意图分流
+            intent = await xitong_luyou(req.question, dyn_rewrite_llm)
+            yield f"data: {_sse({'type': 'route', 'intent': intent})}\n\n"
+            
+            if intent == "system_meta":
+                prov_label = "🏠 本地部署" if req.provider == "local" else "☁️ 云端 API"
+                fast_meta_resp = f"我是运行在 **[{prov_label}]** 环境下的 **{req.model_name}** 大语言模型！结合企业级 RAG 知识库与 Agent 工具箱为您提供智能技术支持。"
+                yield f"data: {_sse({'type': 'content', 'content': fast_meta_resp})}\n\n"
+            elif intent == "simple_rag":
+                output_has_content = False
+                async for chunk in dyn_qa_chain.astream({"input": req.question}):
+                    if chunk:
+                        output_has_content = True
+                        yield f"data: {_sse({'type': 'content', 'content': chunk})}\n\n"
+                if not output_has_content:
+                    # 降级退回由包含丰富知识库的 Agent 兜底回答
+                    async for chunk in dyn_stream_llm.astream(req.question):
+                        yield f"data: {_sse({'type': 'content', 'content': chunk.content})}\n\n"
+            else:
+                lock = get_session_lock(req.session_id)
+                async with lock:
+                    history = await asyncio.to_thread(huode_huibao_jiliu, req.session_id)
+                    messages = await asyncio.to_thread(lambda: history.messages)
+                    chat_history_str = await compact_history(messages, dyn_rewrite_llm)
+                    
+                    final_output = ""
+                    async for chunk in dyn_agent_executor.astream({
+                        "input": req.question,
+                        "chat_history": chat_history_str
+                    }):
+                        if "actions" in chunk:
+                            for action in chunk["actions"]:
+                                yield f"data: {_sse({'type': 'thought', 'content': action.log})}\n\n"
+                        elif "steps" in chunk:
+                            for step in chunk["steps"]:
+                                yield f"data: {_sse({'type': 'observation', 'content': str(step.observation)})}\n\n"
+                        elif "output" in chunk:
+                            final_output = chunk["output"]
+                            if "Agent stopped due to iteration limit" in final_output or "time limit" in final_output:
+                                final_output = "已为您完成知识库深度检索与分析。"
+                            yield f"data: {_sse({'type': 'output', 'content': final_output})}\n\n"
+                            
+                    if final_output:
+                        await asyncio.to_thread(history.add_user_message, req.question)
+                        await asyncio.to_thread(history.add_ai_message, final_output)
+        except Exception as e:
+            err_text = str(e)
+            logger.error(f"SSE 流式生成异常: {err_text}", exc_info=True)
+            if "1234" in err_text or "11434" in err_text or "Connection refused" in err_text or "ConnectError" in err_text:
+                friendly_msg = (
+                    "⚠️ **无法连接到本地大模型服务 (http://127.0.0.1:1234)**\n\n"
+                    "**排查指引：**\n"
+                    "1. 本地大模型依赖 LM Studio 或本地推理引擎。请在 LM Studio 中确认已启动 Local Server 并加载模型；\n"
+                    "2. 若当前电脑未开启本地模型服务，请前往顶部导航栏 **【⚙️ 设置】**，一键切换为 **【☁️ 云端 API 模式】** 即可直接体验！"
+                )
+            elif "api_key" in err_text.lower() or "authentication" in err_text.lower() or "401" in err_text:
+                friendly_msg = (
+                    "⚠️ **大模型 API 认证失败**\n\n"
+                    "未配置有效的 API 密钥。请前往 **【⚙️ 设置】** 页面填入您的 API Key，或在项目根目录 `.env` 文件中配置 `DEEPSEEK_API_KEY`。"
+                )
+            else:
+                friendly_msg = f"⚠️ **生成回答时发生异常**：{err_text}\n\n建议检查网络连接或前往 **【⚙️ 设置】** 切换模型重试。"
+            yield f"data: {_sse({'type': 'content', 'content': friendly_msg})}\n\n"
+        finally:
+            yield f"data: [DONE]\n\n"
 
     return StreamingResponse(generate(), media_type="text/event-stream")
 

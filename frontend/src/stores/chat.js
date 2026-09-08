@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 
 const SESSIONS_STORAGE_KEY = 'rag_sessions_history'
 
@@ -32,6 +32,24 @@ export const useChatStore = defineStore('chat', () => {
   const isStreaming = ref(false)
   const mode = ref('stream')
   const currentSessionId = ref(generateUUID())
+
+  // 类似于 Antigravity，将会话首轮提问作为中文会话标题
+  const currentChatTitle = computed(() => {
+    const firstUserMsg = messages.value.find(m => m.role === 'user')
+    if (firstUserMsg && firstUserMsg.content) {
+      const clean = firstUserMsg.content.trim().split('\n')[0].replace(/^#+\s*/, '').trim()
+      return clean.length > 28 ? clean.slice(0, 28) + '...' : clean
+    }
+    return '新建对话'
+  })
+
+  const fullChatTitle = computed(() => {
+    const firstUserMsg = messages.value.find(m => m.role === 'user')
+    if (firstUserMsg && firstUserMsg.content) {
+      return firstUserMsg.content.trim().split('\n')[0].replace(/^#+\s*/, '').trim()
+    }
+    return '新建对话'
+  })
 
   function createNewSession() {
     currentSessionId.value = generateUUID()
@@ -106,13 +124,10 @@ export const useChatStore = defineStore('chat', () => {
 
     const { type, content, intent } = chunk || {}
     if (type === 'route') {
-      const intentMap = {
-        'simple_rag': '知识库直接检索 (Fast RAG)',
-        'agent': '智能 Agent 规划与推理 (ReAct Agent)',
-        'summarize': '文档摘要生成 (Summarization)'
+      last.routeIntent = intent
+      if (intent === 'agent') {
+        last.thought += `[智能规划] 启动多步 Agent 推理与工具调用...\n`
       }
-      const label = intentMap[intent] || intent || '自动分析'
-      last.thought += `[系统路由] 识别提问意图为：${label}\n`
     } else if (type === 'thought') {
       if (content) last.thought += content + '\n'
     } else if (type === 'observation') {
@@ -148,6 +163,8 @@ export const useChatStore = defineStore('chat', () => {
     isStreaming,
     mode,
     currentSessionId,
+    currentChatTitle,
+    fullChatTitle,
     createNewSession,
     loadSession,
     syncCurrentSessionToStorage,

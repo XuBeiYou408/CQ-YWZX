@@ -56,9 +56,9 @@ const renderedContent = computed(() => {
     </div>
 
     <div class="bubble-body">
-      <!-- Assistant DeepSeek 风格深度思考面板 -->
+      <!-- Assistant 深度思考/Agent 推理面板：仅当存在实际思考推理日志时展示 -->
       <div
-        v-if="message.role === 'assistant' && (message.thought || message.isThinking)"
+        v-if="message.role === 'assistant' && (message.thought && message.thought.trim())"
         class="thinking-card"
         :class="{ collapsed: message.isCollapsed }"
       >

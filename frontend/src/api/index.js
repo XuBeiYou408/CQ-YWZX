@@ -5,7 +5,7 @@ export async function healthCheck() {
 }
 
 export async function askQuestion(question, provider, modelName) {
-  let savedConfig = { provider: 'cloud', cloudModel: 'deepseek-chat', localModel: 'qwen2.5:7b' }
+  let savedConfig = { provider: 'cloud', cloudModel: 'deepseek-chat', localModel: 'qwen2.5:7b', cloudApiKey: '', cloudBaseUrl: '' }
   try {
     const raw = localStorage.getItem('rag_model_config')
     if (raw) savedConfig = JSON.parse(raw)
@@ -20,7 +20,9 @@ export async function askQuestion(question, provider, modelName) {
     body: JSON.stringify({
       question,
       provider: finalProvider,
-      model_name: finalModel
+      model_name: finalModel,
+      api_key: savedConfig.cloudApiKey || undefined,
+      api_base: savedConfig.cloudBaseUrl || undefined
     }),
   })
   if (!res.ok) throw new Error('问答请求失败')
@@ -30,7 +32,7 @@ export async function askQuestion(question, provider, modelName) {
 export async function* streamQuestion(question, signal, sessionId = 'default_session', provider, modelName) {
   const cleanSessionId = String(sessionId).replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 64) || 'default_session'
   
-  let savedConfig = { provider: 'cloud', cloudModel: 'deepseek-chat', localModel: 'qwen2.5:7b' }
+  let savedConfig = { provider: 'cloud', cloudModel: 'deepseek-chat', localModel: 'qwen2.5:7b', cloudApiKey: '', cloudBaseUrl: '' }
   try {
     const raw = localStorage.getItem('rag_model_config')
     if (raw) savedConfig = JSON.parse(raw)
@@ -46,7 +48,9 @@ export async function* streamQuestion(question, signal, sessionId = 'default_ses
       question,
       session_id: cleanSessionId,
       provider: finalProvider,
-      model_name: finalModel
+      model_name: finalModel,
+      api_key: savedConfig.cloudApiKey || undefined,
+      api_base: savedConfig.cloudBaseUrl || undefined
     }),
     signal,
   })
@@ -90,4 +94,36 @@ export async function getDatasetInfo() {
   if (!res.ok) throw new Error('测试集不存在')
   const json = await res.json()
   return json.data !== undefined ? json.data : json
+}
+
+export async function getDocuments() {
+  const res = await fetch('/api/documents')
+  if (!res.ok) throw new Error('获取知识库文档失败')
+  const json = await res.json()
+  return json.data !== undefined ? json.data : json
+}
+
+export async function uploadDocument(file) {
+  const formData = new FormData()
+  formData.append('file', file)
+  const res = await fetch('/api/documents/upload', {
+    method: 'POST',
+    body: formData,
+  })
+  const json = await res.json()
+  if (!res.ok || (json.code && json.code !== 200)) {
+    throw new Error(json.detail || json.message || '文档上传失败')
+  }
+  return json.data !== undefined ? json.data : json
+}
+
+export async function deleteDocument(fileName) {
+  const res = await fetch(`/api/documents/${encodeURIComponent(fileName)}`, {
+    method: 'DELETE',
+  })
+  const json = await res.json()
+  if (!res.ok || (json.code && json.code !== 200)) {
+    throw new Error(json.detail || json.message || '删除文档失败')
+  }
+  return json
 }

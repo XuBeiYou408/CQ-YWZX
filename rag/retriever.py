@@ -152,20 +152,30 @@ async def zhaohui_and_rerank(
     else:
         raise TypeError("zhaohui_and_rerank 接收到的 inputs 类型不合法，须为 dict 或 str")
     
-    rewriter_task = asyncio.create_task(question_rewriter(question, target_llm))
-    original_retrieval_task = asyncio.to_thread(retrieve_single, question)
-    
-    queries, original_docs = await asyncio.gather(rewriter_task, original_retrieval_task)
-    
-    other_queries = [q for q in queries if q != question]
-    if other_queries:
-        other_results = await asyncio.to_thread(
-            lambda: list(executor.map(retrieve_single, other_queries))
-        )
-        other_docs = [doc for sublist in other_results for doc in sublist]
-        all_docs = original_docs + other_docs
+    is_local = False
+    if target_llm:
+        endpoint = str(getattr(target_llm, "openai_api_base", "") or getattr(target_llm, "base_url", ""))
+        if "1234" in endpoint or "11434" in endpoint or "localhost" in endpoint or "127.0.0.1" in endpoint:
+            is_local = True
+
+    if is_local:
+        # 本地模式直接双路混合极速召回（20ms），彻底免除 3~6 秒的重写 LLM 等待
+        all_docs = await asyncio.to_thread(retrieve_single, question)
     else:
-        all_docs = original_docs
+        rewriter_task = asyncio.create_task(question_rewriter(question, target_llm))
+        original_retrieval_task = asyncio.to_thread(retrieve_single, question)
+        
+        queries, original_docs = await asyncio.gather(rewriter_task, original_retrieval_task)
+        
+        other_queries = [q for q in queries if q != question]
+        if other_queries:
+            other_results = await asyncio.to_thread(
+                lambda: list(executor.map(retrieve_single, other_queries))
+            )
+            other_docs = [doc for sublist in other_results for doc in sublist]
+            all_docs = original_docs + other_docs
+        else:
+            all_docs = original_docs
 
     all_docs = deduplicate_docs(all_docs)
     chongpaishuju = await asyncio.to_thread(rerank_documents, question, all_docs, rerank_limit)
@@ -182,6 +192,8 @@ async def zhaohui_and_rerank(
             expanded_docs.append(doc)
             
     final_docs = deduplicate_docs(expanded_docs)
+    if is_local:
+        final_docs = final_docs[:2]
     
     if return_documents:
         return final_docs

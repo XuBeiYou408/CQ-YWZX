@@ -1,6 +1,6 @@
 # 面向异构技术文档的自适应容灾型问答 Agent 协同系统 (v3.0)
 
-基于 LangChain + DeepSeek / Ollama + Firecrawl + FAISS + Vue 3 的企业级智能问答 Agent 协同系统。项目旨在解决静态知识库（RAG）检索中**无法处理逻辑算术运算、缺乏互联网时效性扩展、搜索反爬/死循环、端云模型切换困难以及会话历史在动态环境部署易混淆崩溃**等工程痛点。
+基于 LangChain + DeepSeek / LM Studio + Firecrawl + FAISS + Vue 3 的企业级智能问答 Agent 协同系统。项目旨在解决静态知识库（RAG）检索中**无法处理逻辑算术运算、缺乏互联网时效性扩展、搜索反爬/死循环、端云模型切换困难以及会话历史在动态环境部署易混淆崩溃**等工程痛点。
 
 ---
 
@@ -9,16 +9,16 @@
 本系统由**前端全景大盘 (Vue 3 + Pinia)、端云模型管理中心 (Settings)、前置分类网关 (Router)、动态 LLM 实例化工厂 (Dynamic Factory)、ReAct 协同决策环 (Firecrawl/LangChain)、自适应记忆网关 (Session Isolation)** 等核心模块组成：
 
 ```mermaid
-graph TD
-    User(["用户 Web UI (Vue 3 / Element Plus)"]) --> Settings["模型管理中心 (/settings)"]
-    User --> Router{"意图分类路由器 (rag/router.py)"}
+flowchart TD
+    User(["用户 (Vue 3 前端)"]) -->|HTTP / SSE| API_GW["FastAPI 统一网关 (/ask & /stream)"]
+    API_GW --> Router{"轻量意图路由器 (rag/router.py)"}
     
     Settings -. "选择 Provider & Model" .- Store[("Pinia Model Store / LocalStorage")]
     Store -. "动态参数透传" .- API["FastAPI 统一 API 层 (app/routes/ask.py)"]
     
     API --> Factory{"动态 LLM 工厂 (rag/llm.py)"}
     Factory -- "provider='cloud'" --> CloudAPI["云端大模型 API (DeepSeek/GPT-4/Claude/Qwen)"]
-    Factory -- "provider='local'" --> LocalOllama["本地 Ollama 端侧部署 (127.0.0.1:11434)"]
+    Factory -- "provider='local'" --> LocalLLM["本地部署模式 (LM Studio: 127.0.0.1:1234)"]
     
     Router -- "简单检索 (simple_rag)" --> RAG["RAG 知识库检索直连通道"]
     Router -- "长文总结 (summarize)" --> Summarize["文档摘要直连通道"]
@@ -43,8 +43,8 @@ graph TD
 
 1. **端云混合模型管理大盘 (Multi-Provider Hybrid Architecture)**：
    - **云端 API 模式 (Cloud API)**：对接主流云端大模型 API（支持 `deepseek-chat` / `deepseek-reasoner` / `gpt-4o` / `claude-3-5-sonnet` / `qwen-max` 等），具备高并发推理能力与弹性拓展能力。
-   - **本地端侧部署模式 (Local Ollama)**：基于本地硬件平台纯离线推理（如 `qwen2.5:7b` / `deepseek-r1:7b`），数据 100% 离线隐私安全，零 Token 运营成本。
-   - **状态自动感测**：内置 `http://127.0.0.1:11434/api/tags` 健康检查与模型自动发现机制，前端自动感知拉取本地已下载的模型列表。
+   - **本地端侧部署模式 (Local Mode)**：基于本地硬件平台纯离线推理（支持 `LM Studio` / `qwen3.8-27b` 等），数据 100% 离线隐私安全，零 Token 运营成本。
+   - **状态自动感测**：内置 `http://127.0.0.1:1234/v1/models` 健康检查与模型自动发现机制，前端自动感知拉取本地已加载的模型列表。
 
 2. **全链路动态 LLM 工厂架构 (Dynamic LLM Factory Architecture)**：
    - 彻底解耦静态 LLM 硬绑定，在 `rag/llm.py`、`rag/chain.py` 与 `rag/agent.py` 中实现了 `huode_dongtai_llm()`、`create_qa_chain()` 与 `create_dynamic_agent_executor()` 动态工厂，支持运行时根据前端请求实时构建适配的链与 Agent 执行器。
@@ -120,23 +120,22 @@ rag-enterprise/
 ## 🚀 快速开始
 
 ### 1. 配置环境变量
-在项目根目录下复制 `.env.example` 为 `.env` 并填入密钥（如使用纯本地 Ollama 模式，云端 Key 可留空）：
+在项目根目录下复制 `.env.example` 为 `.env` 并填入密钥（如使用纯本地部署模式，云端 Key 可留空）：
 ```ini
 DEEPSEEK_API_KEY='sk-ba81e719...'                  # DeepSeek 密钥 (可选)
 FIRECRAWL_API_KEY='fc-b1659da2...'                 # Firecrawl 密钥 (可选)
 DEEPSEEK_API_URL='https://api.deepseek.com'         # API 基址
-HF_HOME='D:/rag/bge_models'                         # 本地模型缓存目录
-BGE_MODEL_PATH='D:/rag/bge_models/hub/models...'    # BGE Embedding 模型目录
-RERANKER_MODEL_PATH='D:/rag/bge_models/models...'   # BGE Reranker 模型目录
-LOCAL_DB_PATH='D:/rag/faiss-db'                     # FAISS 持久化目录
+LOCAL_LLM_URL='http://127.0.0.1:1234/v1'           # 本地模型服务地址 (默认 LM Studio)
+LOCAL_DB_PATH='./data/faiss_db'                     # FAISS 持久化目录
+YUAN_SUCAI_PATH='./data/documents'                 # 文档目录
 ```
 
 ### 2. 启动服务 (开箱即用)
 ```bash
-# 启动统一 FastAPI + Vue 3 服务
+# 双击运行 一键启动.bat 或终端执行：
 python run.py
 ```
-启动后访问 `http://localhost:8010` 即可直接体验全套功能（点击侧边栏 **【模型管理】** 即可实时切换端云模式并调整本地 Ollama 模型）。
+启动后访问 `http://localhost:8010` 即可直接体验全套功能（点击侧边栏 **【模型管理】** 即可实时切换端云模式并自动识别本地大模型）。
 
 ---
 
