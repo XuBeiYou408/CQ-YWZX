@@ -1,4 +1,4 @@
-﻿# 合同审查 AGENT · 企业级合同合规智能审查系统 (v2.0)
+# 合同审查 AGENT · 企业级合同合规智能审查系统 (v2.0)
 
 基于 **FastAPI + Vue 3 + Tailwind CSS + OOXML Lite + LM Studio / 端侧大模型** 的企业级合同合规智能审查、风险诊断与原生 Word 修订批注导出系统。
 
@@ -71,7 +71,7 @@ flowchart TD
 ## 📂 项目目录结构
 
 ```
-项目二/
+合同审查/
 ├── run.py                         # 系统一键启动入口 (FastAPI + Uvicorn + 自动打开浏览器)
 ├── config.py                      # 统一运行时配置文件 (端口 8020 / LM Studio 接入配置)
 ├── 一键启动.bat                   # Windows 环境双击一键极速启动脚本
@@ -124,7 +124,7 @@ flowchart TD
 - 推荐使用 Python 3.10 或更高版本。
 - 安装项目依赖：
 ```bash
-cd 项目二
+cd 合同审查
 pip install -r requirements.txt
 ```
 
