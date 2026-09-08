@@ -1,0 +1,1608 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>合同审查 AGENT · 企业级合同合规审查系统</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Vue 3 -->
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  <!-- Element Plus CSS & JS -->
+  <link rel="stylesheet" href="https://unpkg.com/element-plus/dist/index.css" />
+  <script src="https://unpkg.com/element-plus"></script>
+  <script src="https://unpkg.com/@element-plus/icons-vue"></script>
+  <!-- Marked.js Markdown 解析器 (本地纯离线优先 + CDN 兜底) -->
+  <script src="/static/marked.min.js"></script>
+  <script>
+    if (typeof marked === 'undefined') {
+      document.write('<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"><\/script>');
+    }
+  </script>
+  <style>
+    :root {
+      --saas-bg: #f8fafc;
+      --saas-surface: #ffffff;
+      --saas-border: #e2e8f0;
+      --saas-text-main: #0f172a;
+      --saas-text-muted: #64748b;
+    }
+    body {
+      background-color: #f8fafc;
+      color: #0f172a;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    }
+
+    /* 现代 SaaS 细腻滚动条 */
+    .custom-scroll::-webkit-scrollbar {
+      width: 5px;
+      height: 5px;
+    }
+    .custom-scroll::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 4px;
+    }
+    .custom-scroll::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
+    }
+    .custom-scroll::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    /* 现代 SaaS 卡片投影与面板系统 */
+    .saas-panel {
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px -1px rgba(0, 0, 0, 0.03);
+    }
+    .saas-panel-hover {
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .saas-panel-hover:hover {
+      border-color: #cbd5e1;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.06), 0 2px 4px -2px rgba(0, 0, 0, 0.04);
+    }
+    .drag-hover {
+      border-color: #3b82f6 !important;
+      background: #eff6ff !important;
+    }
+
+    /* Markdown 报告现代排版系统 */
+    .markdown-body {
+      color: #334155;
+      font-size: 0.85rem;
+      line-height: 1.65;
+    }
+    .markdown-body h1, .markdown-body h2, .markdown-body h3 {
+      color: #0f172a;
+      font-weight: 600;
+    }
+    .markdown-body h3 {
+      font-size: 0.9rem;
+      margin-top: 1.25rem;
+      margin-bottom: 0.75rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 1px solid #e2e8f0;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .markdown-body p, .markdown-body li {
+      color: #475569;
+      font-size: 0.825rem;
+      line-height: 1.6;
+    }
+    .markdown-body ul {
+      list-style: none;
+      padding-left: 0;
+      margin: 0.5rem 0;
+    }
+    .markdown-body code {
+      background: #f1f5f9;
+      color: #1e293b;
+      padding: 0.15rem 0.35rem;
+      border-radius: 0.25rem;
+      font-size: 0.78rem;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      border: 1px solid #e2e8f0;
+    }
+    .markdown-body pre {
+      background: #0f172a;
+      border: 1px solid #1e293b;
+      border-radius: 0.5rem;
+      padding: 0.85rem 1rem;
+      margin: 0.5rem 0 0.85rem 0;
+      white-space: pre-wrap;
+      word-break: break-word;
+      max-height: 14rem;
+      overflow-y: auto;
+    }
+    .markdown-body pre code {
+      background: transparent;
+      border: none;
+      padding: 0;
+      color: #6ee7b7;
+      font-size: 0.8rem;
+      line-height: 1.6;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+    .markdown-body blockquote {
+      border-left: 3px solid #3b82f6;
+      background: #eff6ff;
+      border: 1px solid #dbeafe;
+      border-left: 3px solid #3b82f6;
+      padding: 0.75rem 1rem;
+      border-radius: 0.5rem;
+      margin: 0.5rem 0 0.75rem 0;
+      color: #1e40af;
+      font-size: 0.825rem;
+      line-height: 1.6;
+    }
+  </style>
+</head>
+<body class="h-screen overflow-hidden flex flex-col bg-slate-50 text-slate-900">
+  <div id="app" class="h-full flex flex-col">
+    <!-- 顶部现代 SaaS 导航栏 (纯白背景 + 细腻底边框 + 柔和阴影) -->
+    <header class="h-14 bg-white border-b border-slate-200 flex items-center justify-between px-6 shrink-0 z-10 shadow-[0_1px_2px_rgba(0,0,0,0.03)]">
+      <div class="flex items-center space-x-3.5">
+        <div class="w-8 h-8 rounded-lg bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-600 shadow-sm">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+          </svg>
+        </div>
+        <div>
+          <div class="flex items-center space-x-2">
+            <span class="text-sm font-semibold tracking-tight text-slate-900">合同审查 <span class="text-blue-600 font-mono text-xs font-semibold">AGENT</span></span>
+            <span class="px-2 py-0.5 text-[10px] rounded bg-slate-100 text-slate-600 border border-slate-200 font-mono font-medium">企业版</span>
+          </div>
+          <p class="text-[11px] text-slate-500">离线风险核验 · 条款智能起草 · 司法裁判指引</p>
+        </div>
+      </div>
+
+      <!-- 中间功能模式切换 (现代 SaaS 胶囊分段控制器) -->
+      <div class="flex items-center bg-slate-100 p-1 rounded-lg border border-slate-200/80">
+        <button 
+          @click="workMode = 'review'" 
+          :class="workMode === 'review' ? 'bg-white text-slate-900 shadow-xs border border-slate-200/60 font-medium' : 'text-slate-500 hover:text-slate-800 border border-transparent'"
+          class="px-3.5 py-1 rounded-md text-xs flex items-center space-x-1.5 transition-all cursor-pointer">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+          <span>合同风险审查</span>
+        </button>
+        <button 
+          @click="workMode = 'draft_create'" 
+          :class="workMode === 'draft_create' ? 'bg-white text-slate-900 shadow-xs border border-slate-200/60 font-medium' : 'text-slate-500 hover:text-slate-800 border border-transparent'"
+          class="px-3.5 py-1 rounded-md text-xs flex items-center space-x-1.5 transition-all cursor-pointer">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+          </svg>
+          <span>智能初稿起草</span>
+        </button>
+      </div>
+
+      <!-- 右侧操作栏 -->
+      <div class="flex items-center space-x-2.5">
+        <button 
+          v-if="workMode === 'review'"
+          @click="loadSampleContract" 
+          :disabled="isReviewing"
+          title="载入内置采购合同示范案例"
+          class="px-3 py-1.5 text-xs text-slate-700 hover:text-slate-900 bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 rounded-md transition-all active:scale-95 disabled:opacity-50 flex items-center space-x-1.5 shadow-xs font-medium cursor-pointer">
+          <svg class="w-3.5 h-3.5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+          </svg>
+          <span>载入演示示例</span>
+        </button>
+
+        <button 
+          @click="clearAll" 
+          :disabled="isReviewing || isDrafting"
+          class="px-3 py-1.5 text-xs text-slate-500 hover:text-slate-800 bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 rounded-md transition-all active:scale-95 disabled:opacity-50 shadow-xs cursor-pointer">
+          清空
+        </button>
+      </div>
+    </header>
+
+    <!-- 主体双栏现代 SaaS 布局 -->
+    <main class="flex-1 flex overflow-hidden p-4 gap-4 bg-slate-50">
+      
+      <!-- ================= 左栏：工作输入区 (50% 宽度) ================= -->
+      <section class="w-1/2 flex flex-col saas-panel rounded-xl overflow-hidden shadow-sm">
+        
+        <!-- 模式一：合同风险审查视图 -->
+        <template v-if="workMode === 'review'">
+          <div class="h-10 px-4 bg-slate-50/70 border-b border-slate-200 flex items-center justify-between shrink-0">
+            <div class="flex items-center space-x-2">
+              <svg class="w-3.5 h-3.5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              <span class="text-xs font-semibold text-slate-800">待审查合同文档</span>
+            </div>
+            <div class="text-xs font-mono text-slate-500">
+              字符数：<span class="text-slate-800 font-semibold">{{ contractText.length }}</span>
+            </div>
+          </div>
+
+          <!-- 文件拖拽上传区 (现代 SaaS 浅色微质感边框) -->
+          <div 
+            @dragover.prevent="isDragging = true"
+            @dragleave.prevent="isDragging = false"
+            @drop.prevent="handleFileDrop"
+            @click="triggerFileInput"
+            :class="{'drag-hover': isDragging}"
+            class="m-3 p-3.5 rounded-xl border-2 border-dashed border-slate-200 hover:border-blue-400 bg-slate-50/60 hover:bg-blue-50/20 transition-all cursor-pointer flex flex-col items-center justify-center shrink-0 group">
+            
+            <input type="file" ref="fileInput" @change="handleFileSelect" accept=".docx,.pdf,.txt,.md" class="hidden" />
+            
+            <div class="flex items-center space-x-3.5">
+              <div class="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-500 group-hover:text-blue-600 group-hover:border-blue-300 transition-all shadow-xs">
+                <svg v-if="isParsingFile" class="animate-spin w-4 h-4 text-blue-600" fill="none" viewBox="0 0 24 24">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <svg v-else class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                </svg>
+              </div>
+              <div>
+                <p class="text-xs font-medium text-slate-700 group-hover:text-blue-600 transition-all">
+                  {{ isParsingFile ? '正在解析合同文档...' : '点击或将合同文件拖拽至此处' }}
+                </p>
+                <p class="text-[11px] text-slate-400">
+                  支持格式：Word (.docx)、PDF (.pdf)、文本 (.txt / .md)
+                </p>
+              </div>
+            </div>
+
+            <!-- 解析成功提示横幅 -->
+            <div v-if="uploadedFileName" class="mt-2 text-xs text-emerald-700 flex items-center space-x-1.5 font-medium bg-emerald-50 px-3 py-1 rounded-md border border-emerald-200">
+              <svg class="w-3.5 h-3.5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+              </svg>
+              <span>已解析：{{ uploadedFileName }}（自动匹配【{{ contractType }}】）</span>
+            </div>
+          </div>
+
+          <!-- 合同正文编辑与阅读区 -->
+          <div class="flex-1 relative px-3 pb-2">
+            <textarea 
+              v-model="contractText" 
+              placeholder="在此粘贴或上传待审查的合同全文（如技术开发、商品买卖、用工劳动、租赁协议等）..."
+              class="w-full h-full bg-slate-50/40 p-3.5 rounded-lg border border-slate-200 text-slate-800 font-sans text-xs leading-relaxed outline-none resize-none custom-scroll placeholder:text-slate-400 focus:bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 transition-all"
+              :disabled="isReviewing">
+            </textarea>
+          </div>
+
+          <!-- 左栏底部控制栏：立场机制与专项门禁 -->
+          <div class="p-3.5 bg-slate-50/70 border-t border-slate-200 flex flex-col space-y-2.5 shrink-0">
+            <div class="grid grid-cols-3 gap-2.5">
+              <div>
+                <label class="block text-[11px] font-medium text-slate-600 mb-1">合同类型：</label>
+                <select v-model="contractType" class="w-full bg-white text-slate-800 text-xs rounded-lg px-2.5 py-1.5 border border-slate-200 shadow-xs outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+                  <option value="软件技术开发与外包采购合同">软件技术开发与采购</option>
+                  <option value="商品货物买卖与供应链采购合同">商品买卖与采购合同</option>
+                  <option value="劳动人事用工与竞业限制协议">劳动人事与竞业限制</option>
+                  <option value="房屋租赁与商业物业租赁合同">房屋与商业物业租赁</option>
+                  <option value="股权转让与投资合伙协议">股权转让与投资协议</option>
+                  <option value="民间借贷与保证担保借款合同">借贷与保证担保合同</option>
+                  <option value="商业保密与反不正当竞争协议 (NDA)">商业保密协议 (NDA)</option>
+                  <option value="通用商业民商事经济合同">通用商业经济合同</option>
+                </select>
+              </div>
+
+              <div>
+                <label class="block text-[11px] font-medium text-slate-600 mb-1">己方立场：</label>
+                <select v-model="clientRole" class="w-full bg-white text-slate-800 text-xs rounded-lg px-2.5 py-1.5 border border-slate-200 shadow-xs outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+                  <option value="甲方 (采购/委托/付款/出租方)">甲方 (采购/付款方)</option>
+                  <option value="乙方 (供应/受托/承揽/承租方)">乙方 (供应/承揽方)</option>
+                  <option value="中立合规把关 (法务风控/双向平衡)">中立把关 (双向对等)</option>
+                </select>
+              </div>
+
+              <div>
+                <label class="block text-[11px] font-medium text-slate-600 mb-1">审查尺度：</label>
+                <select v-model="reviewStance" class="w-full bg-white text-slate-800 text-xs rounded-lg px-2.5 py-1.5 border border-slate-200 shadow-xs outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+                  <option value="对等平衡 (常规商业惯例)">对等平衡 (常规惯例)</option>
+                  <option value="强势防守 (维护己方最大利益)">严控风险 (充分防守)</option>
+                  <option value="商业促成 (克制把关/促成签约)">商业促成 (放宽非核心)</option>
+                </select>
+              </div>
+            </div>
+
+            <button 
+              @click="startReview" 
+              :disabled="isReviewing || !contractText.trim()"
+              class="w-full py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium text-xs tracking-wide shadow-sm hover:shadow transition-all flex items-center justify-center space-x-2 active:scale-98 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer">
+              <svg v-if="isReviewing" class="animate-spin w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              <svg v-else class="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+              </svg>
+              <span>{{ isReviewing ? '正在逐条审查合同条款...' : '开始合同合规审查' }}</span>
+            </button>
+          </div>
+        </template>
+
+        <!-- 模式二：智能初稿起草视图 -->
+        <template v-else>
+          <div class="h-10 px-4 bg-slate-50/70 border-b border-slate-200 flex items-center justify-between shrink-0">
+            <div class="flex items-center space-x-2">
+              <svg class="w-3.5 h-3.5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+              </svg>
+              <span class="text-xs font-semibold text-slate-800">商业意向要素录入</span>
+            </div>
+          </div>
+
+          <div class="flex-1 overflow-y-auto p-4 space-y-3.5 custom-scroll text-xs">
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="block text-slate-600 font-medium mb-1">合同类型：</label>
+                <select v-model="draftForm.contract_type" class="w-full bg-white text-slate-800 rounded-lg p-2 border border-slate-200 shadow-xs outline-none focus:border-blue-500">
+                  <option value="商品货物买卖与采购合同">商品买卖与采购合同</option>
+                  <option value="软件技术开发与外包服务合同">软件技术开发与外包合同</option>
+                  <option value="商业房屋与场地租赁合同">商业房屋与场地租赁合同</option>
+                  <option value="劳动用工与人事聘用合同">劳动用工与人事聘用合同</option>
+                  <option value="商业保密与反不正当竞争协议 (NDA)">商业保密协议 (NDA)</option>
+                  <option value="企业借款与保证担保合同">企业借款与保证担保合同</option>
+                  <option value="商务咨询与居间委托服务合同">商务咨询与居间服务合同</option>
+                </select>
+              </div>
+
+              <div>
+                <label class="block text-slate-600 font-medium mb-1">起草立场：</label>
+                <select v-model="draftForm.client_role" class="w-full bg-white text-slate-800 rounded-lg p-2 border border-slate-200 shadow-xs outline-none focus:border-blue-500">
+                  <option value="甲方 (采购/委托/出租方)">偏向甲方 (采购/委托方)</option>
+                  <option value="乙方 (供应/受托/承租方)">偏向乙方 (供应/承揽方)</option>
+                  <option value="中立对等 (商业通用惯例)">中立对等 (通用商业惯例)</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="block text-slate-600 font-medium mb-1">甲方主体全称：</label>
+                <input v-model="draftForm.party_a" placeholder="例如：某某科技有限公司" class="w-full bg-white text-slate-800 rounded-lg p-2 border border-slate-200 shadow-xs outline-none focus:border-blue-500" />
+              </div>
+              <div>
+                <label class="block text-slate-600 font-medium mb-1">乙方主体全称：</label>
+                <input v-model="draftForm.party_b" placeholder="例如：某某供应链制造有限公司" class="w-full bg-white text-slate-800 rounded-lg p-2 border border-slate-200 shadow-xs outline-none focus:border-blue-500" />
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-slate-600 font-medium mb-1">核心合作标的与金额要求：</label>
+              <textarea v-model="draftForm.core_subject" rows="3" placeholder="例如：乙方向甲方供应智能硬件模块共计 5000 套，规格以技术参数为准，含税总价款为人民币 680,000 元整。" class="w-full bg-white text-slate-800 rounded-lg p-2 border border-slate-200 shadow-xs outline-none focus:border-blue-500 resize-none"></textarea>
+            </div>
+
+            <div>
+              <label class="block text-slate-600 font-medium mb-1">结算方式与付款节点：</label>
+              <input v-model="draftForm.payment_terms" placeholder="例如：合同签订付30%预付款，全部到货验收合格后付65%，留5%质保金满1年返还。" class="w-full bg-white text-slate-800 rounded-lg p-2 border border-slate-200 shadow-xs outline-none focus:border-blue-500" />
+            </div>
+
+            <div>
+              <label class="block text-slate-600 font-medium mb-1">特约防守与违约要求（选填）：</label>
+              <textarea v-model="draftForm.special_terms" rows="2" placeholder="例如：迟延交付违约金按日万分之五计算，争议管辖选择甲方所在地人民法院。" class="w-full bg-white text-slate-800 rounded-lg p-2 border border-slate-200 shadow-xs outline-none focus:border-blue-500 resize-none"></textarea>
+            </div>
+          </div>
+
+          <div class="p-3.5 bg-slate-50/70 border-t border-slate-200">
+            <button 
+              @click="submitCreateDraft" 
+              :disabled="isDrafting || !draftForm.party_a || !draftForm.party_b || !draftForm.core_subject"
+              class="w-full py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium text-xs tracking-wide shadow-sm hover:shadow transition-all flex items-center justify-center space-x-2 active:scale-98 disabled:opacity-50 cursor-pointer">
+              <svg v-if="isDrafting" class="animate-spin w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              <svg v-else class="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              <span>{{ isDrafting ? '正在依据示范文本起草初稿...' : '生成正式合同初稿' }}</span>
+            </button>
+          </div>
+        </template>
+      </section>
+
+      <!-- ================= 右栏：双 Tab 结果工作台 (50% 宽度) ================= -->
+      <section class="w-1/2 flex flex-col saas-panel rounded-xl overflow-hidden shadow-sm">
+        <!-- 右栏标头：原生 Tab 切换导航 -->
+        <div class="h-10 px-3.5 bg-slate-50/70 border-b border-slate-200 flex items-center justify-between shrink-0">
+          <div class="flex items-center space-x-1.5">
+            <!-- Tab 1: 审查报告 -->
+            <button 
+              @click="activeTab = 'review'"
+              :class="activeTab === 'review' ? 'bg-white text-slate-900 border border-slate-200/80 shadow-xs font-medium' : 'text-slate-500 hover:text-slate-800 border border-transparent'"
+              class="px-3 py-1 rounded-md text-xs flex items-center space-x-1.5 transition-all cursor-pointer">
+              <svg class="w-3.5 h-3.5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span>审查分析报告</span>
+              <span v-if="stats.high + stats.medium > 0" class="ml-1 px-1.5 py-0.2 text-[10px] rounded-full bg-rose-50 text-rose-600 border border-rose-200 font-mono font-semibold">
+                {{ stats.high + stats.medium }}
+              </span>
+            </button>
+
+            <!-- Tab 2: 合规初稿全文 -->
+            <button 
+              @click="activeTab = 'draft'"
+              :class="activeTab === 'draft' ? 'bg-white text-slate-900 border border-slate-200/80 shadow-xs font-medium' : 'text-slate-500 hover:text-slate-800 border border-transparent'"
+              class="px-3 py-1 rounded-md text-xs flex items-center space-x-1.5 transition-all cursor-pointer relative">
+              <svg class="w-3.5 h-3.5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              <span>合规初稿全文</span>
+              <span v-if="revisedContractText" class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+            </button>
+          </div>
+          
+          <!-- 右栏顶部操作按钮组 -->
+          <div class="flex items-center space-x-1.5">
+            <!-- 审查报告动作 -->
+            <template v-if="activeTab === 'review'">
+              <button 
+                v-if="hasResults || reviewContent"
+                @click="downloadAnnotatedDocx"
+                :disabled="isExportingDocx"
+                class="px-2.5 py-1 text-xs text-slate-700 hover:text-slate-900 bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 rounded-md transition-all flex items-center space-x-1 shadow-xs active:scale-95 disabled:opacity-50 font-medium cursor-pointer">
+                <svg v-if="isExportingDocx" class="animate-spin w-3 h-3 text-slate-500" fill="none" viewBox="0 0 24 24">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <svg v-else class="w-3 h-3 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+                <span>{{ isExportingDocx ? '导出中...' : '导出带批注 Word (.docx)' }}</span>
+              </button>
+
+              <button 
+                v-if="hasResults || reviewContent"
+                @click="copyReviewReport"
+                class="px-2.5 py-1 text-xs text-slate-600 hover:text-slate-900 bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 rounded-md transition-all shadow-xs cursor-pointer">
+                复制报告
+              </button>
+            </template>
+
+            <!-- 合规初稿动作 -->
+            <template v-else>
+              <button 
+                @click="copyRevisedDraft" 
+                :disabled="!revisedContractText"
+                class="px-2.5 py-1 text-xs text-slate-700 hover:text-slate-900 bg-white hover:bg-slate-50 border border-slate-200 rounded-md transition-all flex items-center space-x-1 active:scale-95 disabled:opacity-50 shadow-xs cursor-pointer">
+                <svg class="w-3 h-3 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                </svg>
+                <span>复制初稿</span>
+              </button>
+              <button 
+                @click="downloadDraftText" 
+                :disabled="!revisedContractText"
+                class="px-2.5 py-1 text-xs text-slate-700 hover:text-slate-900 bg-white hover:bg-slate-50 border border-slate-200 rounded-md transition-all flex items-center space-x-1 active:scale-95 disabled:opacity-50 shadow-xs cursor-pointer">
+                <svg class="w-3 h-3 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+                <span>下载 TXT</span>
+              </button>
+            </template>
+          </div>
+        </div>
+
+        <!-- ================= TAB 1: 审查分析报告视图 ================= -->
+        <div v-show="activeTab === 'review'" class="flex-1 flex flex-col overflow-hidden relative">
+          <!-- 顶部状态指示行 -->
+          <div class="px-4 py-2 bg-slate-50/40 border-b border-slate-200/80 flex items-center justify-between shrink-0 text-xs">
+            <div class="flex items-center space-x-4">
+              <div class="flex items-center space-x-1.5">
+                <span class="w-2 h-2 rounded-full bg-rose-500"></span>
+                <span class="text-slate-500">高风险：</span>
+                <span class="font-semibold text-rose-600 font-mono">{{ stats.high }} 项</span>
+              </div>
+              <div class="flex items-center space-x-1.5">
+                <span class="w-2 h-2 rounded-full bg-amber-500"></span>
+                <span class="text-slate-500">中风险：</span>
+                <span class="font-semibold text-amber-600 font-mono">{{ stats.medium }} 项</span>
+              </div>
+              <div class="flex items-center space-x-1.5">
+                <span class="w-2 h-2 rounded-full bg-blue-500"></span>
+                <span class="text-slate-500">优化项：</span>
+                <span class="font-semibold text-blue-600 font-mono">{{ stats.advice }} 项</span>
+              </div>
+            </div>
+            <div class="text-slate-500 text-xs truncate max-w-xs font-mono">
+              {{ statusMessage || '就绪' }}
+            </div>
+          </div>
+
+          <!-- 报告正文可滚动容器 -->
+          <div 
+            ref="reportContainer" 
+            @scroll="handleScroll"
+            class="flex-1 p-5 overflow-y-auto custom-scroll">
+            
+            <!-- 状态 1：初始未开始状态 (现代 SaaS 空状态插画与文字) -->
+            <div v-if="!hasResults && !isReviewing && !reviewContent" class="h-full flex flex-col items-center justify-center text-center p-8">
+              <div class="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center text-slate-400 mb-3 border border-slate-200 shadow-xs">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+              </div>
+              <h4 class="text-xs font-semibold text-slate-800 mb-1">等待载入合同</h4>
+              <p class="text-xs text-slate-500 max-w-sm">在左侧上传文档或输入合同文本，系统将结合《民法典》及商业裁量基准生成逐条合规审查报告。</p>
+            </div>
+
+            <!-- 状态 2：审查正在进行中（但首字尚在分析中） -->
+            <div v-else-if="isReviewing && !reviewContent" class="h-full flex flex-col items-center justify-center text-center p-6 space-y-4">
+              <div class="w-10 h-10 rounded-full border-2 border-slate-200 border-t-blue-600 animate-spin"></div>
+              
+              <div class="space-y-1 max-w-md">
+                <div class="text-xs font-semibold text-slate-800">
+                  正在进行合同合规审查
+                </div>
+                <p class="text-[11px] text-slate-500 font-mono">
+                  {{ statusMessage || '正在加载司法裁判要旨与合规规则库...' }}
+                </p>
+              </div>
+
+              <div class="w-full max-w-xs space-y-2 text-left pt-2">
+                <div class="p-2.5 rounded-lg bg-slate-50 border border-slate-200 flex items-center space-x-2.5 text-xs shadow-xs">
+                  <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                  <span class="text-slate-700">校验主体资格与核心交付条款</span>
+                  <span class="ml-auto text-[11px] text-slate-400">已就绪</span>
+                </div>
+                <div class="p-2.5 rounded-lg bg-slate-50 border border-slate-200 flex items-center space-x-2.5 text-xs shadow-xs">
+                  <span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+                  <span class="text-slate-700">民法典第585条违约责任对等性</span>
+                  <span class="ml-auto text-[11px] text-blue-600 font-medium">审查中...</span>
+                </div>
+                <div class="p-2.5 rounded-lg bg-slate-50 border border-slate-200 flex items-center space-x-2.5 text-xs shadow-xs">
+                  <span class="w-1.5 h-1.5 rounded-full bg-slate-300"></span>
+                  <span class="text-slate-400">提炼实质风险与合规建议</span>
+                  <span class="ml-auto text-[11px] text-slate-400">待输出</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- 状态 3：审查完成且为正常合同（0 高危 0 中危） -->
+            <div v-else-if="!isReviewing && stats.high === 0 && stats.medium === 0 && reviewContent && isContractCompliant" class="space-y-4">
+              <div class="my-4 p-5 rounded-xl bg-emerald-50/50 border border-emerald-200 flex flex-col items-center justify-center text-center space-y-2.5 shadow-xs">
+                <div class="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600">
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+                <div>
+                  <div class="text-emerald-900 font-semibold text-sm">全文合规良好 · 未检出实质性法律风险</div>
+                  <div class="text-xs text-slate-600 mt-1 max-w-md leading-relaxed">
+                    本合同各项主要权利义务对等、法定必备要素齐备，经民法典专项规则核验未发现高危缺陷或显失公平条款。
+                  </div>
+                </div>
+                <div class="pt-2 flex items-center space-x-2.5">
+                  <button 
+                    @click="activeTab = 'draft'"
+                    class="px-3.5 py-1.5 text-xs text-slate-700 hover:text-slate-900 bg-white hover:bg-slate-50 border border-slate-200 rounded-md transition-all shadow-xs cursor-pointer font-medium">
+                    查看合同全文
+                  </button>
+                  <button 
+                    @click="downloadAnnotatedDocx"
+                    :disabled="isExportingDocx"
+                    class="px-3.5 py-1.5 text-xs text-blue-700 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-md transition-all shadow-xs cursor-pointer font-medium">
+                    导出 Word 存档
+                  </button>
+                </div>
+              </div>
+
+              <!-- 司法裁判与法条指引参考 -->
+              <div v-if="precedents && precedents.length > 0" class="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2.5 shadow-xs">
+                <div class="text-xs font-semibold text-slate-800 flex items-center space-x-2">
+                  <svg class="w-3.5 h-3.5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3" />
+                  </svg>
+                  <span>司法裁判参考与依据法条 (共 {{ precedents.length }} 项)</span>
+                </div>
+                <div class="space-y-2">
+                  <div v-for="(p, i) in precedents" :key="i" class="p-2.5 rounded-lg bg-white border border-slate-200 text-xs shadow-xs">
+                    <div class="flex items-center justify-between mb-1">
+                      <div class="text-slate-800 font-medium">{{ p.title || p.case_title }}</div>
+                      <div v-if="p.case_no" class="text-[10px] text-slate-500 font-mono">{{ p.case_no }}</div>
+                    </div>
+                    <div class="text-slate-600 text-[11px] leading-relaxed mb-1">{{ p.key_holding || p.ruling_point }}</div>
+                    <div v-if="p.statute || p.legal_basis" class="text-slate-500 text-[10px]">依据法条：{{ p.statute || p.legal_basis }}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 状态 4：存在风险项的合同报告 -->
+            <div v-else class="space-y-4">
+              <div class="markdown-body" v-html="renderedMarkdown"></div>
+            </div>
+
+          </div>
+
+          <!-- 浮动“返回顶部审查总览”按钮 (现代 SaaS 悬浮药丸胶囊) -->
+          <button 
+            v-if="userScrolledUp" 
+            @click="scrollToTop" 
+            class="absolute bottom-5 right-6 px-3.5 py-1.5 bg-white hover:bg-slate-50 text-slate-700 text-xs font-medium rounded-full shadow-lg border border-slate-200 hover:border-slate-300 flex items-center space-x-1.5 transition-all z-20 active:scale-95 cursor-pointer">
+            <svg class="w-3.5 h-3.5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18" />
+            </svg>
+            <span>返回顶部审查总览</span>
+          </button>
+        </div>
+
+        <!-- ================= TAB 2: 合规初稿全文视图 ================= -->
+        <div v-show="activeTab === 'draft'" class="flex-1 flex flex-col overflow-hidden bg-white">
+          <!-- 提示状态条 -->
+          <div class="px-4 py-2 bg-slate-50/70 border-b border-slate-200 flex items-center justify-between shrink-0">
+            <div class="flex items-center space-x-2 text-xs text-slate-600">
+              <svg class="w-3.5 h-3.5 text-emerald-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span>{{ workMode === 'draft_create' ? '已根据商业要素起草标准合同初稿。' : '本初稿已依据审查意见对风险条款完成原位修正。' }}</span>
+            </div>
+            <button 
+              @click="regenerateDraftWithAI" 
+              :disabled="isGeneratingDraft || !reviewContent"
+              class="px-2.5 py-1 text-xs text-slate-700 hover:text-slate-900 bg-white hover:bg-slate-50 border border-slate-200 rounded-md transition-all shadow-xs flex items-center space-x-1 disabled:opacity-50 cursor-pointer font-medium">
+              <svg v-if="isGeneratingDraft" class="animate-spin w-3 h-3 text-slate-500" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              <span>{{ isGeneratingDraft ? '润色中...' : '重新润色' }}</span>
+            </button>
+          </div>
+
+          <!-- 合同初稿全文阅读区 -->
+          <div class="flex-1 p-5 overflow-y-auto custom-scroll bg-slate-50/30">
+            <div v-if="!revisedContractText && !isGeneratingDraft && !isDrafting" class="h-full flex flex-col items-center justify-center text-center p-8 text-slate-400">
+              <svg class="w-10 h-10 text-slate-300 mb-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              <p class="text-xs text-slate-700 mb-1 font-semibold">暂无合同初稿全文</p>
+              <p class="text-[11px] text-slate-500 max-w-xs">审查模式下完成审查后将自动重构初稿；或切换至左上方“智能初稿起草”录入商业要素从零生成。</p>
+            </div>
+            
+            <div v-else-if="isGeneratingDraft || isDrafting" class="h-full flex flex-col items-center justify-center space-y-3 text-slate-500">
+              <svg class="animate-spin w-7 h-7 text-blue-600" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              <span class="text-xs text-slate-700 font-medium">正在生成合同全文初稿，请稍候...</span>
+            </div>
+
+            <pre v-else class="text-xs sm:text-sm text-slate-800 font-mono whitespace-pre-wrap leading-relaxed select-text p-4 bg-white rounded-xl border border-slate-200 shadow-xs">{{ revisedContractText }}</pre>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    const { createApp, ref, reactive, computed, nextTick } = Vue;
+
+    createApp({
+      setup() {
+        const workMode = ref('review'); // 'review' | 'draft_create'
+        const contractText = ref('');
+        const contractType = ref('通用商业民商事经济合同');
+        const clientRole = ref('中立合规把关 (法务风控/双向平衡)');
+        const reviewStance = ref('对等平衡 (常规商业惯例)');
+
+        const isReviewing = ref(false);
+        const isDrafting = ref(false);
+        const isExportingDocx = ref(false);
+        const hasResults = ref(false);
+        const reviewContent = ref('');
+        const statusMessage = ref('');
+        const precedents = ref([]);
+        const reportContainer = ref(null);
+        const userScrolledUp = ref(false);
+        const isGeneratingDraft = ref(false);
+        const revisedContractText = ref('');
+        
+        // 右侧 Tab 切换 ('review' | 'draft')
+        const activeTab = ref('review');
+
+        // 文件上传拖拽状态
+        const fileInput = ref(null);
+        const isDragging = ref(false);
+        const isParsingFile = ref(false);
+        const uploadedFileName = ref('');
+
+        // 从零起草表单
+        const draftForm = reactive({
+          contract_type: '商品货物买卖与采购合同',
+          party_a: '',
+          party_b: '',
+          core_subject: '',
+          payment_terms: '签订合同后付30%定金，交货初验后付60%，质保期满1年付10%尾款',
+          special_terms: '双方违约金按日万分之五约定，上限不超过总价10%，争议由甲方所在地法院管辖。',
+          client_role: '甲方 (采购/委托/出租方)'
+        });
+
+        const handleScroll = () => {
+          if (!reportContainer.value) return;
+          const { scrollTop } = reportContainer.value;
+          userScrolledUp.value = scrollTop > 250;
+        };
+
+        const scrollToTop = () => {
+          if (reportContainer.value) {
+            reportContainer.value.scrollTo({ top: 0, behavior: 'smooth' });
+          }
+        };
+
+        const triggerFileInput = () => {
+          if (fileInput.value && !isReviewing.value) {
+            fileInput.value.click();
+          }
+        };
+
+        const uploadFileToServer = async (file) => {
+          if (!file) return;
+          isParsingFile.value = true;
+          const formData = new FormData();
+          formData.append('file', file);
+
+          try {
+            const res = await fetch('/api/contract/upload', {
+              method: 'POST',
+              body: formData
+            });
+            const data = await res.json();
+            if (data.data) {
+              contractText.value = data.data.text;
+              uploadedFileName.value = data.data.filename;
+              if (data.data.contract_type) {
+                contractType.value = data.data.contract_type;
+              }
+              ElementPlus.ElMessage.success(`成功解析【${data.data.filename}】`);
+            } else {
+              throw new Error(data.message || '解析失败');
+            }
+          } catch (e) {
+            ElementPlus.ElMessage.error('合同文件解析异常: ' + e.message);
+          } finally {
+            isParsingFile.value = false;
+            isDragging.value = false;
+          }
+        };
+
+        const handleFileSelect = (e) => {
+          const file = e.target.files[0];
+          if (file) uploadFileToServer(file);
+        };
+
+        const handleFileDrop = (e) => {
+          isDragging.value = false;
+          const file = e.dataTransfer.files[0];
+          if (file) uploadFileToServer(file);
+        };
+
+        const loadSampleContract = async () => {
+          try {
+            const res = await fetch('/api/contract/sample');
+            const data = await res.json();
+            if (data.data) {
+              contractText.value = data.data.content;
+              uploadedFileName.value = data.data.title;
+              contractType.value = data.data.contract_type || '软件技术开发与外包采购合同';
+              clientRole.value = '乙方 (供应/受托/承揽/承租方)';
+              reviewStance.value = '对等平衡 (常规商业惯例)';
+              ElementPlus.ElMessage.success('已载入示范合同（立场已设为【乙方】）');
+            }
+          } catch (e) {
+            ElementPlus.ElMessage.error('载入失败: ' + e);
+          }
+        };
+
+        const clearAll = () => {
+          contractText.value = '';
+          uploadedFileName.value = '';
+          reviewContent.value = '';
+          statusMessage.value = '';
+          precedents.value = [];
+          hasResults.value = false;
+          userScrolledUp.value = false;
+          revisedContractText.value = '';
+          activeTab.value = 'review';
+        };
+
+        const stats = computed(() => {
+          const text = reviewContent.value;
+          if (!text) return { high: 0, medium: 0, advice: 0 };
+
+          const highMatches = (text.match(/####\s*🔴/g) || []).length;
+          const medMatches = (text.match(/####\s*🟡/g) || []).length;
+          const advMatches = (text.match(/####\s*🟢/g) || []).length;
+
+          if (highMatches > 0 || medMatches > 0 || advMatches > 0) {
+            return { high: highMatches, medium: medMatches, advice: advMatches };
+          }
+
+          const summaryMatch = text.match(/高危风险\s*\[?(\d+)\]?\s*项[，,]\s*中危风险\s*\[?(\d+)\]?\s*项/);
+          if (summaryMatch) {
+            const h = parseInt(summaryMatch[1], 10) || 0;
+            const m = parseInt(summaryMatch[2], 10) || 0;
+            if (h > 0 || m > 0) {
+              return { high: h, medium: m, advice: 0 };
+            }
+          }
+
+          if (text.includes('合规良好') || text.includes('全文合规通过') || text.includes('未检出实质性法律风险')) {
+            return { high: 0, medium: 0, advice: 0 };
+          }
+
+          const highCount = (text.match(/高危/g) || []).length;
+          const medCount = (text.match(/中危/g) || []).length;
+          return {
+            high: highCount > 0 ? Math.floor(highCount / 2) : 0,
+            medium: medCount > 0 ? Math.floor(medCount / 2) : 0,
+            advice: 0
+          };
+        });
+
+        const isContractCompliant = computed(() => {
+          const text = reviewContent.value || '';
+          if (!text) return false;
+          return (text.includes('合规良好') || text.includes('全文合规通过') || text.includes('未检出实质性法律风险'))
+            && !text.includes('#### 🔴') && !text.includes('#### 🟡');
+        });
+
+        window.copyToClipboard = (encodedText) => {
+          try {
+            const text = decodeURIComponent(encodedText);
+            navigator.clipboard.writeText(text).then(() => {
+              if (window.ElementPlus && window.ElementPlus.ElMessage) {
+                window.ElementPlus.ElMessage.success('已复制修改建议条款至剪贴板');
+              }
+            });
+          } catch (e) {
+            console.error('复制建议异常:', e);
+          }
+        };
+
+        window.filterRisks = (type, btn) => {
+          const cards = document.querySelectorAll('.risk-card-item');
+          cards.forEach(card => {
+            if (type === 'all' || card.dataset.severity === type) {
+              card.style.display = '';
+            } else {
+              card.style.display = 'none';
+            }
+          });
+          if (btn) {
+            document.querySelectorAll('.risk-filter-btn').forEach(b => {
+              b.className = 'risk-filter-btn px-2.5 py-0.5 text-xs rounded-md font-medium text-slate-600 hover:text-slate-900 border border-transparent cursor-pointer transition-all';
+            });
+            if (type === 'all') {
+              btn.className = 'risk-filter-btn px-2.5 py-0.5 text-xs rounded-md font-medium bg-white text-slate-900 border border-slate-300 shadow-xs cursor-pointer';
+            } else if (type === 'high') {
+              btn.className = 'risk-filter-btn px-2.5 py-0.5 text-xs rounded-md font-medium bg-rose-50 text-rose-700 border border-rose-200 shadow-xs cursor-pointer';
+            } else if (type === 'medium') {
+              btn.className = 'risk-filter-btn px-2.5 py-0.5 text-xs rounded-md font-medium bg-amber-50 text-amber-700 border border-amber-200 shadow-xs cursor-pointer';
+            }
+          }
+        };
+
+        // 现代 SaaS 逐条穿透风险卡片渲染器
+        const renderUnifiedRiskCard = (rawCardHtml, curIdx) => {
+          const titleMatch = rawCardHtml.match(/<h4>([\s\S]*?)<\/h4>/i);
+          const rawTitle = titleMatch ? titleMatch[1].replace(/<[^>]+>/g, '').trim() : '风险条款';
+          
+          const isHigh = rawTitle.includes('🔴') || rawTitle.includes('[高') || rawTitle.includes('高危') || rawTitle.includes('重大');
+
+          let cleanTitle = rawTitle
+            .replace(/^[🔴🟡🟢⚠️\s]*/g, '')
+            .replace(/^\[(高危|中危|低危|合规|优化|重大)?风险?\]\s*/g, '')
+            .trim();
+          
+          let clausePill = '';
+          const clauseMatch = cleanTitle.match(/^((?:第[一二三四五六七八九十\d]+条|\d+\.\d+)[^：:]*)[：:]\s*(.*)$/);
+          if (clauseMatch) {
+            clausePill = clauseMatch[1].trim();
+            cleanTitle = clauseMatch[2].trim();
+          }
+
+          // 提取争议条款原文
+          const quoteMatch = rawCardHtml.match(/<li><strong>【?条款原文引述】?<\/strong>[：:]\s*([\s\S]*?)(?=<\/li>|$)/i);
+          let rawQuote = quoteMatch ? quoteMatch[1].replace(/<[^>]+>/g, '').trim() : '';
+          if ((rawQuote.startsWith('“') && rawQuote.endsWith('”')) || 
+              (rawQuote.startsWith('"') && rawQuote.endsWith('"')) ||
+              (rawQuote.startsWith('「') && rawQuote.endsWith('」'))) {
+            rawQuote = rawQuote.slice(1, -1).trim();
+          }
+
+          // 争议点关键字标红高亮（保持原文字体，杜绝多重嵌套与红框重叠）
+          const redKeywords = [
+            '100% 的惩罚性赔偿金', '100% 的惩罚性赔偿', '100%惩罚性赔偿金', '100%惩罚性',
+            '不承担任何迟延履行违约金及利息责任', '不承担任何迟延履行违约金',
+            '随时单方面无条件解除', '随时无条件解除', '单方面无条件解除',
+            '永久且无偿转归甲方独家所有', '无偿转归甲方独家所有', '永久无偿转归',
+            '180 个工作日内组织内部验收', '180 个工作日', '视为未通过验收',
+            '满 6 个月后', '满 6 个月', '60 个工作日内',
+            '5%', '5％', '日 5%'
+          ];
+          redKeywords.sort((a, b) => b.length - a.length);
+          const escapedKeywords = redKeywords.map(k => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+          const highlightRegex = new RegExp('(' + escapedKeywords.join('|') + ')', 'g');
+
+          const highlightedQuote = rawQuote ? rawQuote.replace(
+            highlightRegex,
+            '<span class="inline px-1.5 py-0.5 mx-0.5 text-rose-700 bg-rose-50 border border-rose-200 rounded font-medium text-xs">$1</span>'
+          ) : '';
+
+          // 提取法理风险解构
+          const harmMatch = rawCardHtml.match(/<li><strong>【?法理风险解构】?<\/strong>[：:]\s*([\s\S]*?)(?=<\/li>|$)/i);
+          const harmContent = harmMatch ? harmMatch[1].replace(/<[^>]+>/g, '').trim() : '';
+
+          // 提取依据法律原文
+          const blockquoteMatch = rawCardHtml.match(/<blockquote>([\s\S]*?)<\/blockquote>/i);
+          let statuteContent = '';
+          if (blockquoteMatch) {
+            statuteContent = blockquoteMatch[1].replace(/📜\s*/g, '').trim();
+          } else {
+            const inlineStatute = rawCardHtml.match(/<li><strong>【?依据法律原文】?<\/strong>[：:]\s*([^<][\s\S]*?)(?=<\/li>|$)/i);
+            statuteContent = inlineStatute ? inlineStatute[1].replace(/📜\s*/g, '').trim() : '';
+          }
+
+          // 提取合规修改建议初稿代码块
+          const codeMatch = rawCardHtml.match(/<pre><code(?:\s+class="[^"]*")?>([\s\S]*?)<\/code><\/pre>/i);
+          const revisionCode = codeMatch ? codeMatch[1].trim() : '';
+          const escapedCode = encodeURIComponent(revisionCode);
+
+          const severityBadge = isHigh 
+            ? '<span class="px-2 py-0.5 text-[11px] font-semibold rounded bg-rose-50 text-rose-700 border border-rose-200 shadow-xs">高风险</span>' 
+            : '<span class="px-2 py-0.5 text-[11px] font-semibold rounded bg-amber-50 text-amber-700 border border-amber-200 shadow-xs">中风险</span>';
+
+          return `
+          <div id="risk-anchor-${curIdx}" class="risk-card-item rounded-xl border border-slate-200 bg-white shadow-xs divide-y divide-slate-100 mb-4 hover:border-slate-300 hover:shadow-sm transition-all" data-severity="${isHigh ? 'high' : 'medium'}">
+            <!-- Header -->
+            <div class="px-4 py-3 bg-slate-50/70 flex items-center justify-between gap-3">
+              <div class="flex items-center space-x-2.5 min-w-0">
+                ${severityBadge}
+                ${clausePill ? `<span class="px-2 py-0.5 text-[11px] rounded bg-white text-slate-700 border border-slate-200 font-mono shadow-xs shrink-0">${clausePill}</span>` : ''}
+                <h4 class="text-xs font-semibold text-slate-900 truncate">${cleanTitle}</h4>
+              </div>
+              <div class="flex items-center space-x-2 shrink-0">
+                <span class="text-[11px] text-slate-500 hidden sm:inline font-medium">${isHigh ? '建议阻断驳回' : '建议协商调整'}</span>
+                ${revisionCode ? `
+                <button 
+                  onclick="window.copyToClipboard('${escapedCode}')"
+                  class="px-2.5 py-1 text-[11px] text-slate-700 hover:text-slate-900 bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 rounded-md transition-all flex items-center space-x-1 active:scale-95 shadow-xs cursor-pointer font-medium">
+                  <svg class="w-3 h-3 text-emerald-600" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+                  <span>复制修改建议</span>
+                </button>
+                ` : ''}
+              </div>
+            </div>
+
+            <!-- Original Clause Quote -->
+            ${rawQuote ? `
+            <div class="p-4 bg-amber-50/20">
+              <div class="text-[11px] font-medium text-amber-800 mb-1.5 flex items-center space-x-1.5">
+                <svg class="w-3.5 h-3.5 text-amber-600" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+                <span>争议条款原文引述</span>
+              </div>
+              <div class="text-xs text-slate-800 font-sans leading-relaxed pl-3 border-l-2 border-amber-400 bg-amber-50/50 p-2.5 rounded-r">
+                “${highlightedQuote}”
+              </div>
+            </div>
+            ` : ''}
+
+            <!-- Legal Assessment & Statutory Ground -->
+            <div class="p-4 space-y-3">
+              ${harmContent ? `
+              <div>
+                <div class="text-[11px] font-medium text-rose-700 mb-1 flex items-center space-x-1.5">
+                  <svg class="w-3.5 h-3.5 text-rose-600" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                  <span>法务风险解构与商业后果</span>
+                </div>
+                <div class="text-xs text-slate-700 leading-relaxed pl-3 border-l-2 border-rose-400">
+                  ${harmContent}
+                </div>
+              </div>
+              ` : ''}
+
+              ${statuteContent ? `
+              <div class="pt-2 border-t border-slate-100">
+                <div class="text-[11px] font-medium text-blue-700 mb-1 flex items-center space-x-1.5">
+                  <svg class="w-3.5 h-3.5 text-blue-600" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3"/></svg>
+                  <span>法定依据与司法裁判尺度</span>
+                </div>
+                <div class="text-xs text-slate-700 leading-relaxed pl-3 border-l-2 border-blue-400 bg-blue-50/40 p-2.5 rounded-r">
+                  ${statuteContent}
+                </div>
+              </div>
+              ` : ''}
+            </div>
+
+            <!-- Suggested Revision -->
+            ${revisionCode ? `
+            <div class="p-4 bg-slate-50/60">
+              <div class="flex items-center justify-between mb-2">
+                <div class="text-[11px] font-medium text-emerald-700 flex items-center space-x-1.5">
+                  <svg class="w-3.5 h-3.5 text-emerald-600" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                  <span>建议合规条款条文（可直接替换原文）</span>
+                </div>
+              </div>
+              <pre class="bg-slate-900 border border-slate-800 rounded-lg p-3.5 max-h-48 overflow-y-auto custom-scroll shadow-xs"><code class="text-xs text-emerald-300 font-mono leading-relaxed whitespace-pre-wrap break-words">${revisionCode}</code></pre>
+            </div>
+            ` : ''}
+          </div>
+          `;
+        };
+
+        // 现代 SaaS 司法裁判与商务谈判抓手卡片渲染器
+        const renderNegotiationCard = (rawText, idx) => {
+          let text = rawText.replace(/<\/?li>/g, '').replace(/<\/?p>/g, '').trim();
+          if (!text) return '';
+          
+          let title = '';
+          let body = text;
+          const strongMatch = text.match(/<strong>([\s\S]*?)<\/strong>[：:]\s*([\s\S]*)$/i);
+          if (strongMatch) {
+            title = strongMatch[1].replace(/<[^>]+>/g, '').trim();
+            body = strongMatch[2].trim();
+          } else {
+            const numMatch = text.match(/^[一二三四五\d]+[、. ]\s*([^：:\n]+)[：:]\s*([\s\S]*)$/);
+            if (numMatch) {
+              title = numMatch[1].trim();
+              body = numMatch[2].trim();
+            } else {
+              title = '谈判抓手 0' + (idx + 1);
+            }
+          }
+
+          // 提取权威裁判要旨案号及民法典法条
+          const caseMatch = body.match(/(?:(?:最高法\s*)?\(\d{4}\)[^，。\s；]+|(?:《?民法典》?第[一二三四五六七八九十百]+条))/g);
+          let caseBadges = '';
+          if (caseMatch) {
+            caseBadges = [...new Set(caseMatch)].map(c => `<span class="px-2 py-0.5 text-[10px] rounded bg-blue-50 text-blue-700 border border-blue-200 font-mono shadow-xs">${c.trim()}</span>`).join(' ');
+          }
+
+          // 分离法理依据与实战话术
+          let defense = '';
+          let tactic = '';
+          if (body.includes('谈判替代话术') || body.includes('谈判抓手')) {
+            const parts = body.split(/(?:谈判替代话术[：:]|谈判抓手与条款对冲[：:]|谈判抓手[：:])/);
+            defense = parts[0].replace(/核心风险防御[：:]/, '').trim();
+            tactic = (parts[1] || '').trim();
+          } else {
+            const splitMatch = body.match(/([\s\S]*?)(建议(?:以|向|在|将)[\s\S]*)$/);
+            if (splitMatch) {
+              defense = splitMatch[1].trim();
+              tactic = splitMatch[2].trim();
+            } else {
+              defense = body;
+            }
+          }
+
+          return `
+          <div class="negotiation-card rounded-xl border border-slate-200 bg-white p-4 mb-3.5 space-y-3 shadow-xs hover:border-slate-300 transition-all">
+            <div class="flex items-start justify-between gap-3">
+              <div class="flex items-center space-x-2.5">
+                <span class="w-6 h-6 rounded-md bg-slate-100 text-slate-700 text-xs font-mono font-semibold flex items-center justify-center shrink-0 border border-slate-200">
+                  0${idx + 1}
+                </span>
+                <h4 class="text-xs font-semibold text-slate-900 tracking-wide">${title}</h4>
+              </div>
+              <div class="flex flex-wrap gap-1.5 justify-end">
+                ${caseBadges}
+              </div>
+            </div>
+            
+            <div class="space-y-2 text-xs">
+              <div class="pl-3 border-l-2 border-slate-300 text-slate-700 leading-relaxed">
+                <span class="text-slate-500 font-medium">裁判要旨与法理底线：</span>${defense}
+              </div>
+              ${tactic ? `
+              <div class="pl-3 border-l-2 border-emerald-500 bg-emerald-50/70 p-2.5 rounded-r text-emerald-900 leading-relaxed">
+                <div class="text-[11px] font-medium text-emerald-700 mb-1 flex items-center space-x-1">
+                  <svg class="w-3.5 h-3.5 text-emerald-600" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                  <span>实战谈判抓手与对话策略：</span>
+                </div>
+                ${tactic}
+              </div>
+              ` : ''}
+            </div>
+          </div>
+          `;
+        };
+
+        const enhanceReportHtml = (rawHtml) => {
+          if (!rawHtml) return '';
+          let html = rawHtml;
+
+          // 1. 全景概览：现代 SaaS 高管合规审计看板 (白底卡片 + 细致边框 + 柔和状态色)
+          html = html.replace(
+            /<h3>[^\n<]*一、[^\n<]*<\/h3>([\s\S]*?)(?=<h3>[^\n<]*二、[^\n<]*<\/h3>|$)/i,
+            (match, p1) => {
+              const typeMatch = p1.match(/合同类型判定[^\n：:]*[：:]\s*([^\n<]+)/);
+              const stanceMatch = p1.match(/审查立场[^\n：:]*[：:]\s*([^\n<]+)/);
+              const ratingMatch = p1.match(/合同综合风控评级[^\n：:]*[：:]\s*([^\n<]+)/);
+              const summaryMatch = p1.match(/审查风险条目汇总[^\n：:]*[：:]\s*([^\n<]+)/);
+              const opinionMatch = p1.match(/资深法务(?:综合)?评估意见[^\n：:]*[：:]\s*([\s\S]*?)(?=<\/p>|<\/li>|$)/);
+
+              const cType = typeMatch ? typeMatch[1].replace(/<[^>]+>/g, '').trim() : (contractType.value || '软件技术开发与外包采购合同');
+              const cStance = stanceMatch ? stanceMatch[1].replace(/<[^>]+>/g, '').trim() : (clientRole.value || '对等平衡');
+              const rawRating = ratingMatch ? ratingMatch[1].replace(/<[^>]+>/g, '').replace(/[🔴🟡🟢]/g, '').trim() : '高危风险';
+              const cSummary = summaryMatch ? summaryMatch[1].replace(/<[^>]+>/g, '').trim() : '';
+              const cOpinion = opinionMatch ? opinionMatch[1].replace(/<[^>]+>/g, '').trim() : '';
+
+              const isHigh = rawRating.includes('高');
+              const isClean = rawRating.includes('合规') || rawRating.includes('良好');
+              const highCount = (cSummary.match(/高危[^\d]*(\d+)/) || [, (stats.value.high || '0')])[1];
+              const medCount = (cSummary.match(/中危[^\d]*(\d+)/) || [, (stats.value.medium || '0')])[1];
+
+              return `
+              <div class="overview-scorecard rounded-xl p-4 mb-5 bg-slate-50/60 border border-slate-200 shadow-xs space-y-3.5">
+                <div class="flex items-center justify-between pb-3 border-b border-slate-200">
+                  <div>
+                    <div class="text-xs font-semibold text-slate-900 tracking-tight flex items-center space-x-2">
+                      <span>合同合规审查总览</span>
+                      <span class="text-slate-300">|</span>
+                      <span class="text-slate-600 font-normal">${cType}</span>
+                    </div>
+                    <div class="text-[11px] text-slate-500 mt-1">
+                      己方立场：<span class="text-slate-800 font-medium">${cStance}</span>
+                    </div>
+                  </div>
+                  <div class="px-3 py-1 rounded-full text-xs font-semibold border flex items-center space-x-1.5 shadow-xs ${
+                    isHigh ? 'bg-rose-50 text-rose-700 border-rose-200' :
+                    isClean ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                    'bg-amber-50 text-amber-700 border-amber-200'
+                  }">
+                    <span class="w-1.5 h-1.5 rounded-full ${isHigh ? 'bg-rose-500' : isClean ? 'bg-emerald-500' : 'bg-amber-500'}"></span>
+                    <span>${rawRating}</span>
+                  </div>
+                </div>
+
+                <!-- 统计指标扁平胶囊行 -->
+                <div class="flex items-center space-x-3 text-xs">
+                  <div class="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-white border border-slate-200 shadow-xs">
+                    <span class="w-2 h-2 rounded-full bg-rose-500"></span>
+                    <span class="text-slate-500 text-[11px]">高风险项：</span>
+                    <span class="font-bold text-rose-600 font-mono">${highCount}</span>
+                  </div>
+                  <div class="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-white border border-slate-200 shadow-xs">
+                    <span class="w-2 h-2 rounded-full bg-amber-500"></span>
+                    <span class="text-slate-500 text-[11px]">中风险项：</span>
+                    <span class="font-bold text-amber-600 font-mono">${medCount}</span>
+                  </div>
+                  <div class="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-white border border-slate-200 shadow-xs">
+                    <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                    <span class="text-slate-500 text-[11px]">修改建议：</span>
+                    <span class="font-bold text-emerald-600 font-mono">全部就绪</span>
+                  </div>
+                </div>
+
+                ${cOpinion ? `
+                <div class="p-3 rounded-lg bg-white border border-slate-200/90 text-xs text-slate-700 leading-relaxed shadow-xs">
+                  <span class="text-slate-500 font-medium">法务风控综述：</span>${cOpinion}
+                </div>
+                ` : ''}
+              </div>
+              `;
+            }
+          );
+
+          // 2. 提取风险项，并构建快捷导航与分级筛选
+          const section2Match = html.match(/(<h3>[^\n<]*二、[^\n<]*<\/h3>)([\s\S]*?)(?=<h3>[^\n<]*三、[^\n<]*<\/h3>|$)/i);
+          if (section2Match) {
+            const sec2Body = section2Match[2];
+            const parts = sec2Body.split(/(?=<h4>)/g).filter(p => p.trim() && p.includes('<h4>'));
+            let quickNavButtons = [];
+            let assembledCards = [];
+            let curRiskIdx = 0;
+            let highRiskCount = 0;
+            let medRiskCount = 0;
+
+            for (let part of parts) {
+              const titleMatch = part.match(/<h4>([\s\S]*?)<\/h4>/i);
+              if (titleMatch) {
+                const rawTitle = titleMatch[1].replace(/<[^>]+>/g, '').trim();
+                const isHigh = rawTitle.includes('🔴') || rawTitle.includes('[高') || rawTitle.includes('高危') || rawTitle.includes('重大');
+                if (isHigh) highRiskCount++; else medRiskCount++;
+
+                let cleanTitle = rawTitle
+                  .replace(/^[🔴🟡🟢⚠️\s]*/g, '')
+                  .replace(/^\[(高危|中危|低危|合规|优化|重大)?风险?\]\s*/g, '')
+                  .trim();
+                const cMatch = cleanTitle.match(/^((?:第[一二三四五六七八九十\d]+条|\d+\.\d+)[^：:]*)[：:]\s*(.*)$/);
+                const shortName = cMatch ? cMatch[1] : cleanTitle.substring(0, 10);
+                const idx = curRiskIdx;
+
+                quickNavButtons.push(`
+                  <button onclick="document.getElementById('risk-anchor-${idx}')?.scrollIntoView({behavior:'smooth',block:'start'})" class="px-2.5 py-1 text-xs font-medium rounded-md border transition-all active:scale-95 cursor-pointer flex items-center space-x-1.5 shadow-xs ${
+                    isHigh 
+                      ? 'bg-rose-50/70 hover:bg-rose-100 text-rose-700 border-rose-200' 
+                      : 'bg-amber-50/70 hover:bg-amber-100 text-amber-700 border-amber-200'
+                  }">
+                    <span class="w-1.5 h-1.5 rounded-full ${isHigh ? 'bg-rose-500' : 'bg-amber-500'}"></span>
+                    <span>${shortName}</span>
+                  </button>
+                `);
+
+                assembledCards.push(renderUnifiedRiskCard(part, idx));
+                curRiskIdx++;
+              }
+            }
+
+            const quickNavHtml = quickNavButtons.length > 0 ? `
+            <div class="risk-quick-nav p-3.5 mb-4 rounded-xl bg-slate-50/70 border border-slate-200 shadow-xs">
+              <div class="flex items-center justify-between mb-2.5 pb-2 border-b border-slate-200">
+                <div class="flex items-center space-x-1">
+                  <span class="text-[11px] text-slate-500 font-medium mr-1.5">筛选视图：</span>
+                  <button onclick="window.filterRisks('all', this)" class="risk-filter-btn px-2.5 py-0.5 text-xs rounded-md font-medium bg-white text-slate-900 border border-slate-300 shadow-xs cursor-pointer">全部 (${assembledCards.length})</button>
+                  <button onclick="window.filterRisks('high', this)" class="risk-filter-btn px-2.5 py-0.5 text-xs rounded-md font-medium text-rose-600 hover:bg-rose-50 border border-transparent cursor-pointer transition-all">高风险 (${highRiskCount})</button>
+                  <button onclick="window.filterRisks('medium', this)" class="risk-filter-btn px-2.5 py-0.5 text-xs rounded-md font-medium text-amber-600 hover:bg-amber-50 border border-transparent cursor-pointer transition-all">中风险 (${medRiskCount})</button>
+                </div>
+                <button onclick="document.getElementById('sec3-anchor')?.scrollIntoView({behavior:'smooth',block:'start'})" class="text-xs text-blue-600 hover:text-blue-700 transition-all cursor-pointer flex items-center space-x-1 font-medium">
+                  <span>直达谈判指引</span>
+                  <span>&darr;</span>
+                </button>
+              </div>
+              <div class="flex flex-wrap gap-1.5">
+                ${quickNavButtons.join('')}
+              </div>
+            </div>
+            ` : '';
+
+            const cleanSec2Header = `<div class="text-xs font-semibold text-slate-800 mb-3 flex items-center space-x-2">
+              <span class="w-2 h-2 rounded-full bg-rose-500"></span>
+              <span>逐条穿透审查与条文修改建议</span>
+            </div>`;
+
+            html = html.replace(section2Match[0], cleanSec2Header + quickNavHtml + assembledCards.join(''));
+          }
+
+          // 3. Section 3: 司法裁判与商务谈判抓手现代 SaaS 模块
+          html = html.replace(
+            /<h3>[^\n<]*三、[^\n<]*<\/h3>([\s\S]*?)$/i,
+            (m, rawSec3) => {
+              let cleanedSec3 = rawSec3.replace(/<\/?ol>/g, '').replace(/<\/?ul>/g, '');
+              const items = cleanedSec3.split(/(?=<li>|<p>[一二三四五\d]+[、. ])/g).filter(x => x.trim());
+              let cardsHtml = items.map((it, idx) => renderNegotiationCard(it, idx)).join('');
+
+              return `
+              <div id="sec3-anchor" class="pt-4"></div>
+              <div class="mt-6 mb-8 p-4 rounded-xl bg-slate-50/70 border border-slate-200 shadow-xs">
+                <div class="flex items-center justify-between text-xs font-semibold text-slate-900 mb-3 pb-2.5 border-b border-slate-200">
+                  <div class="flex items-center space-x-2">
+                    <svg class="w-4 h-4 text-blue-600" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3"/></svg>
+                    <span>司法裁判指引与商务谈判抓手</span>
+                  </div>
+                  <span class="text-[11px] text-slate-500 font-normal">权威判例支撑 · 对冲霸王条款</span>
+                </div>
+                <div class="space-y-3">
+                  ${cardsHtml}
+                </div>
+              </div>
+              `;
+            }
+          );
+
+          // 4. 清理空标签与残留 markdown 标记
+          html = html.replace(/<ul>\s*<\/ul>/g, '');
+          html = html.replace(/<p>\s*<\/p>/g, '');
+          html = html.replace(/###\s+/g, '');
+          html = html.replace(/####\s+/g, '');
+
+          return html;
+        };
+
+        const fallbackMarkdownParse = (md) => {
+          if (!md) return '';
+          let res = md;
+          res = res.replace(/```[a-zA-Z]*\n([\s\S]*?)```/g, '<pre><code>$1</code></pre>');
+          res = res.replace(/^####\s+(.*$)/gim, '<h4>$1</h4>');
+          res = res.replace(/^###\s+(.*$)/gim, '<h3>$1</h3>');
+          res = res.replace(/^##\s+(.*$)/gim, '<h2>$1</h2>');
+          res = res.replace(/^#\s+(.*$)/gim, '<h1>$1</h1>');
+          res = res.replace(/^\>\s+(.*$)/gim, '<blockquote>$1</blockquote>');
+          res = res.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+          res = res.replace(/^\s*[-*]\s+(.*$)/gim, '<li>$1</li>');
+          res = res.replace(/\n{2,}/g, '</p><p>');
+          res = res.replace(/\n/g, '<br/>');
+          return '<p>' + res + '</p>';
+        };
+
+        const renderedMarkdown = computed(() => {
+          if (!reviewContent.value) return '';
+          try {
+            let parsed = '';
+            if (typeof marked !== 'undefined' && marked.parse) {
+              parsed = marked.parse(reviewContent.value, { breaks: true, gfm: true });
+            } else {
+              parsed = fallbackMarkdownParse(reviewContent.value);
+            }
+            return enhanceReportHtml(parsed);
+          } catch (e) {
+            console.error('Markdown 增强解析异常:', e);
+            try {
+              const fallback = fallbackMarkdownParse(reviewContent.value);
+              return enhanceReportHtml(fallback);
+            } catch (err2) {
+              const sanitized = (reviewContent.value || '')
+                .replace(/#{1,6}\s*/g, '')
+                .replace(/\*\*/g, '')
+                .replace(/^\s*>\s*/gm, '')
+                .replace(/^\s*[-*]\s+/gm, '• ');
+              return '<div class="whitespace-pre-wrap text-xs text-slate-800 font-sans leading-relaxed p-4 bg-white rounded-xl border border-slate-200 shadow-xs">' + sanitized + '</div>';
+            }
+          }
+        });
+
+        // 流式审查主流程
+        const startReview = async () => {
+          if (!contractText.value.trim()) return;
+          
+          isReviewing.value = true;
+          hasResults.value = true;
+          userScrolledUp.value = false;
+          reviewContent.value = '';
+          revisedContractText.value = '';
+          precedents.value = [];
+          activeTab.value = 'review';
+          statusMessage.value = '正在检索法律依据与合规审查规则...';
+
+          try {
+            const response = await fetch('/api/contract/review/stream', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                contract_text: contractText.value,
+                contract_type: contractType.value,
+                client_role: clientRole.value,
+                review_stance: reviewStance.value
+              })
+            });
+
+            if (!response.ok) {
+              throw new Error('网络请求错误 ' + response.statusText);
+            }
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder('utf-8');
+            let buffer = '';
+
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+
+              buffer += decoder.decode(value, { stream: true });
+              const lines = buffer.split('\n\n');
+              buffer = lines.pop();
+
+              for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                  const jsonStr = line.replace(/^data: /, '').trim();
+                  if (!jsonStr) continue;
+
+                  try {
+                    const frame = JSON.parse(jsonStr);
+                    if (frame.type === 'status') {
+                      statusMessage.value = frame.message;
+                      if (frame.detected_type) {
+                        contractType.value = frame.detected_type;
+                      }
+                    } else if (frame.type === 'precedents') {
+                      precedents.value = frame.data || [];
+                      statusMessage.value = frame.message;
+                    } else if (frame.type === 'content') {
+                      reviewContent.value += frame.delta;
+                      hasResults.value = true;
+                      nextTick(() => {
+                        // 审查生成过程中，如果用户未手动回翻查看前面，保持跟随最新分析
+                        if (reportContainer.value && !userScrolledUp.value) {
+                          reportContainer.value.scrollTop = reportContainer.value.scrollHeight;
+                        }
+                      });
+                    } else if (frame.type === 'draft') {
+                      revisedContractText.value = frame.data;
+                      if (frame.is_perfect) {
+                        ElementPlus.ElMessage.success('合同合规评级良好，未检出实质性法律风险');
+                      }
+                    } else if (frame.type === 'done') {
+                      hasResults.value = true;
+                      statusMessage.value = '审查完成';
+                      ElementPlus.ElMessage.success('合同合规审查完成');
+                      // 审查完成后自动平滑回到顶部，展示审计总览看板与第一项核心风险
+                      nextTick(() => {
+                        if (reportContainer.value) {
+                          reportContainer.value.scrollTo({ top: 0, behavior: 'smooth' });
+                        }
+                      });
+                    } else if (frame.type === 'error') {
+                      ElementPlus.ElMessage.error(frame.message);
+                      statusMessage.value = '审查异常中断';
+                    }
+                  } catch (err) {
+                    console.error('SSE 帧解析异常', err);
+                  }
+                }
+              }
+            }
+          } catch (e) {
+            ElementPlus.ElMessage.error('审查启动失败: ' + e.message);
+            statusMessage.value = '连接中断';
+          } finally {
+            isReviewing.value = false;
+          }
+        };
+
+        // 从零起草初稿
+        const submitCreateDraft = async () => {
+          isDrafting.value = true;
+          try {
+            const res = await fetch('/api/contract/draft/create', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                contract_type: draftForm.contract_type,
+                party_a: draftForm.party_a,
+                party_b: draftForm.party_b,
+                core_subject: draftForm.core_subject,
+                payment_terms: draftForm.payment_terms,
+                special_terms: draftForm.special_terms,
+                client_role: draftForm.client_role
+              })
+            });
+
+            const data = await res.json();
+            if (data.data && data.data.draft_text) {
+              revisedContractText.value = data.data.draft_text;
+              activeTab.value = 'draft';
+              ElementPlus.ElMessage.success('标准合同初稿起草完成');
+            } else {
+              throw new Error(data.message || '起草响应为空');
+            }
+          } catch (e) {
+            ElementPlus.ElMessage.error('初稿起草失败: ' + e.message);
+          } finally {
+            isDrafting.value = false;
+          }
+        };
+
+        // 导出带有原生批注与修订的 Word (.docx)
+        const downloadAnnotatedDocx = async () => {
+          if (!contractText.value.trim() && !reviewContent.value.trim()) {
+            ElementPlus.ElMessage.warning('暂无审查数据可供导出');
+            return;
+          }
+
+          isExportingDocx.value = true;
+          try {
+            const res = await fetch('/api/contract/export-docx', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                original_text: contractText.value,
+                review_report: reviewContent.value,
+                title: uploadedFileName.value ? `审阅批注_${uploadedFileName.value}` : '合同审查审阅批注版'
+              })
+            });
+
+            if (!res.ok) {
+              throw new Error('导出服务异常: ' + res.statusText);
+            }
+
+            const blob = await res.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${uploadedFileName.value || '合同审查审阅批注版'}.docx`;
+            a.click();
+            URL.revokeObjectURL(url);
+            ElementPlus.ElMessage.success('已导出带有原位批注与修订标记的 Word 文档');
+          } catch (e) {
+            ElementPlus.ElMessage.error('导出 Word 失败: ' + e.message);
+          } finally {
+            isExportingDocx.value = false;
+          }
+        };
+
+        const copyReviewReport = () => {
+          navigator.clipboard.writeText(reviewContent.value).then(() => {
+            ElementPlus.ElMessage.success('已复制审查报告至剪贴板');
+          });
+        };
+
+        const copyRevisedDraft = () => {
+          navigator.clipboard.writeText(revisedContractText.value).then(() => {
+            ElementPlus.ElMessage.success('已复制初稿全文至剪贴板');
+          });
+        };
+
+        const downloadDraftText = () => {
+          if (!revisedContractText.value) return;
+          const blob = new Blob([revisedContractText.value], { type: 'text/plain;charset=utf-8' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `合规合同初稿_${uploadedFileName.value || '草案'}.txt`;
+          a.click();
+          URL.revokeObjectURL(url);
+          ElementPlus.ElMessage.success('初稿文件已开始下载');
+        };
+
+        const regenerateDraftWithAI = async () => {
+          if (!reviewContent.value) {
+            ElementPlus.ElMessage.warning('请先等待审查完成');
+            return;
+          }
+          isGeneratingDraft.value = true;
+          try {
+            const res = await fetch('/api/contract/generate-draft', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                original_text: contractText.value,
+                review_report: reviewContent.value
+              })
+            });
+            const data = await res.json();
+            if (data.data && data.data.revised_contract) {
+              revisedContractText.value = data.data.revised_contract;
+              ElementPlus.ElMessage.success('合同润色完成');
+            }
+          } catch (e) {
+            ElementPlus.ElMessage.error('润色失败: ' + e.message);
+          } finally {
+            isGeneratingDraft.value = false;
+          }
+        };
+
+        return {
+          workMode,
+          contractText,
+          contractType,
+          clientRole,
+          reviewStance,
+          isReviewing,
+          isDrafting,
+          isExportingDocx,
+          hasResults,
+          reviewContent,
+          statusMessage,
+          precedents,
+          stats,
+          reportContainer,
+          userScrolledUp,
+          handleScroll,
+          scrollToTop,
+          renderedMarkdown,
+          fileInput,
+          isDragging,
+          isParsingFile,
+          uploadedFileName,
+          triggerFileInput,
+          handleFileSelect,
+          handleFileDrop,
+          loadSampleContract,
+          clearAll,
+          startReview,
+          copyReviewReport,
+          activeTab,
+          revisedContractText,
+          isGeneratingDraft,
+          copyRevisedDraft,
+          downloadDraftText,
+          regenerateDraftWithAI,
+          draftForm,
+          submitCreateDraft,
+          downloadAnnotatedDocx,
+          isContractCompliant
+        };
+      }
+    }).use(ElementPlus).mount('#app');
+  </script>
+</body>
+</html>

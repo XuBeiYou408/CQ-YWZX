@@ -13,6 +13,8 @@ __pycache__/
 *.pyo
 *.egg-info/
 dist/
+!**/frontend/dist/
+!**/frontend/dist/**
 build/
 .eggs/
 *.egg

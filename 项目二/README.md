@@ -1,0 +1,159 @@
+﻿# 合同审查 AGENT · 企业级合同合规智能审查系统 (v2.0)
+
+基于 **FastAPI + Vue 3 + Tailwind CSS + OOXML Lite + LM Studio / 端侧大模型** 的企业级合同合规智能审查、风险诊断与原生 Word 修订批注导出系统。
+
+专为解决企业合同审查中**商业秘密上云泄露风险、传统大模型审查缺乏法律事实与判例支撑、审查意见停留在纯文本无法直接回填到 Word 原文档、以及审查标准不统一**等核心业务痛点而设计。
+
+---
+
+## 🛠️ 系统全景架构
+
+```mermaid
+flowchart TD
+    User(["法务 / 业务人员 (Vue 3 现代 SaaS 工作台)"]) -->|HTTP / SSE 流式通信| Gateway["FastAPI 统一网关 (app/main.py)"]
+    
+    subgraph Frontend ["前端交互与渲染 (frontend/dist/index.html)"]
+        WorkBench["三栏分步协同工作台"]
+        WorkBench --> Left["左侧: 审查配置 / 示范合同样本 / 多立场选择"]
+        WorkBench --> Mid["中间: 合同正文 / 风险条款原位高亮"]
+        WorkBench --> Right["右侧: 风险看板 / 审查意见 / 判例匹配 / Word导出"]
+    end
+
+    subgraph Backend ["智能体审查核心引擎 (contract/engine.py)"]
+        Gateway --> Parser["合同结构化解析器 (contract/parser.py)"]
+        Parser --> Gates{"16 类业务专项门禁与深水区条款分类器 (contract/gates/special_gates.py)"}
+        
+        Gates --> Precedents[("20 项最高人民法院司法判例库 (contract/precedents.py)")]
+        Precedents --> Prompts["立场化审查与严谨防幻觉提示词 (contract/prompts.py)"]
+        
+        Prompts --> LLM{"本地端侧高隐私大模型 (LM Studio: 127.0.0.1:1234)"}
+        LLM -. "流式 SSE 审查思考与结果" .-> Gateway
+    end
+
+    subgraph DocumentWriter ["Word 原生修订批注生成器 (contract/document_annotator.py)"]
+        Backend --> OOXML["OOXML Lite 引擎 (contract/ooxml_lite.py)"]
+        OOXML --> Docx["原生 .docx 文档 (Word 原生 Track Changes + Comments 批注框)"]
+    end
+```
+
+---
+
+## 🔥 核心特性与技术亮点
+
+1. **企业级现代 SaaS 交互设计 (Modern SaaS Workbench)**：
+   - 采用国际流行 SaaS 设计语言（Slate 调色板、圆角卡片、高对比度微渐变、清晰层次排版）。
+   - 风险分级雷达标记：高危（红色）、中危（橙色）、低危（黄色）、放行（绿色），风险要点与原位条款智能关联。
+   - 深度纯净清洗机制：彻底剔除前端多余的 Markdown、反引号、代码块残留，阅读体验丝滑清爽。
+
+2. **100% 物理隔离与本地隐私计算 (Zero Data Leakage)**：
+   - 专为企业核心商业合同、投资协议、保密协议打造。
+   - 默认对接 `LM Studio` / 本地端侧推理服务（默认接入 `http://127.0.0.1:1234/v1`），审查全过程数据不离开本地物理设备。
+
+3. **16 大类专项审查门禁与深水区条款深挖**：
+   - 覆盖**股权转让与投资合伙、业绩对赌与补偿、反稀释保护、商业租赁、软件开发交付、买卖购销、劳动用工与保密竞业**等核心场景。
+   - 自动识别隐蔽性极强的深水区免责套路、无限连带责任、违约金倒挂等不平等条款。
+
+4. **20 项最高人民法院/裁判文书网法条判例知识库**：
+   - 融合《中华人民共和国民法典》、《最高人民法院关于适用〈民法典〉合同编通则若干问题的解释》以及代表性司法裁判指引。
+   - 审查意见自动附带**司法案号**与**裁判规则**（例如违约金过高司法酌减 30% 裁判规则、业绩对赌回购认定标准等），权威可信。
+
+5. **真正的 Word 原生修订与批注导出 (OOXML Native Track Changes & Comments)**：
+   - 业界突破性轻量级方案，无需配置复杂的外部渲染服务或依赖 Office 进程。
+   - 基于纯 Python 实现的 OOXML 语法树操作，将审查修改建议直接转换为 Word 原生**删除线 (`<w:del>`)、插入线 (`<w:ins>`) 与边栏气泡批注 (`<w:comment>`)**。
+   - 导出的 Word 文档在 Microsoft Word、WPS 中打开时，法务可直接点击“接受所有修订”或“逐项审阅批注”，无缝嵌入企业流转协同。
+
+6. **三国立场切换与合同起草功能**：
+   - 支持**【偏向甲方 (买方/委托方)】**、**【偏向乙方 (卖方/服务方)】**、**【客观中立 (法官/公证视角)】**三种立场深度审视。
+   - 支持提供需求大纲一键自动起草严密标准的合同样本。
+
+---
+
+## 📂 项目目录结构
+
+```
+项目二/
+├── run.py                         # 系统一键启动入口 (FastAPI + Uvicorn + 自动打开浏览器)
+├── config.py                      # 统一运行时配置文件 (端口 8020 / LM Studio 接入配置)
+├── 一键启动.bat                   # Windows 环境双击一键极速启动脚本
+├── README.md                      # 系统架构与使用指南
+├── requirements.txt               # Python 依赖清单
+├── .env.example                   # 环境变量配置参考范本
+├── .gitignore                     # Git 忽略规则
+├── sample_contract.py             # 内置真实商业合同样本集 (股权/租赁/软件/劳动)
+│
+├── app/                           # FastAPI 服务层
+│   ├── main.py                    # API 路由装配、CORS 配置与前端静态资源挂载
+│   ├── schemas.py                 # Pydantic 请求与响应数据结构契约
+│   └── routes/
+│       └── contract.py            # 审查、流式推理、判例检索与 Word 批注导出路由
+│
+├── contract/                      # 智能体核心算法与风控逻辑层
+│   ├── engine.py                  # 审查流程调度中枢与多轮推理管线
+│   ├── parser.py                  # 混合文本与段落结构化解析器
+│   ├── prompts.py                 # 针对法务立场的防御性系统提示词工程
+│   ├── precedents.py              # 20 项最高院裁判指引与司法案例库
+│   ├── ooxml_lite.py              # 轻量级 OOXML 批注与修订语法底层引擎
+│   ├── document_annotator.py      # Word 批注封装与字节流导出器
+│   ├── data/                      # 预置标准条款与风控标签字典
+│   │   ├── clause_standards.csv
+│   │   ├── contract_types.csv
+│   │   ├── review_checklists.csv
+│   │   └── risk_labels.csv
+│   └── gates/                     # 16 类专项审查门禁与条款级深水区门禁
+│       └── special_gates.py
+│
+├── frontend/                      # 现代 SaaS 交互工作台前端
+│   └── dist/
+│       ├── index.html             # 单页现代 SaaS 工作台 (Vue 3 + Tailwind + Element Plus)
+│       └── marked.min.js          # 本地 Markdown 解析脚本
+│
+└── tests/                         # 自动化测试与质量检验套件
+    ├── verify_all.py              # 全链路 5 大核心模块自动化集成测试脚本
+    ├── test_contract_review.py    # 审查逻辑单元测试
+    ├── test_annotator.py          # Word 批注导出功能验证
+    ├── test_api_endpoints.py      # FastAPI 接口自动化用例
+    ├── test_lmstudio_conn.py      # LM Studio 本地服务连通性测试
+    └── test_universal_audit.py    # 通用风控规则测试
+```
+
+---
+
+## 🚀 快速启动指南
+
+### 1. 环境准备
+- 推荐使用 Python 3.10 或更高版本。
+- 安装项目依赖：
+```bash
+cd 项目二
+pip install -r requirements.txt
+```
+
+### 2. 启动大模型服务
+- 打开 **LM Studio**（或 Ollama 等兼容 OpenAI 接口的本地端侧服务）。
+- 加载所选大模型（如 `qwen2.5-14b-instruct` / `qwen2.5-7b-instruct`）。
+- 启动 **Local Server**（默认监听端口 `1234`）。
+
+### 3. 一键启动合同审查系统
+- **方式一（便捷）**：双击运行项目根目录下的 `一键启动.bat`。
+- **方式二（命令行）**：
+```bash
+python run.py
+```
+服务将在 `http://localhost:8020` 启动，并会自动为您在默认浏览器中打开现代 SaaS 审查工作台。
+
+---
+
+## 🧪 自动化测试与验证
+
+项目提供了一体化自动化验证套件，覆盖门禁路由、判例检索、Word 原生批注导出、接口可用性等全流程：
+
+```bash
+python tests/verify_all.py
+```
+
+执行后将运行以下 5 大测试项并报告结果：
+1. `[1]` 验证 16 类专项门禁与条款级深水区门禁路由
+2. `[2]` 验证判例库与检索召回 (20 项司法判例)
+3. `[3]` 验证 Word 原生 Track Changes 批注导出 (带风险条款标注)
+4. `[4]` 验证 Word 原生批注导出 (无风险绿标放行)
+5. `[5]` 验证 FastAPI 核心接口与静态前端挂载

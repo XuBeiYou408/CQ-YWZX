@@ -1,0 +1,29 @@
+# ============================================
+# 敏感文件与环境缓存
+# ============================================
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+
+# Frontend (dist 目录保留用于开箱即用)
+!frontend/dist/
+!frontend/dist/**
+
+# 编辑器
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# 临时日志与导出报告
+*.log
