@@ -1,0 +1,1160 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SalesAgent · 企业销售周报自动汇总智能体</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Vue 3 CDN -->
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  <!-- Marked for markdown parsing in raw report viewer -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#f0fdf9',
+              100: '#ccfbf0',
+              500: '#00b395',
+              600: '#006b58',
+              700: '#005445',
+              800: '#004237',
+              900: '#00332a',
+            },
+            surface: {
+              50: '#f8fafc',
+              100: '#f1f5f9',
+              200: '#e2e8f0',
+              300: '#cbd5e1',
+              800: '#1e293b',
+              900: '#0f172a',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
+    body {
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
+      background-color: #f8fafc;
+    }
+    /* 自定义滚动条 */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #f1f5f9;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
+    }
+    /* 仿真 A4 纸张排版 */
+    .paper-sheet {
+      background: #ffffff;
+      box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.08), 0 2px 6px -1px rgba(0, 0, 0, 0.04);
+      border: 1px solid #e2e8f0;
+      min-height: 520px;
+    }
+    .markdown-body table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1rem 0;
+      font-size: 0.875rem;
+    }
+    .markdown-body th, .markdown-body td {
+      border: 1px solid #e2e8f0;
+      padding: 0.5rem 0.75rem;
+      text-align: left;
+    }
+    .markdown-body th {
+      background-color: #f1f5f9;
+      font-weight: 600;
+      color: #334155;
+    }
+    .markdown-body h1, .markdown-body h2, .markdown-body h3 {
+      font-weight: 700;
+      color: #0f172a;
+      margin-top: 1rem;
+      margin-bottom: 0.5rem;
+    }
+    .markdown-body ul {
+      list-style-type: disc;
+      padding-left: 1.25rem;
+      margin: 0.5rem 0;
+    }
+    .markdown-body hr {
+      border: 0;
+      border-top: 1px solid #e2e8f0;
+      margin: 1rem 0;
+    }
+  </style>
+</head>
+<body class="text-slate-800 antialiased min-h-screen flex flex-col">
+  <div id="app" class="flex-1 flex flex-col">
+
+    <!-- 顶部导航栏 -->
+    <header class="sticky top-0 z-30 bg-white/90 backdrop-blur-md border-b border-slate-200 shadow-sm">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+        
+        <!-- 左侧 Brand -->
+        <div class="flex items-center space-x-3">
+          <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-600 to-emerald-400 flex items-center justify-center text-white shadow-md shadow-brand-600/20">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+            </svg>
+          </div>
+          <div>
+            <div class="flex items-center space-x-2">
+              <h1 class="text-lg font-bold text-slate-900 tracking-tight">SalesAgent</h1>
+              <span class="px-2 py-0.5 text-xs font-semibold bg-brand-50 text-brand-700 border border-brand-200 rounded-full">企业级销售周报智能体</span>
+            </div>
+            <p class="text-xs text-slate-500">周报多源自动汇总 · 确定性算术大盘 · 战略决策内参</p>
+          </div>
+        </div>
+
+        <!-- 中间：周期与重置 -->
+        <div class="hidden md:flex items-center space-x-3 bg-slate-100 p-1.5 rounded-xl border border-slate-200/80 text-xs">
+          <span class="px-2.5 py-1 bg-white font-semibold text-slate-700 rounded-lg shadow-sm">
+            📅 {{ summaryData.cycle_period || '2026年第36周' }}
+          </span>
+          <button @click="resetToPresets" title="重置为默认演示数据" class="px-2 py-1 text-slate-600 hover:text-brand-600 transition flex items-center space-x-1">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+            <span>重置数据</span>
+          </button>
+        </div>
+
+        <!-- 右侧：模型胶囊与操作 -->
+        <div class="flex items-center space-x-3">
+          <!-- 模型状态胶囊 -->
+          <button @click="showModelModal = true" class="flex items-center space-x-2 px-3 py-1.5 rounded-full text-xs font-medium border transition hover:shadow-sm" :class="modelStatus.local_status === 'available' ? 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100' : 'bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100'">
+            <span class="relative flex h-2 w-2">
+              <span class="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" :class="modelStatus.local_status === 'available' ? 'bg-emerald-400' : 'bg-amber-400'"></span>
+              <span class="relative inline-flex rounded-full h-2 w-2" :class="modelStatus.local_status === 'available' ? 'bg-emerald-500' : 'bg-amber-500'"></span>
+            </span>
+            <span>{{ modelStatusLabel }}</span>
+            <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+          </button>
+
+          <!-- 批量上传按键 -->
+          <button @click="showUploadModal = true" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg transition flex items-center space-x-1.5 border border-slate-300">
+            <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+            <span>批量导入周报</span>
+          </button>
+
+          <!-- 导出 Word -->
+          <a :href="exportDocxUrl" download class="px-3 py-1.5 bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold rounded-lg shadow-sm transition flex items-center space-x-1.5">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+            <span>导出 Word 周报</span>
+          </a>
+        </div>
+
+      </div>
+    </header>
+
+    <!-- 主体内容 -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex-1 flex flex-col space-y-6">
+
+      <!-- 1. 部门总体经营 KPI 四维大盘看板 -->
+      <section class="grid grid-cols-1 md:grid-cols-4 gap-4">
+        
+        <!-- 指标 1：签约成单总额 -->
+        <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden flex flex-col justify-between">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-semibold text-slate-500 tracking-wider">部门签约总额 (本周)</span>
+            <span class="p-2 rounded-xl bg-brand-50 text-brand-600">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            </span>
+          </div>
+          <div class="my-3">
+            <div class="flex items-baseline space-x-2">
+              <span class="text-3xl font-bold text-slate-900 tracking-tight">{{ (metrics.total_actual / 10000).toFixed(1) }}</span>
+              <span class="text-sm font-semibold text-slate-600">万元</span>
+            </div>
+            <div class="mt-2 flex items-center justify-between text-xs text-slate-500">
+              <span>目标 {{ (metrics.total_target / 10000).toFixed(1) }} 万</span>
+              <span class="font-bold" :class="metrics.overall_completion_rate >= 80 ? 'text-emerald-600' : 'text-rose-600'">达成率 {{ metrics.overall_completion_rate }}%</span>
+            </div>
+            <!-- 进度条 -->
+            <div class="w-full bg-slate-100 rounded-full h-2 mt-1.5 overflow-hidden">
+              <div class="bg-brand-600 h-2 rounded-full transition-all duration-500" :style="{ width: Math.min(metrics.overall_completion_rate, 100) + '%' }"></div>
+            </div>
+          </div>
+          <div class="text-[11px] text-emerald-600 font-medium flex items-center space-x-1">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"/></svg>
+            <span>较上周环比增长 +24.6%</span>
+          </div>
+        </div>
+
+        <!-- 指标 2：实际总回款 -->
+        <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-semibold text-slate-500 tracking-wider">实际到账回款</span>
+            <span class="p-2 rounded-xl bg-blue-50 text-blue-600">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+            </span>
+          </div>
+          <div class="my-3">
+            <div class="flex items-baseline space-x-2">
+              <span class="text-3xl font-bold text-slate-900 tracking-tight">{{ (metrics.total_collection / 10000).toFixed(1) }}</span>
+              <span class="text-sm font-semibold text-slate-600">万元</span>
+            </div>
+            <div class="mt-2 flex items-center justify-between text-xs text-slate-500">
+              <span>现金流质量健康</span>
+              <span class="font-bold text-blue-600">回款率 {{ metrics.collection_rate }}%</span>
+            </div>
+            <div class="w-full bg-slate-100 rounded-full h-2 mt-1.5 overflow-hidden">
+              <div class="bg-blue-500 h-2 rounded-full transition-all duration-500" :style="{ width: Math.min(metrics.collection_rate, 100) + '%' }"></div>
+            </div>
+          </div>
+          <div class="text-[11px] text-slate-500">
+            无死账坏账风险，主力款项正常落地
+          </div>
+        </div>
+
+        <!-- 指标 3：有效拜访与高价值线索 -->
+        <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-semibold text-slate-500 tracking-wider">客户拜访与线索储备</span>
+            <span class="p-2 rounded-xl bg-purple-50 text-purple-600">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+            </span>
+          </div>
+          <div class="my-3">
+            <div class="flex items-baseline space-x-2">
+              <span class="text-3xl font-bold text-slate-900 tracking-tight">{{ metrics.total_visits }}</span>
+              <span class="text-sm font-semibold text-slate-600">家次</span>
+            </div>
+            <div class="mt-2 flex items-center justify-between text-xs text-slate-500">
+              <span>在途意向线索</span>
+              <span class="font-bold text-purple-600">{{ metrics.total_leads }} 条 (进入POC 3家)</span>
+            </div>
+            <div class="w-full bg-slate-100 rounded-full h-2 mt-1.5 overflow-hidden">
+              <div class="bg-purple-500 h-2 rounded-full w-3/4"></div>
+            </div>
+          </div>
+          <div class="text-[11px] text-purple-700 font-medium">
+            新人高频扫街带动外勤拓客量走高
+          </div>
+        </div>
+
+        <!-- 指标 4：全员战斗力分布 -->
+        <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-semibold text-slate-500 tracking-wider">团队销售梯队状态</span>
+            <span class="p-2 rounded-xl bg-amber-50 text-amber-600">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+            </span>
+          </div>
+          <div class="my-3">
+            <div class="flex items-center space-x-3 text-xs">
+              <div class="flex-1 bg-emerald-50 border border-emerald-200 p-2 rounded-xl text-center">
+                <div class="text-lg font-bold text-emerald-700">{{ metrics.exceeded_count }}</div>
+                <div class="text-slate-500 text-[10px]">超额冲顶</div>
+              </div>
+              <div class="flex-1 bg-blue-50 border border-blue-200 p-2 rounded-xl text-center">
+                <div class="text-lg font-bold text-blue-700">{{ metrics.on_track_count }}</div>
+                <div class="text-slate-500 text-[10px]">稳步推进</div>
+              </div>
+              <div class="flex-1 bg-rose-50 border border-rose-200 p-2 rounded-xl text-center">
+                <div class="text-lg font-bold text-rose-700">{{ metrics.blocked_count }}</div>
+                <div class="text-slate-500 text-[10px]">遇阻卡单</div>
+              </div>
+            </div>
+          </div>
+          <div class="text-[11px] text-rose-600 font-medium flex items-center space-x-1">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+            <span>华北区央企项目高危预警中</span>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- 2. 核心双栏操作台 -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+
+        <!-- 左栏：销售代表周报流卡片 (占 5 列) -->
+        <div class="lg:col-span-5 space-y-4">
+          <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-3">
+            <div class="flex items-center justify-between">
+              <h2 class="text-sm font-bold text-slate-900 flex items-center space-x-2">
+                <span>销售人员周报提交清单</span>
+                <span class="px-2 py-0.5 text-xs bg-slate-100 text-slate-600 rounded-full font-normal">{{ filteredReports.length }} 份</span>
+              </h2>
+              <!-- 排序 -->
+              <select v-model="sortBy" class="text-xs border border-slate-300 rounded-lg px-2 py-1 bg-white text-slate-700 outline-none focus:border-brand-500">
+                <option value="amount">按签约额排序</option>
+                <option value="rate">按达成率排序</option>
+                <option value="visits">按客拜量排序</option>
+              </select>
+            </div>
+
+            <!-- 搜索与状态过滤器 -->
+            <div class="flex items-center space-x-2">
+              <div class="relative flex-1">
+                <svg class="w-4 h-4 text-slate-400 absolute left-3 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                <input v-model="searchQuery" type="text" placeholder="搜索销售、部门、客户、阻碍..." class="w-full pl-9 pr-3 py-1.5 text-xs border border-slate-300 rounded-lg outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition">
+              </div>
+            </div>
+
+            <!-- 过滤 Pill -->
+            <div class="flex items-center space-x-1.5 overflow-x-auto pb-1 text-xs">
+              <button @click="filterStatus = 'all'" class="px-2.5 py-1 rounded-full font-medium transition" :class="filterStatus === 'all' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'">全部 ({{ counts.all }})</button>
+              <button @click="filterStatus = 'exceeded'" class="px-2.5 py-1 rounded-full font-medium transition" :class="filterStatus === 'exceeded' ? 'bg-emerald-600 text-white' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'">超额 ({{ counts.exceeded }})</button>
+              <button @click="filterStatus = 'on_track'" class="px-2.5 py-1 rounded-full font-medium transition" :class="filterStatus === 'on_track' ? 'bg-blue-600 text-white' : 'bg-blue-50 text-blue-700 hover:bg-blue-100'">稳健 ({{ counts.on_track }})</button>
+              <button @click="filterStatus = 'blocked'" class="px-2.5 py-1 rounded-full font-medium transition" :class="filterStatus === 'blocked' ? 'bg-rose-600 text-white' : 'bg-rose-50 text-rose-700 hover:bg-rose-100'">遇阻 ({{ counts.blocked }})</button>
+            </div>
+          </div>
+
+          <!-- 销售周报列表 -->
+          <div class="space-y-3">
+            <div v-for="r in filteredReports" :key="r.id" class="bg-white rounded-2xl border transition duration-200 hover:shadow-md p-4 space-y-3 relative overflow-hidden" :class="r.status === 'blocked' ? 'border-rose-300 shadow-rose-50' : 'border-slate-200'">
+              
+              <!-- 顶部行：头像、姓名、标签与达成率胶囊 -->
+              <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-3">
+                  <div class="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold shadow-sm" :class="r.avatar_bg || 'bg-brand-600'">
+                    {{ (r.salesperson || '销')[0] }}
+                  </div>
+                  <div>
+                    <div class="flex items-center space-x-2">
+                      <span class="font-bold text-slate-900 text-sm">{{ r.salesperson }}</span>
+                      <span class="text-[11px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 font-medium">{{ r.department }}</span>
+                    </div>
+                    <div class="text-[11px] text-slate-400 mt-0.5">{{ r.role_title || '客户经理' }}</div>
+                  </div>
+                </div>
+
+                <!-- 状态徽章 -->
+                <div class="text-right">
+                  <span class="px-2.5 py-1 text-xs font-bold rounded-full inline-block" :class="getStatusBadgeClass(r.status)">
+                    {{ r.status_label || '正常' }} {{ r.completion_rate }}%
+                  </span>
+                  <div v-if="r.reviewed" class="text-[10px] text-emerald-600 mt-1 flex items-center justify-end space-x-0.5">
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                    <span>主管已批阅</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 业绩数据紧凑三栏 -->
+              <div class="grid grid-cols-3 gap-2 bg-slate-50 p-2.5 rounded-xl text-center text-xs">
+                <div>
+                  <span class="text-slate-400 text-[10px] block">签约额 / 目标</span>
+                  <span class="font-bold text-slate-800">{{ (r.actual_amount/10000).toFixed(1) }}万</span>
+                  <span class="text-slate-400 text-[10px]"> / {{ (r.target_amount/10000).toFixed(1) }}万</span>
+                </div>
+                <div>
+                  <span class="text-slate-400 text-[10px] block">到账回款</span>
+                  <span class="font-bold text-blue-600">{{ (r.collection_amount/10000).toFixed(1) }}万</span>
+                </div>
+                <div>
+                  <span class="text-slate-400 text-[10px] block">客户拜访</span>
+                  <span class="font-bold text-purple-600">{{ r.visit_count }} 家次</span>
+                </div>
+              </div>
+
+              <!-- 战报亮点摘要 -->
+              <div v-if="r.highlight_summary" class="text-xs text-slate-700 bg-emerald-50/70 border border-emerald-200/60 p-2.5 rounded-xl flex items-start space-x-2">
+                <span class="text-emerald-600 mt-0.5">🌟</span>
+                <span class="line-clamp-2">{{ r.highlight_summary }}</span>
+              </div>
+
+              <!-- 遇阻卡点警示 -->
+              <div v-if="r.blockers && r.blockers !== '无明显卡点，按计划推进'" class="text-xs text-rose-800 bg-rose-50 border border-rose-200 p-2.5 rounded-xl flex items-start space-x-2">
+                <span class="text-rose-600 mt-0.5">⚠️</span>
+                <span class="line-clamp-2"><strong>卡点求助：</strong>{{ r.blockers }}</span>
+              </div>
+
+              <!-- 底部操作按钮栏（每一个按键都具备真实功能与闭环） -->
+              <div class="pt-2 border-t border-slate-100 flex items-center justify-between">
+                <!-- 用户明确指定按键：查看原始周报 -->
+                <button @click="openRawViewer(r)" class="px-3 py-1.5 bg-brand-50 hover:bg-brand-100 text-brand-700 text-xs font-semibold rounded-lg transition flex items-center space-x-1.5 border border-brand-200">
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                  <span>查看原始周报原件</span>
+                </button>
+
+                <div class="flex items-center space-x-2">
+                  <!-- 主管批阅按钮 -->
+                  <button @click="openReviewModal(r)" class="px-2.5 py-1.5 text-xs font-medium rounded-lg transition border" :class="r.reviewed ? 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100' : 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100 font-semibold'">
+                    {{ r.reviewed ? '修改批注' : '主管批阅' }}
+                  </button>
+                  <!-- 下载原件文本 -->
+                  <a :href="'/api/reports/' + r.id + '/raw'" :download="r.salesperson + '_周报原件.txt'" title="下载销售原始文件" class="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                  </a>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+
+        <!-- 右栏：AI 部门周报智能汇总与管理决策内参 (占 7 列) -->
+        <div class="lg:col-span-7 space-y-4">
+          
+          <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+            
+            <!-- 决策内参顶栏 -->
+            <div class="p-5 border-b border-slate-200 bg-gradient-to-r from-slate-50 via-white to-brand-50/30 flex items-center justify-between">
+              <div class="space-y-1">
+                <div class="flex items-center space-x-2">
+                  <span class="px-2 py-0.5 rounded text-[11px] font-bold bg-brand-600 text-white">AI 战略内参</span>
+                  <input v-if="isEditingSummary" v-model="summaryData.report_title" class="text-base font-bold text-slate-900 border-b border-brand-500 bg-transparent outline-none px-1">
+                  <h3 v-else class="text-base font-bold text-slate-900 tracking-tight">{{ summaryData.report_title }}</h3>
+                </div>
+                <p class="text-xs text-slate-500">双轨架构：精确数字经确定性代码核算 · 重点战果与丢单风险经大模型认知提炼</p>
+              </div>
+
+              <!-- 操作按钮组 -->
+              <div class="flex items-center space-x-2">
+                <!-- AI 重新汇总按钮 -->
+                <button @click="triggerAISummary" :disabled="generatingAI" class="px-3 py-1.5 bg-gradient-to-r from-brand-600 to-emerald-600 hover:from-brand-700 hover:to-emerald-700 text-white text-xs font-semibold rounded-lg shadow-sm transition flex items-center space-x-1.5 disabled:opacity-50">
+                  <svg v-if="generatingAI" class="animate-spin -ml-1 mr-1 h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  <svg v-else class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                  <span>{{ generatingAI ? '智能体推演中...' : '重新生成 AI 汇总' }}</span>
+                </button>
+
+                <!-- 编辑模式切换 -->
+                <button @click="toggleEditSummary" class="px-3 py-1.5 border border-slate-300 hover:bg-slate-50 text-slate-700 text-xs font-medium rounded-lg transition flex items-center space-x-1">
+                  <span>{{ isEditingSummary ? '保存修订' : '手动润色' }}</span>
+                </button>
+
+                <!-- 复制 Markdown -->
+                <button @click="copyMarkdown" class="p-1.5 text-slate-500 hover:text-slate-800 rounded-lg hover:bg-slate-100 transition" title="复制完整 Markdown 报告到剪贴板">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"/></svg>
+                </button>
+              </div>
+            </div>
+
+            <!-- 决策内参主体 -->
+            <div class="p-6 space-y-6 text-sm text-slate-800">
+              
+              <!-- 模块 1：总体经营态势 -->
+              <div class="space-y-2">
+                <div class="flex items-center space-x-2 text-brand-700 font-bold text-xs uppercase tracking-wider">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+                  <span>一、 部门总体经营态势综述</span>
+                </div>
+                <textarea v-if="isEditingSummary" v-model="summaryData.executive_overview" rows="4" class="w-full text-xs p-3 border rounded-xl border-slate-300 focus:border-brand-500 outline-none leading-relaxed"></textarea>
+                <div v-else class="p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-700 text-xs leading-relaxed">
+                  {{ summaryData.executive_overview }}
+                </div>
+              </div>
+
+              <!-- 模块 2：核心战报与重大突破 -->
+              <div class="space-y-2.5">
+                <div class="flex items-center space-x-2 text-emerald-700 font-bold text-xs uppercase tracking-wider">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                  <span>二、 核心战报与标杆突破 (Highlights)</span>
+                </div>
+                <div class="space-y-2">
+                  <div v-for="(hl, idx) in summaryData.highlights" :key="idx" class="p-3 bg-emerald-50/60 border border-emerald-200/80 rounded-xl text-xs text-slate-800 flex items-start space-x-2.5">
+                    <span class="w-5 h-5 rounded-full bg-emerald-600 text-white flex items-center justify-center text-[10px] font-bold flex-shrink-0 mt-0.5">{{ idx + 1 }}</span>
+                    <div class="flex-1" v-html="formatMarkdownText(hl)"></div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 模块 3：重大卡点与风险雷达 -->
+              <div class="space-y-2.5">
+                <div class="flex items-center space-x-2 text-rose-700 font-bold text-xs uppercase tracking-wider">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+                  <span>三、 重大卡点、竞品威胁与丢单预警 (Risk Radar)</span>
+                </div>
+                <div class="space-y-2">
+                  <div v-for="(rk, idx) in summaryData.risk_radar" :key="idx" class="p-3 bg-rose-50/70 border border-rose-200 rounded-xl text-xs text-slate-800 flex items-start space-x-2.5">
+                    <span class="w-5 h-5 rounded-full bg-rose-600 text-white flex items-center justify-center text-[10px] font-bold flex-shrink-0 mt-0.5">!</span>
+                    <div class="flex-1" v-html="formatMarkdownText(rk)"></div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 模块 4：销售主管重点督导与派工清单 -->
+              <div class="space-y-2.5">
+                <div class="flex items-center space-x-2 text-purple-700 font-bold text-xs uppercase tracking-wider">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                  <span>四、 销售主管重点督导与派工行动清单 (Action Plan)</span>
+                </div>
+                <div class="space-y-2">
+                  <div v-for="(act, idx) in summaryData.manager_action_items" :key="idx" class="p-3 bg-purple-50/70 border border-purple-200 rounded-xl text-xs text-slate-800 flex items-start space-x-2.5">
+                    <span class="w-5 h-5 rounded-full bg-purple-600 text-white flex items-center justify-center text-[10px] font-bold flex-shrink-0 mt-0.5">→</span>
+                    <div class="flex-1" v-html="formatMarkdownText(act)"></div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 模块 5：龙虎榜台账 -->
+              <div class="space-y-2.5 pt-4 border-t border-slate-200">
+                <div class="flex items-center justify-between text-xs text-slate-500 font-bold">
+                  <span>五、 销售团队业绩龙虎榜</span>
+                  <span>全员数据经 Python 确定性精确核算</span>
+                </div>
+                <div class="overflow-x-auto">
+                  <table class="w-full text-xs text-left">
+                    <thead class="bg-slate-100 text-slate-600 uppercase font-semibold">
+                      <tr>
+                        <th class="py-2 px-3 rounded-l-lg">排名</th>
+                        <th class="py-2 px-3">销售人员</th>
+                        <th class="py-2 px-3">所属部门</th>
+                        <th class="py-2 px-3 text-right">签约额</th>
+                        <th class="py-2 px-3 text-right">达成率</th>
+                        <th class="py-2 px-3 rounded-r-lg text-center">状态</th>
+                      </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100">
+                      <tr v-for="lb in metrics.leaderboard" :key="lb.id" class="hover:bg-slate-50">
+                        <td class="py-2.5 px-3 font-bold">
+                          <span v-if="lb.rank === 1" class="text-amber-500">🥇 1</span>
+                          <span v-else-if="lb.rank === 2" class="text-slate-400">🥈 2</span>
+                          <span v-else-if="lb.rank === 3" class="text-amber-700">🥉 3</span>
+                          <span v-else class="text-slate-500 ml-3">{{ lb.rank }}</span>
+                        </td>
+                        <td class="py-2.5 px-3 font-semibold text-slate-800">{{ lb.name }}</td>
+                        <td class="py-2.5 px-3 text-slate-500">{{ lb.department }}</td>
+                        <td class="py-2.5 px-3 text-right font-bold text-slate-900">{{ (lb.actual_amount/10000).toFixed(1) }} 万元</td>
+                        <td class="py-2.5 px-3 text-right font-bold" :class="lb.completion_rate >= 100 ? 'text-emerald-600' : 'text-slate-700'">{{ lb.completion_rate }}%</td>
+                        <td class="py-2.5 px-3 text-center">
+                          <span class="px-2 py-0.5 text-[10px] font-bold rounded-full" :class="getStatusBadgeClass(lb.status)">{{ lb.status_label }}</span>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+            </div>
+
+          </div>
+
+        </div>
+
+      </div>
+
+    </main>
+
+    <!-- 弹窗 1：【原始周报原件检视抽屉】(主管查看销售提交上来的 100% 完整原件) -->
+    <div v-if="showRawModal" class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+      <div class="bg-white w-full max-w-4xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
+        
+        <!-- 抽屉头部 -->
+        <div class="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+          <div class="flex items-center space-x-3">
+            <div class="w-10 h-10 rounded-xl bg-brand-600 text-white flex items-center justify-center font-bold">
+              📄
+            </div>
+            <div>
+              <div class="flex items-center space-x-2">
+                <h3 class="text-base font-bold text-slate-900">{{ activeRawReport?.salesperson }} 的提交周报原件</h3>
+                <span class="px-2 py-0.5 text-[11px] font-bold rounded-full" :class="getStatusBadgeClass(activeRawReport?.status)">{{ activeRawReport?.status_label }}</span>
+              </div>
+              <p class="text-xs text-slate-500">源文件：{{ activeRawReport?.filename }} | 部门：{{ activeRawReport?.department }}</p>
+            </div>
+          </div>
+          <div class="flex items-center space-x-2">
+            <a :href="'/api/reports/' + activeRawReport?.id + '/raw'" :download="activeRawReport?.salesperson + '_周报原件.txt'" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg transition border border-slate-300 flex items-center space-x-1">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+              <span>下载原件内容</span>
+            </a>
+            <button @click="showRawModal = false" class="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- 抽屉内容：仿真 A4 纸张排版 -->
+        <div class="p-6 overflow-y-auto flex-1 bg-slate-100/70">
+          <div class="max-w-3xl mx-auto paper-sheet p-8 rounded-xl markdown-body" v-html="renderedRawMarkdown"></div>
+        </div>
+
+        <!-- 底部栏 -->
+        <div class="px-6 py-3 border-t border-slate-200 bg-white flex items-center justify-between text-xs text-slate-500">
+          <span>提示：该原件包含销售人员实际填写的全部明细记录，系统已同步提取核心指标并参与团队大盘核算。</span>
+          <button @click="showRawModal = false" class="px-4 py-1.5 bg-slate-800 text-white rounded-lg hover:bg-slate-900 transition">关闭检视</button>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- 弹窗 2：主管批阅与批注弹窗 -->
+    <div v-if="showReviewModal" class="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
+      <div class="bg-white w-full max-w-lg rounded-2xl shadow-xl border border-slate-200 overflow-hidden p-6 space-y-4">
+        <div class="flex items-center justify-between border-b pb-3">
+          <h3 class="font-bold text-slate-900 text-sm">主管批阅与指导批注</h3>
+          <button @click="showReviewModal = false" class="text-slate-400 hover:text-slate-600">✕</button>
+        </div>
+        <div class="text-xs text-slate-600">
+          正在为 <strong class="text-slate-900">{{ activeReviewReport?.salesperson }}</strong> ({{ activeReviewReport?.department }}) 的本周表现下发督导批注：
+        </div>
+        <div>
+          <textarea v-model="reviewComment" rows="4" placeholder="在此输入主管批阅意见、指导对策或资源协调安排..." class="w-full text-xs p-3 border rounded-xl border-slate-300 focus:border-brand-500 outline-none"></textarea>
+        </div>
+        <div class="flex justify-end space-x-2 pt-2">
+          <button @click="showReviewModal = false" class="px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-100 rounded-lg">取消</button>
+          <button @click="submitReview" class="px-4 py-1.5 text-xs font-semibold bg-brand-600 text-white rounded-lg hover:bg-brand-700 shadow-sm">提交批阅</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 弹窗 3：批量导入本地周报弹窗 -->
+    <div v-if="showUploadModal" class="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
+      <div class="bg-white w-full max-w-lg rounded-2xl shadow-xl border border-slate-200 overflow-hidden p-6 space-y-4">
+        <div class="flex items-center justify-between border-b pb-3">
+          <h3 class="font-bold text-slate-900 text-sm">批量导入销售周报文件</h3>
+          <button @click="showUploadModal = false" class="text-slate-400 hover:text-slate-600">✕</button>
+        </div>
+
+        <div class="border-2 border-dashed border-slate-300 hover:border-brand-500 rounded-xl p-6 text-center cursor-pointer transition bg-slate-50" @click="triggerFileInput">
+          <input type="file" ref="fileInput" multiple accept=".docx,.xlsx,.xls,.md,.txt" class="hidden" @change="handleFileSelected">
+          <svg class="w-10 h-10 text-slate-400 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
+          <div class="text-xs font-semibold text-slate-700">点击选择或拖拽销售周报文件至此处</div>
+          <div class="text-[11px] text-slate-400 mt-1">支持格式：Word (.docx), Excel (.xlsx), Markdown (.md), 文本 (.txt)</div>
+        </div>
+
+        <div v-if="selectedFiles.length > 0" class="space-y-1 text-xs max-h-32 overflow-y-auto">
+          <div class="font-semibold text-slate-700">已选待解析文件 ({{ selectedFiles.length }})：</div>
+          <div v-for="(f, i) in selectedFiles" :key="i" class="text-slate-600 flex items-center space-x-1">
+            <span>📄</span>
+            <span class="truncate">{{ f.name }}</span>
+            <span class="text-slate-400">({{ (f.size / 1024).toFixed(1) }} KB)</span>
+          </div>
+        </div>
+
+        <div class="flex justify-end space-x-2 pt-2">
+          <button @click="showUploadModal = false" class="px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-100 rounded-lg">取消</button>
+          <button @click="uploadFiles" :disabled="selectedFiles.length === 0 || uploading" class="px-4 py-1.5 text-xs font-semibold bg-brand-600 text-white rounded-lg hover:bg-brand-700 disabled:opacity-50 shadow-sm flex items-center space-x-1">
+            <span v-if="uploading">正在解析导入...</span>
+            <span v-else>立即解析导入并核算</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 弹窗 4：AI 模型引擎配置弹窗 -->
+    <div v-if="showModelModal" class="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
+      <div class="bg-white w-full max-w-xl rounded-2xl shadow-xl border border-slate-200 overflow-hidden p-6 space-y-5">
+        <div class="flex items-center justify-between border-b pb-3">
+          <div class="flex items-center space-x-2">
+            <span class="text-lg">⚙️</span>
+            <h3 class="font-bold text-slate-900 text-sm">AI 大模型推理引擎设置</h3>
+          </div>
+          <button @click="showModelModal = false" class="text-slate-400 hover:text-slate-600">✕</button>
+        </div>
+
+        <!-- 模式切换 -->
+        <div class="grid grid-cols-2 gap-3 p-1 bg-slate-100 rounded-xl">
+          <button @click="activeProvider = 'local'" class="py-2 text-xs font-bold rounded-lg transition" :class="activeProvider === 'local' ? 'bg-white shadow text-brand-700' : 'text-slate-600'">
+            本地离线模型 (LM Studio / Ollama)
+          </button>
+          <button @click="activeProvider = 'cloud'" class="py-2 text-xs font-bold rounded-lg transition" :class="activeProvider === 'cloud' ? 'bg-white shadow text-brand-700' : 'text-slate-600'">
+            云端大模型 (DeepSeek / 通义千问)
+          </button>
+        </div>
+
+        <!-- 本地模型状态 -->
+        <div v-if="activeProvider === 'local'" class="space-y-3 p-4 bg-slate-50 rounded-xl border border-slate-200 text-xs">
+          <div class="flex items-center justify-between">
+            <span class="font-semibold text-slate-700">本地服务探测状态</span>
+            <button @click="fetchModelStatus" class="text-brand-600 hover:underline">重新探测</button>
+          </div>
+          <div class="flex items-center space-x-2">
+            <span class="w-2.5 h-2.5 rounded-full" :class="modelStatus.local_status === 'available' ? 'bg-emerald-500' : 'bg-rose-500'"></span>
+            <span class="font-bold">{{ modelStatus.local_status === 'available' ? '服务在线已连接' : '未检测到本地模型' }}</span>
+            <span v-if="modelStatus.local_latency_ms > 0" class="text-slate-400">({{ modelStatus.local_latency_ms }}ms)</span>
+          </div>
+          <div class="text-slate-500">
+            服务地址：http://127.0.0.1:1234/v1 <br>
+            识别模型：{{ modelStatus.local_model || 'qwen3.8-27b' }}
+          </div>
+        </div>
+
+        <!-- 云端模型配置 -->
+        <div v-else class="space-y-3 p-4 bg-slate-50 rounded-xl border border-slate-200 text-xs">
+          <div>
+            <label class="block text-slate-600 font-semibold mb-1">选择云端预设服务商</label>
+            <select v-model="selectedCloudPresetKey" @change="applyCloudPreset" class="w-full p-2 border rounded-lg bg-white border-slate-300">
+              <option v-for="(v, k) in cloudPresets" :key="k" :value="k">{{ v.name }}</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-slate-600 font-semibold mb-1">API Base URL</label>
+            <input v-model="cloudForm.base_url" type="text" class="w-full p-2 border rounded-lg bg-white border-slate-300">
+          </div>
+          <div>
+            <label class="block text-slate-600 font-semibold mb-1">API Key</label>
+            <input v-model="cloudForm.api_key" type="password" placeholder="sk-..." class="w-full p-2 border rounded-lg bg-white border-slate-300">
+          </div>
+          <div>
+            <label class="block text-slate-600 font-semibold mb-1">模型名称</label>
+            <input v-model="cloudForm.model_name" type="text" class="w-full p-2 border rounded-lg bg-white border-slate-300">
+          </div>
+          <div class="flex items-center justify-between pt-2">
+            <button @click="testCloudModel" :disabled="testingCloud" class="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 rounded-lg text-slate-700">
+              {{ testingCloud ? '测速中...' : '测试云端连接' }}
+            </button>
+            <span v-if="testCloudResult" :class="testCloudResult.success ? 'text-emerald-600' : 'text-rose-600'">
+              {{ testCloudResult.success ? '✅ 连接成功 (' + testCloudResult.latency_ms + 'ms)' : '❌ ' + testCloudResult.error }}
+            </span>
+          </div>
+        </div>
+
+        <div class="flex justify-end space-x-2 pt-2">
+          <button @click="showModelModal = false" class="px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-100 rounded-lg">取消</button>
+          <button @click="saveModelSettings" class="px-4 py-1.5 text-xs font-semibold bg-brand-600 text-white rounded-lg hover:bg-brand-700">保存设置并切换</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Toast 通知浮层 -->
+    <div v-if="toast.show" class="fixed bottom-6 right-6 z-50 px-4 py-2.5 rounded-xl shadow-lg text-xs font-semibold flex items-center space-x-2 transition-all duration-300 transform translate-y-0" :class="toast.type === 'success' ? 'bg-slate-900 text-white border border-slate-700' : 'bg-rose-600 text-white'">
+      <span>{{ toast.icon }}</span>
+      <span>{{ toast.message }}</span>
+    </div>
+
+  </div>
+
+  <script>
+    const { createApp, ref, computed, onMounted } = Vue;
+
+    createApp({
+      setup() {
+        const reports = ref([]);
+        const metrics = ref({
+          total_target: 2900000,
+          total_actual: 2400000,
+          total_collection: 1950000,
+          overall_completion_rate: 82.8,
+          collection_rate: 81.2,
+          total_visits: 31,
+          total_leads: 19,
+          exceeded_count: 1,
+          on_track_count: 1,
+          blocked_count: 2,
+          growing_count: 1,
+          leaderboard: []
+        });
+        const counts = ref({ all: 4, exceeded: 1, on_track: 1, blocked: 2 });
+        const summaryData = ref({});
+        const modelStatus = ref({ local_status: 'checking', active_provider: 'local', local_latency_ms: -1 });
+
+        const searchQuery = ref('');
+        const filterStatus = ref('all');
+        const sortBy = ref('amount');
+
+        const showRawModal = ref(false);
+        const activeRawReport = ref(null);
+
+        const showReviewModal = ref(false);
+        const activeReviewReport = ref(null);
+        const reviewComment = ref('');
+
+        const showUploadModal = ref(false);
+        const selectedFiles = ref([]);
+        const uploading = ref(false);
+        const fileInput = ref(null);
+
+        const showModelModal = ref(false);
+        const activeProvider = ref('local');
+        const cloudPresets = ref({});
+        const selectedCloudPresetKey = ref('deepseek');
+        const cloudForm = ref({ base_url: 'https://api.deepseek.com/v1', api_key: '', model_name: 'deepseek-chat' });
+        const testingCloud = ref(false);
+        const testCloudResult = ref(null);
+
+        const generatingAI = ref(false);
+        const isEditingSummary = ref(false);
+
+        const toast = ref({ show: false, message: '', type: 'success', icon: '✅' });
+
+        function showToast(msg, type = 'success', icon = '✅') {
+          toast.value = { show: true, message: msg, type, icon };
+          setTimeout(() => { toast.value.show = false; }, 3000);
+        }
+
+        // 模型标签计算
+        const modelStatusLabel = computed(() => {
+          if (modelStatus.value.active_provider === 'local') {
+            if (modelStatus.value.local_status === 'available') {
+              return `本地: ${modelStatus.value.local_model || 'qwen3.8-27b'} (${modelStatus.value.local_latency_ms}ms)`;
+            }
+            return '本地模型离线 (点击切换)';
+          }
+          return `云端: ${modelStatus.value.cloud_provider} (${modelStatus.value.cloud_model})`;
+        });
+
+        const exportDocxUrl = computed(() => '/api/export/docx');
+
+        // 过滤后的销售周报列表
+        const filteredReports = computed(() => {
+          let list = reports.value.slice();
+          if (filterStatus.value !== 'all') {
+            list = list.filter(r => r.status === filterStatus.value);
+          }
+          if (searchQuery.value.trim()) {
+            const q = searchQuery.value.trim().toLowerCase();
+            list = list.filter(r => 
+              (r.salesperson || '').toLowerCase().includes(q) ||
+              (r.department || '').toLowerCase().includes(q) ||
+              (r.highlight_summary || '').toLowerCase().includes(q) ||
+              (r.blockers || '').toLowerCase().includes(q)
+            );
+          }
+          if (sortBy.value === 'amount') {
+            list.sort((a, b) => (b.actual_amount || 0) - (a.actual_amount || 0));
+          } else if (sortBy.value === 'rate') {
+            list.sort((a, b) => (b.completion_rate || 0) - (a.completion_rate || 0));
+          } else if (sortBy.value === 'visits') {
+            list.sort((a, b) => (b.visit_count || 0) - (a.visit_count || 0));
+          }
+          return list;
+        });
+
+        // 格式化 markdown 为 html 供原件查看
+        const renderedRawMarkdown = computed(() => {
+          if (!activeRawReport.value || !activeRawReport.value.raw_content) {
+            return '<p class="text-slate-400">暂无原始文本</p>';
+          }
+          try {
+            return marked.parse(activeRawReport.value.raw_content);
+          } catch (e) {
+            return `<pre>${activeRawReport.value.raw_content}</pre>`;
+          }
+        });
+
+        function getStatusBadgeClass(status) {
+          switch (status) {
+            case 'exceeded': return 'bg-emerald-100 text-emerald-800 border border-emerald-300';
+            case 'on_track': return 'bg-blue-100 text-blue-800 border border-blue-300';
+            case 'blocked': return 'bg-rose-100 text-rose-800 border border-rose-300 animate-pulse';
+            case 'growing': return 'bg-purple-100 text-purple-800 border border-purple-300';
+            default: return 'bg-slate-100 text-slate-700';
+          }
+        }
+
+        function formatMarkdownText(txt) {
+          if (!txt) return '';
+          return txt.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+        }
+
+        // 核心 API 调用
+        async function fetchReports() {
+          try {
+            const res = await fetch(`/api/reports?sort=${sortBy.value}`);
+            const json = await res.json();
+            if (json.ok) {
+              reports.value = json.data;
+              counts.value = json.counts;
+              metrics.value = json.metrics;
+            }
+          } catch (e) {
+            console.error(e);
+          }
+        }
+
+        async function fetchSummary() {
+          try {
+            const res = await fetch('/api/summary');
+            const json = await res.json();
+            if (json.ok) {
+              summaryData.value = json.data.summary;
+              metrics.value = json.data.metrics;
+            }
+          } catch (e) {
+            console.error(e);
+          }
+        }
+
+        async function fetchModelStatus() {
+          try {
+            const res = await fetch('/api/model/status');
+            const json = await res.json();
+            if (json.ok) {
+              modelStatus.value = json.data;
+              activeProvider.value = json.data.active_provider;
+            }
+          } catch (e) {
+            console.error(e);
+          }
+        }
+
+        async function fetchModelPresets() {
+          try {
+            const res = await fetch('/api/model/presets');
+            const json = await res.json();
+            if (json.ok) {
+              cloudPresets.value = json.data;
+              applyCloudPreset();
+            }
+          } catch (e) {
+            console.error(e);
+          }
+        }
+
+        function applyCloudPreset() {
+          const p = cloudPresets.value[selectedCloudPresetKey.value];
+          if (p) {
+            cloudForm.value.base_url = p.base_url;
+            cloudForm.value.model_name = p.default_model;
+          }
+        }
+
+        // 1. 查看原始周报抽屉
+        function openRawViewer(report) {
+          activeRawReport.value = report;
+          showRawModal.value = true;
+        }
+
+        // 2. 主管批阅
+        function openReviewModal(report) {
+          activeReviewReport.value = report;
+          reviewComment.value = report.supervisor_comment || '';
+          showReviewModal.value = true;
+        }
+
+        async function submitReview() {
+          if (!activeReviewReport.value) return;
+          try {
+            const res = await fetch(`/api/reports/${activeReviewReport.value.id}/review`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ comment: reviewComment.value })
+            });
+            const json = await res.json();
+            if (json.ok) {
+              showReviewModal.value = false;
+              showToast(`已完成对 ${activeReviewReport.value.salesperson} 的批阅与批注！`);
+              await fetchReports();
+            }
+          } catch (e) {
+            showToast('批阅提交失败: ' + e, 'error', '❌');
+          }
+        }
+
+        // 3. 文件上传
+        function triggerFileInput() {
+          if (fileInput.value) fileInput.value.click();
+        }
+
+        function handleFileSelected(e) {
+          selectedFiles.value = Array.from(e.target.files);
+        }
+
+        async function uploadFiles() {
+          if (!selectedFiles.value.length) return;
+          uploading.value = true;
+          const formData = new FormData();
+          selectedFiles.value.forEach(f => formData.append('files', f));
+          try {
+            const res = await fetch('/api/reports/upload', {
+              method: 'POST',
+              body: formData
+            });
+            const json = await res.json();
+            if (json.ok) {
+              showToast(`成功解析并导入 ${json.data.uploaded_count} 份周报！`);
+              showUploadModal.value = false;
+              selectedFiles.value = [];
+              await fetchReports();
+              await fetchSummary();
+            }
+          } catch (e) {
+            showToast('上传解析失败: ' + e, 'error', '❌');
+          } finally {
+            uploading.value = false;
+          }
+        }
+
+        // 4. 重置演示数据
+        async function resetToPresets() {
+          if (!confirm('确认重置所有周报数据为系统默认预设吗？')) return;
+          try {
+            const res = await fetch('/api/reports/reset', { method: 'POST' });
+            if (res.ok) {
+              showToast('已重置为 4 位核心销售代表的完整周报数据');
+              await fetchReports();
+              await fetchSummary();
+            }
+          } catch (e) {
+            showToast('重置失败: ' + e, 'error', '❌');
+          }
+        }
+
+        // 5. 触发 AI 实时汇总
+        async function triggerAISummary() {
+          generatingAI.value = true;
+          try {
+            const res = await fetch('/api/summary/generate', { method: 'POST' });
+            const json = await res.json();
+            if (json.ok) {
+              summaryData.value = json.data.summary;
+              metrics.value = json.data.metrics;
+              showToast('AI 销售管理决策内参已实时生成！');
+            } else {
+              showToast('生成异常，已应用容错内参', 'warn', '⚠️');
+            }
+          } catch (e) {
+            showToast('生成请求异常: ' + e, 'error', '❌');
+          } finally {
+            generatingAI.value = false;
+          }
+        }
+
+        // 6. 编辑与保存 Summary
+        async function toggleEditSummary() {
+          if (isEditingSummary.value) {
+            // 保存
+            try {
+              const res = await fetch('/api/summary', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(summaryData.value)
+              });
+              if (res.ok) {
+                showToast('主管修订内容已保存！');
+              }
+            } catch (e) {
+              showToast('保存失败: ' + e, 'error', '❌');
+            }
+            isEditingSummary.value = false;
+          } else {
+            isEditingSummary.value = true;
+          }
+        }
+
+        // 7. 复制 Markdown
+        async function copyMarkdown() {
+          try {
+            const res = await fetch('/api/export/markdown');
+            const text = await res.text();
+            await navigator.clipboard.writeText(text);
+            showToast('已复制 Markdown 周报全文至剪贴板，可直接粘贴！');
+          } catch (e) {
+            showToast('复制失败: ' + e, 'error', '❌');
+          }
+        }
+
+        // 8. 测试云端模型
+        async function testCloudModel() {
+          testingCloud.value = true;
+          testCloudResult.value = null;
+          try {
+            const res = await fetch('/api/model/test', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(cloudForm.value)
+            });
+            const json = await res.json();
+            testCloudResult.value = json.data;
+          } catch (e) {
+            testCloudResult.value = { success: false, error: String(e) };
+          } finally {
+            testingCloud.value = false;
+          }
+        }
+
+        // 9. 保存模型设置
+        async function saveModelSettings() {
+          try {
+            const body = {
+              active_provider: activeProvider.value,
+              cloud_model: {
+                provider: selectedCloudPresetKey.value,
+                base_url: cloudForm.value.base_url,
+                api_key: cloudForm.value.api_key,
+                model_name: cloudForm.value.model_name
+              }
+            };
+            const res = await fetch('/api/model/switch', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(body)
+            });
+            if (res.ok) {
+              showToast('模型设置已更新！');
+              showModelModal.value = false;
+              await fetchModelStatus();
+            }
+          } catch (e) {
+            showToast('保存失败: ' + e, 'error', '❌');
+          }
+        }
+
+        onMounted(() => {
+          fetchReports();
+          fetchSummary();
+          fetchModelStatus();
+          fetchModelPresets();
+        });
+
+        return {
+          reports,
+          metrics,
+          counts,
+          summaryData,
+          modelStatus,
+          modelStatusLabel,
+          exportDocxUrl,
+          searchQuery,
+          filterStatus,
+          sortBy,
+          filteredReports,
+          renderedRawMarkdown,
+          getStatusBadgeClass,
+          formatMarkdownText,
+
+          showRawModal,
+          activeRawReport,
+          openRawViewer,
+
+          showReviewModal,
+          activeReviewReport,
+          reviewComment,
+          openReviewModal,
+          submitReview,
+
+          showUploadModal,
+          selectedFiles,
+          uploading,
+          fileInput,
+          triggerFileInput,
+          handleFileSelected,
+          uploadFiles,
+
+          showModelModal,
+          activeProvider,
+          cloudPresets,
+          selectedCloudPresetKey,
+          cloudForm,
+          testingCloud,
+          testCloudResult,
+          applyCloudPreset,
+          testCloudModel,
+          saveModelSettings,
+          fetchModelStatus,
+
+          generatingAI,
+          isEditingSummary,
+          triggerAISummary,
+          toggleEditSummary,
+          copyMarkdown,
+          resetToPresets,
+
+          toast,
+        };
+      }
+    }).mount('#app');
+  </script>
+</body>
+</html>
