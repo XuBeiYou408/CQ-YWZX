@@ -70,3 +70,7 @@ data/models/
 # 保留企业知识库制度与资料文档
 !data/documents/
 !data/documents/**
+
+# 简历筛查上传文件与运行时临时缓存
+简历筛查/uploads/*
+!简历筛查/uploads/.gitkeep

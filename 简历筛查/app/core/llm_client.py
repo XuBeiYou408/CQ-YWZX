@@ -1,0 +1,222 @@
+import asyncio
+import time
+from typing import Any, Dict, TypedDict
+
+import httpx
+
+
+class ModelStatus(TypedDict):
+    active_provider: str  # "local" | "cloud"
+    local_status: str     # "available" | "unavailable" | "checking"
+    local_provider: str   # "lm_studio" | "ollama" | ""
+    local_model: str      # ???? "qwen3.8-27b" ? ""
+    local_latency_ms: int  # -1 ????
+    cloud_status: str     # "configured" | "unconfigured" | "error"
+    cloud_provider: str
+    cloud_model: str
+
+
+async def _probe_single(provider: str, base_url: str) -> Dict[str, Any]:
+    t0 = time.perf_counter()
+    try:
+        async with httpx.AsyncClient(timeout=3.0) as client:
+            resp = await client.get(f"{base_url.rstrip('/')}/models")
+            latency_ms = int((time.perf_counter() - t0) * 1000)
+            if resp.status_code == 200:
+                data = resp.json()
+                models = data.get("data", [])
+                model_name = ""
+                if isinstance(models, list) and models:
+                    model_ids = [m.get("id", "") for m in models if isinstance(m, dict)]
+                    if "qwen3.8-27b" in model_ids:
+                        model_name = "qwen3.8-27b"
+                    elif model_ids:
+                        model_name = model_ids[0]
+                return {
+                    "provider": provider,
+                    "model_name": model_name,
+                    "latency_ms": latency_ms,
+                    "available": True,
+                }
+    except Exception:
+        pass
+
+    return {
+        "provider": provider,
+        "model_name": "",
+        "latency_ms": -1,
+        "available": False,
+    }
+
+
+async def probe_local_models(
+    lm_url: str = "http://127.0.0.1:1234/v1",
+    ollama_url: str = "http://127.0.0.1:11434/v1",
+) -> Dict[str, Any]:
+    """
+    ? httpx?timeout=3s????? LM Studio (1234) ? Ollama (11434) ? /v1/models ??
+    ?????{"provider": "lm_studio"|"ollama"|"", "model_name": str, "latency_ms": int, "available": bool}
+    ???? LM Studio????1234???LM Studio??????Ollama
+    ?????????????
+    ???????????????
+    """
+    lm_res, ollama_res = await asyncio.gather(
+        _probe_single("lm_studio", lm_url),
+        _probe_single("ollama", ollama_url),
+        return_exceptions=False,
+    )
+
+    if isinstance(lm_res, dict) and lm_res.get("available"):
+        return lm_res
+
+    if isinstance(ollama_res, dict) and ollama_res.get("available"):
+        return ollama_res
+
+    return {
+        "provider": "",
+        "model_name": "",
+        "latency_ms": -1,
+        "available": False,
+    }
+
+
+async def get_model_status(cfg: Dict[str, Any]) -> ModelStatus:
+    """
+    ?? probe_local_models() ??????
+    ?? cfg ??????????????api_key???
+    ???? ModelStatus
+    """
+    local_cfg = cfg.get("local_model", {})
+    lm_url = local_cfg.get("lm_studio_url", "http://127.0.0.1:1234/v1")
+    ollama_url = local_cfg.get("ollama_url", "http://127.0.0.1:11434/v1")
+
+    local_info = await probe_local_models(lm_url=lm_url, ollama_url=ollama_url)
+
+    cloud_cfg = cfg.get("cloud_model", {})
+    cloud_provider = cloud_cfg.get("provider", "")
+    cloud_model = cloud_cfg.get("model_name", "")
+    cloud_key = str(cloud_cfg.get("api_key", "")).strip()
+
+    local_available = bool(local_info.get("available", False))
+    local_model = local_info.get("model_name", "") or local_cfg.get("model_name", "")
+
+    return {
+        "active_provider": cfg.get("active_provider", "local"),
+        "local_status": "available" if local_available else "unavailable",
+        "local_provider": local_info.get("provider", "") if local_available else "",
+        "local_model": local_model if local_available else "",
+        "local_latency_ms": local_info.get("latency_ms", -1) if local_available else -1,
+        "cloud_status": "configured" if bool(cloud_key) else "unconfigured",
+        "cloud_provider": cloud_provider,
+        "cloud_model": cloud_model,
+    }
+
+
+async def test_cloud_connection(
+    base_url: str, api_key: str, model_name: str, timeout: int = 10
+) -> Dict[str, Any]:
+    """
+    ?????? chat completion ???prompt="ping", max_tokens=1?? {base_url}/chat/completions
+    ?? {"success": bool, "latency_ms": int, "error": str}
+    """
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "model": model_name,
+        "messages": [{"role": "user", "content": "ping"}],
+        "max_tokens": 1,
+    }
+    url = f"{base_url.rstrip('/')}/chat/completions"
+    t0 = time.perf_counter()
+
+    try:
+        async with httpx.AsyncClient(timeout=float(timeout)) as client:
+            resp = await client.post(url, headers=headers, json=payload)
+            latency_ms = int((time.perf_counter() - t0) * 1000)
+            if resp.status_code == 200:
+                return {"success": True, "latency_ms": latency_ms, "error": ""}
+            else:
+                return {
+                    "success": False,
+                    "latency_ms": latency_ms,
+                    "error": f"HTTP {resp.status_code}: {resp.text}",
+                }
+    except Exception as e:
+        latency_ms = int((time.perf_counter() - t0) * 1000)
+        return {"success": False, "latency_ms": latency_ms, "error": str(e)}
+
+
+async def generate_chat(
+    prompt: str, system_prompt: str, cfg: Dict[str, Any], json_mode: bool = True
+) -> str:
+    """
+    ?? cfg["active_provider"] ???????????
+    ???? lm_studio_url ? ollama_url????????? chat completion
+    ???? cloud_model.base_url ??? Authorization: Bearer {api_key}
+    ? json_mode=True??? messages ????????"???? JSON?????????"
+    ?? httpx.AsyncClient?timeout ? cfg ??
+    ???????choices[0].message.content?
+    ????????? RuntimeError
+    """
+    active_provider = cfg.get("active_provider", "local")
+
+    if active_provider == "local":
+        local_cfg = cfg.get("local_model", {})
+        lm_url = local_cfg.get("lm_studio_url", "http://127.0.0.1:1234/v1")
+        ollama_url = local_cfg.get("ollama_url", "http://127.0.0.1:11434/v1")
+
+        probe = await probe_local_models(lm_url=lm_url, ollama_url=ollama_url)
+        if probe.get("provider") == "ollama":
+            base_url = ollama_url
+        else:
+            base_url = lm_url
+
+        model = local_cfg.get("model_name", "qwen3.8-27b")
+        timeout = float(local_cfg.get("timeout", 45))
+        headers = {"Content-Type": "application/json"}
+    else:
+        cloud_cfg = cfg.get("cloud_model", {})
+        base_url = cloud_cfg.get("base_url", "https://api.deepseek.com/v1")
+        api_key = cloud_cfg.get("api_key", "")
+        model = cloud_cfg.get("model_name", "deepseek-chat")
+        timeout = float(cloud_cfg.get("timeout", 45))
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        }
+
+    messages = []
+    if system_prompt:
+        messages.append({"role": "system", "content": system_prompt})
+
+    user_content = prompt
+    if json_mode:
+        user_content = f"{prompt}\n\n???? JSON?????????"
+    messages.append({"role": "user", "content": user_content})
+
+    payload = {
+        "model": model,
+        "messages": messages,
+    }
+
+    url = f"{base_url.rstrip('/')}/chat/completions"
+
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            resp = await client.post(url, headers=headers, json=payload)
+            if resp.status_code != 200:
+                raise RuntimeError(
+                    f"LLM API request failed with status {resp.status_code}: {resp.text}"
+                )
+            data = resp.json()
+            choices = data.get("choices", [])
+            if not choices:
+                raise RuntimeError(f"LLM returned no choices: {data}")
+            content = choices[0].get("message", {}).get("content", "")
+            return content if content is not None else ""
+    except Exception as e:
+        if isinstance(e, RuntimeError):
+            raise
+        raise RuntimeError(f"LLM chat generation failed: {e}") from e

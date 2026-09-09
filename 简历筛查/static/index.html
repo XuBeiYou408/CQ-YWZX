@@ -1,0 +1,3148 @@
+-8 -*-
+from pathlib import Path
+
+target_file = Path(r'C:\Users\ABC\Desktop\123\简历筛查\static\index.html')
+
+frontend_code = r'''<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"/>
+  <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+  <title>RecruitAI · 企业智能招聘与简历初筛工作台</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Vue 3 CDN -->
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+
+  <style>
+    :root {
+      --primary: #00B395;
+      --primary-dark: #006b58;
+      --mint: #00C5A8;
+      --mint-light: #e6faf6;
+      --ai-violet: #5039f6;
+      --ai-violet-light: #edeaff;
+      --bg: #F6F8FA;
+      --surface: #FFFFFF;
+      --text-main: #181C23;
+      --text-muted: #64748B;
+      --border-color: #EBEEF2;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 0;
+      background-color: var(--bg);
+      color: var(--text-main);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 9999px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    [v-cloak] { display: none !important; }
+
+    .icon {
+      display: inline-block;
+      width: 1.15rem;
+      height: 1.15rem;
+      vertical-align: -0.15em;
+      flex-shrink: 0;
+    }
+
+    .badge-s {
+      background: linear-gradient(135deg, rgba(80, 57, 246, 0.15) 0%, rgba(0, 197, 168, 0.18) 100%);
+      color: #5039f6;
+      border: 1px solid rgba(80, 57, 246, 0.25);
+    }
+    .badge-a {
+      background: #e6faf6;
+      color: #008770;
+      border: 1px solid rgba(0, 179, 149, 0.25);
+    }
+    .badge-b {
+      background: #f1f5f9;
+      color: #475569;
+      border: 1px solid #cbd5e1;
+    }
+    .badge-d {
+      background: #fef2f2;
+      color: #dc2626;
+      border: 1px solid #fecaca;
+    }
+  </style>
+
+  <script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            "primary": "#006b58",
+            "primary-container": "#00B395",
+            "primary-fixed": "#71f9d8",
+            "secondary": "#006b5a",
+            "secondary-container": "#e6faf6",
+            "tertiary": "#5039f6",
+            "tertiary-fixed": "#edeaff",
+            "surface": "#F6F8FA",
+            "on-surface": "#181C23",
+            "outline": "#64748B",
+            "error": "#dc2626"
+          }
+        }
+      }
+    };
+  </script>
+</head>
+<body class="bg-[#F6F8FA] text-[#181C23] min-h-screen">
+  <div id="app" v-cloak class="min-h-screen flex flex-col">
+
+    <!-- 1. Header Navigation Bar -->
+    <header class="fixed top-0 left-0 right-0 w-full z-40 bg-white/95 backdrop-blur-md shadow-[0_1px_4px_rgba(0,0,0,0.05)] border-b border-[#EBEEF2]">
+      <div class="h-16 w-full px-6 flex items-center justify-between gap-4 max-w-[1560px] mx-auto">
+        <!-- Logo & Main Nav -->
+        <div class="flex items-center gap-8">
+          <div class="flex items-center gap-2.5 cursor-pointer" @click="currentTab = 'all'; fetchCandidates()">
+            <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-[#006b58] to-[#00B395] flex items-center justify-center text-white shadow-sm">
+              <svg class="icon w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><circle cx="4" cy="12" r="2"/><circle cx="20" cy="12" r="2"/><circle cx="12" cy="4" r="2"/><circle cx="12" cy="20" r="2"/><line x1="6" y1="12" x2="9" y2="12"/><line x1="15" y1="12" x2="18" y2="12"/><line x1="12" y1="6" x2="12" y2="9"/><line x1="12" y1="15" x2="12" y2="18"/></svg>
+            </div>
+            <div class="flex flex-col">
+              <span class="text-[17px] font-bold text-[#181C23] tracking-tight leading-none">RecruitAI</span>
+              <span class="text-[11px] text-[#00B395] tracking-wide leading-none mt-1 font-semibold">企业智能招聘中心</span>
+            </div>
+          </div>
+
+          <!-- Top Navigation with Real Actions -->
+          <nav class="hidden xl:flex items-center gap-1.5 text-[14px]">
+            <button @click="openJobManagementModal" class="px-3 py-1.5 rounded-lg text-slate-600 hover:bg-slate-100 transition-colors flex items-center gap-1">
+              <span>职位管理</span>
+              <span class="text-[11px] font-bold px-1.5 py-0.2 bg-slate-200/80 rounded-full">{{ jobs.length }}</span>
+            </button>
+            <button @click="currentTab = 'all'; fetchCandidates()" class="px-3 py-1.5 rounded-lg bg-[#e6faf6] text-[#008770] font-semibold flex items-center gap-1">
+              <span>简历投递/初筛</span>
+            </button>
+            <button @click="openChatCenter()" class="px-3 py-1.5 rounded-lg text-slate-600 hover:bg-slate-100 transition-colors flex items-center gap-1 cursor-pointer" title="打开候选人沟通中心">
+              <span>候选人沟通</span>
+              <span class="w-1.5 h-1.5 rounded-full bg-[#00B395]"></span>
+            </button>
+            <button @click="openInterviewModal" class="px-3 py-1.5 rounded-lg text-slate-600 hover:bg-slate-100 transition-colors flex items-center gap-1">
+              <span>面试日程</span>
+              <span class="text-[11px] font-bold px-1.5 py-0.2 bg-slate-200/80 rounded-full">{{ interviews.length }}</span>
+            </button>
+            <button @click="openTalentPoolModal" class="px-3 py-1.5 rounded-lg text-slate-600 hover:bg-slate-100 transition-colors flex items-center gap-1">
+              <span>人才公海</span>
+              <span class="text-[11px] font-bold px-1.5 py-0.2 bg-slate-200/80 rounded-full">{{ talentPool.length }}</span>
+            </button>
+          </nav>
+        </div>
+
+        <!-- Search, AI Diagnostics, Model Capsule & Actions -->
+        <div class="flex items-center gap-3">
+          <!-- Search Box -->
+          <div class="relative hidden lg:flex items-center w-60">
+            <svg class="icon w-4 h-4 absolute left-3 text-slate-400 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input v-model="searchQuery" @input="debouncedSearch"
+              class="w-full pl-9 pr-7 py-1.5 h-9 bg-slate-100/90 rounded-full text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:bg-white focus:ring-1 focus:ring-[#00B395] transition-all"
+              placeholder="快速检索人才库、职位或技能..." type="text"/>
+            <button v-if="searchQuery" @click="searchQuery = ''; fetchCandidates()" class="absolute right-2.5 text-slate-400 hover:text-slate-700">
+              <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
+
+          <!-- AI Diagnostic Button -->
+          <button @click="openDiagnosticsModal"
+            class="h-9 px-3 bg-[#edeaff] hover:bg-[#dfd8ff] text-[#5039f6] rounded-lg inline-flex items-center gap-1.5 text-xs font-semibold transition-all border border-[#5039f6]/20 shadow-sm"
+            title="查看招聘健康度与全景诊断">
+            <svg class="icon w-4 h-4 text-[#5039f6]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l2.4 7.2L22 12l-7.6 2.8L12 22l-2.4-7.2L2 12l7.6-2.8z"/></svg>
+            <span>AI 智能诊断</span>
+          </button>
+
+          <!-- Model Engine Status Pill (Clickable) -->
+          <div @click="showModelModal = true"
+            class="flex items-center gap-2 px-3 py-1 rounded-full cursor-pointer transition-all border shadow-sm group hover:scale-[1.02]"
+            :class="modelStatus.local_status === 'available' || modelStatus.cloud_status === 'configured'
+              ? 'bg-[#e6faf6] border-[#00B395]/30 text-[#006b58] hover:bg-[#d0f5ee]'
+              : 'bg-red-50 border-red-200 text-red-700 hover:bg-red-100'">
+            <span class="w-2.5 h-2.5 rounded-full relative flex items-center justify-center">
+              <span class="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75"
+                :class="modelStatus.active_provider === 'local' ? 'bg-[#00B395]' : 'bg-[#5039f6]'"></span>
+              <span class="relative inline-flex rounded-full h-2 w-2"
+                :class="modelStatus.active_provider === 'local' ? 'bg-[#00B395]' : 'bg-[#5039f6]'"></span>
+            </span>
+            <div class="flex flex-col text-left">
+              <span class="text-[11px] font-bold leading-tight flex items-center gap-1">
+                <span>{{ modelStatus.active_provider === 'local' ? '本地端侧' : '云端大模型' }}</span>
+                <svg class="w-3 h-3 text-slate-500 opacity-70 group-hover:translate-x-0.5 transition-transform" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+              </span>
+              <span class="text-[10px] text-slate-600 leading-none truncate max-w-[110px]">
+                {{ modelStatus.active_provider === 'local' ? (modelStatus.local_model || 'qwen3.8-27b') : (modelStatus.cloud_model || 'DeepSeek') }}
+              </span>
+            </div>
+          </div>
+
+          <!-- Upload Resume Button -->
+          <button @click="showUploadModal = true"
+            class="h-9 px-3.5 bg-[#00B395] hover:bg-[#008770] text-white rounded-lg inline-flex items-center gap-1.5 text-xs font-semibold transition-all shadow-sm">
+            <svg class="icon w-4 h-4 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            <span>上传简历</span>
+          </button>
+
+          <!-- Settings Button -->
+          <button @click="showModelModal = true" class="p-2 rounded-full text-slate-600 hover:bg-slate-100 transition-colors" title="AI引擎设置">
+            <svg class="icon w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>
+          </button>
+
+          <!-- Refresh Button -->
+          <button @click="fetchCandidates" class="p-2 rounded-full text-slate-600 hover:bg-slate-100 transition-colors" title="刷新列表">
+            <svg class="icon w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+          </button>
+
+          <!-- HR Profile -->
+          <div class="flex items-center gap-2 pl-2 border-l border-slate-200">
+            <div class="w-8 h-8 rounded-full bg-[#00B395]/15 text-[#006b58] flex items-center justify-center font-bold text-xs ring-2 ring-[#00B395]/20">
+              HR
+            </div>
+            <div class="hidden md:flex flex-col text-left">
+              <span class="text-xs font-semibold text-slate-800 leading-tight">HR 主管</span>
+              <span class="text-[10px] text-slate-400 leading-tight">技术人才甄选组</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- 2. Main Content Container -->
+    <main class="w-full pt-20 bg-[#F6F8FA] min-h-screen flex-1 pb-16">
+      <div class="flex flex-col w-full px-6 py-4 max-w-[1560px] mx-auto space-y-4">
+
+        <!-- Top Header Banner / Job Switcher Bar (OVERFLOW-VISIBLE to prevent dropdown clipping!) -->
+        <section class="w-full bg-white rounded-xl p-5 shadow-sm border border-[#EBEEF2] relative z-20">
+          <div class="absolute inset-0 rounded-xl overflow-hidden pointer-events-none">
+            <div class="absolute -right-16 -top-16 w-80 h-80 rounded-full bg-[#00B395]/5 blur-3xl"></div>
+          </div>
+
+          <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 relative z-10">
+            <!-- Left: Job Identity & Details -->
+            <div class="flex flex-col space-y-2.5">
+              <div class="flex flex-wrap items-center gap-3">
+                <div class="flex items-center gap-2">
+                  <span class="p-2 bg-[#e6faf6] text-[#008770] rounded-lg flex items-center justify-center">
+                    <svg class="icon w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+                  </span>
+                  <h1 class="text-xl font-bold text-slate-900 tracking-tight">{{ currentJob.title }}</h1>
+                </div>
+                <span class="text-sm font-bold text-[#008770] bg-[#e6faf6] px-3 py-1 rounded-full border border-[#00B395]/20">
+                  {{ currentJob.salary }}
+                </span>
+                <span class="text-xs text-slate-600 bg-slate-100 px-2.5 py-1 rounded-md font-medium">
+                  {{ currentJob.department }}
+                </span>
+                <span class="text-xs text-slate-600 bg-slate-100 px-2.5 py-1 rounded-md flex items-center gap-1.5 font-medium">
+                  <span class="w-1.5 h-1.5 rounded-full bg-[#00B395] animate-ping"></span>
+                  HC需求: {{ currentJob.hc }}人 (已约面 {{ counts.scheduled }})
+                </span>
+              </div>
+
+              <!-- Job Summary Tags -->
+              <div class="flex flex-wrap items-center gap-2 text-xs text-slate-600 font-medium">
+                <span class="inline-flex items-center gap-1 bg-slate-100 px-2.5 py-1 rounded-full">
+                  <svg class="icon w-3.5 h-3.5 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                  {{ currentJob.location }}
+                </span>
+                <span class="inline-flex items-center gap-1 bg-slate-100 px-2.5 py-1 rounded-full">
+                  <svg class="icon w-3.5 h-3.5 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+                  {{ currentJob.experience_years }}+ 年经验
+                </span>
+                <span class="inline-flex items-center gap-1 bg-slate-100 px-2.5 py-1 rounded-full">
+                  <svg class="icon w-3.5 h-3.5 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
+                  {{ formatEdu(currentJob.education) }}
+                </span>
+                <span class="inline-flex items-center gap-1 bg-[#e6faf6] text-[#008770] px-2.5 py-1 rounded-full font-semibold border border-[#00B395]/15">
+                  <svg class="icon w-3.5 h-3.5 text-[#008770]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/><line x1="14" y1="4" x2="10" y2="20"/></svg>
+                  {{ (currentJob.required_skills || []).join(' / ') }}
+                </span>
+              </div>
+            </div>
+
+            <!-- Right: Action Controls (Robust Dropdown & Operations) -->
+            <div class="flex flex-wrap items-center gap-2 self-start lg:self-center">
+              <!-- Switch Job Dropdown Menu Button -->
+              <div class="relative job-dropdown-container">
+                <button @click="showJobDropdown = !showJobDropdown"
+                  class="h-9 px-3 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold rounded-lg inline-flex items-center gap-1.5 transition-all border border-slate-200 shadow-sm cursor-pointer">
+                  <svg class="icon w-4 h-4 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 3 21 8 16 13"/><line x1="21" y1="8" x2="9" y2="8"/><polyline points="8 21 3 16 8 11"/><line x1="3" y1="16" x2="15" y2="16"/></svg>
+                  <span>切换职位 ({{ jobs.length }}个在招)</span>
+                  <svg class="icon w-3.5 h-3.5 text-slate-400 transition-transform" :class="{'rotate-180': showJobDropdown}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                </button>
+
+                <!-- Floating Dropdown (Not Clipped!) -->
+                <div v-if="showJobDropdown"
+                  class="absolute right-0 top-11 w-72 bg-white rounded-xl shadow-2xl border border-slate-200 p-2 z-50 space-y-1">
+                  <div class="px-2 py-1 text-[11px] font-bold text-slate-400 border-b border-slate-100 flex items-center justify-between">
+                    <span>当前招聘职位列表</span>
+                    <button @click="openCreateJobModal" class="text-[#008770] hover:underline flex items-center gap-0.5">
+                      <span>+ 新建岗位</span>
+                    </button>
+                  </div>
+                  <div v-for="j in jobs" :key="j.id" @click="selectJob(j.id)"
+                    class="p-2.5 rounded-lg cursor-pointer transition-colors flex items-center justify-between"
+                    :class="currentJobId === j.id ? 'bg-[#e6faf6] text-[#008770] font-semibold' : 'hover:bg-slate-100 text-slate-800'">
+                    <div class="flex flex-col">
+                      <div class="text-xs">{{ j.title }}</div>
+                      <div class="text-[10px] text-slate-400">{{ j.department }} · {{ j.salary }}</div>
+                    </div>
+                    <svg v-if="currentJobId === j.id" class="w-4 h-4 text-[#008770]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Full JD and Rules Button -->
+              <button @click="showJDModal = true" class="h-9 px-3 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold rounded-lg inline-flex items-center gap-1.5 transition-all border border-slate-200">
+                <svg class="icon w-4 h-4 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                <span>完整JD与规则</span>
+              </button>
+              
+              <!-- Upload Resume Button -->
+              <button @click="showUploadModal = true" class="h-9 px-3 bg-[#edeaff] hover:bg-[#dfd8ff] text-[#5039f6] text-xs font-semibold rounded-lg inline-flex items-center gap-1.5 transition-all border border-[#5039f6]/20">
+                <svg class="icon w-4 h-4 text-[#5039f6]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                <span>上传简历</span>
+              </button>
+
+              <!-- Refresh List Button -->
+              <button @click="fetchCandidates" class="h-9 w-9 bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900 rounded-lg flex items-center justify-center transition-all border border-slate-200" title="刷新列表">
+                <svg class="icon w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <!-- 3. Key Metric Overview Bar -->
+        <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+          <!-- Metric 1 -->
+          <div @click="currentTab = 'all'; fetchCandidates()" class="bg-white p-4 rounded-xl shadow-sm border border-[#EBEEF2] flex items-center justify-between cursor-pointer group hover:shadow-md transition-shadow">
+            <div class="flex flex-col space-y-1">
+              <span class="text-xs text-slate-500 font-medium">总投递 / 初筛候选人</span>
+              <div class="flex items-baseline gap-2">
+                <span class="text-2xl font-bold text-slate-900">{{ counts.all }}</span>
+                <span class="text-[11px] text-[#008770] flex items-center font-bold">
+                  <svg class="icon w-3 h-3 text-[#008770] mr-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+                  实时更新
+                </span>
+              </div>
+            </div>
+            <div class="w-11 h-11 rounded-xl bg-emerald-50 flex items-center justify-center text-[#008770] group-hover:bg-[#00B395]/20 transition-colors">
+              <svg class="icon w-6 h-6 text-[#008770]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+            </div>
+          </div>
+
+          <!-- Metric 2 -->
+          <div @click="currentTab = 'review'; fetchCandidates()" class="bg-white p-4 rounded-xl shadow-sm border border-[#EBEEF2] flex items-center justify-between cursor-pointer group hover:shadow-md transition-shadow">
+            <div class="flex flex-col space-y-1">
+              <span class="text-xs text-slate-500 font-medium">待人工复核</span>
+              <div class="flex items-baseline gap-2">
+                <span class="text-2xl font-bold text-slate-900">{{ counts.review }}</span>
+                <span class="text-[10px] text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded font-medium">
+                  技术栈/年限需复审
+                </span>
+              </div>
+            </div>
+            <div class="w-11 h-11 rounded-xl bg-slate-100 flex items-center justify-center text-slate-600 group-hover:bg-slate-200 transition-colors">
+              <svg class="icon w-6 h-6 text-slate-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><polyline points="9 14 11 16 15 12"/></svg>
+            </div>
+          </div>
+
+          <!-- Metric 3 -->
+          <div @click="currentTab = 'recommended'; fetchCandidates()" class="bg-white p-4 rounded-xl shadow-sm border border-[#EBEEF2] flex items-center justify-between cursor-pointer relative overflow-hidden group hover:shadow-md transition-shadow">
+            <div class="absolute -right-4 -bottom-4 w-24 h-24 rounded-full bg-[#5039f6]/5 blur-xl pointer-events-none"></div>
+            <div class="flex flex-col space-y-1">
+              <div class="flex items-center gap-1.5">
+                <span class="text-xs text-[#5039f6] font-bold">AI 高匹配推荐</span>
+                <span class="w-2 h-2 rounded-full bg-[#5039f6] animate-pulse"></span>
+              </div>
+              <div class="flex items-baseline gap-2">
+                <span class="text-2xl font-bold text-slate-900">{{ counts.recommended }}</span>
+                <span class="text-[10px] text-[#5039f6] bg-[#edeaff] px-1.5 py-0.5 rounded font-bold">
+                  S / A 级 ≥ 85%
+                </span>
+              </div>
+            </div>
+            <div class="w-11 h-11 rounded-xl bg-[#edeaff] flex items-center justify-center text-[#5039f6]">
+              <svg class="icon w-6 h-6 text-[#5039f6]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l2.4 7.2L22 12l-7.6 2.8L12 22l-2.4-7.2L2 12l7.6-2.8z"/></svg>
+            </div>
+          </div>
+
+          <!-- Metric 4 -->
+          <div @click="openInterviewModal" class="bg-white p-4 rounded-xl shadow-sm border border-[#EBEEF2] flex items-center justify-between cursor-pointer group hover:shadow-md transition-shadow">
+            <div class="flex flex-col space-y-1">
+              <span class="text-xs text-slate-500 font-medium">已进入约面流程</span>
+              <div class="flex items-baseline gap-2">
+                <span class="text-2xl font-bold text-slate-900">{{ counts.scheduled }}</span>
+                <span class="text-[11px] text-[#008770] flex items-center font-bold">
+                  自动化面试管理
+                </span>
+              </div>
+            </div>
+            <div class="w-11 h-11 rounded-xl bg-emerald-50 flex items-center justify-center text-[#008770] group-hover:bg-[#00B395]/20 transition-colors">
+              <svg class="icon w-6 h-6 text-[#008770]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+            </div>
+          </div>
+        </section>
+
+        <!-- 4. AI Status Banner & Tab Toolbar -->
+        <section class="flex flex-col space-y-3">
+          <!-- AI Engine Live Banner -->
+          <div class="bg-[#f0faf7] rounded-xl px-4 py-3 flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-sm border border-[#00B395]/20">
+            <div class="flex items-center gap-3 min-w-0">
+              <div class="w-8 h-8 rounded-lg bg-[#00B395] text-white flex items-center justify-center flex-shrink-0 shadow-sm">
+                <svg class="icon w-4 h-4 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="6" width="16" height="14" rx="2"/><circle cx="9" cy="11" r="1.5" fill="currentColor"/><circle cx="15" cy="11" r="1.5" fill="currentColor"/><line x1="9" y1="16" x2="15" y2="16"/><line x1="12" y1="2" x2="12" y2="6"/></svg>
+              </div>
+              <p class="text-xs text-slate-800 leading-relaxed truncate md:whitespace-normal">
+                <span class="font-bold text-[#008770]">AI 智能初筛引擎正在实时运行：</span>
+                已严格根据本岗位JD硬性门槛（{{ currentJob.experience_years }}年+经验、{{ formatEdu(currentJob.education) }}、核心技能链路）完成自动化比对，已自动拦截不合规投递 <span class="font-bold text-red-600">{{ counts.rejected }}</span> 份，自动置顶核心优质画像。
+              </p>
+            </div>
+            <div class="flex items-center gap-2 flex-shrink-0 self-end md:self-center">
+              <button @click="showJDModal = true" class="text-xs font-semibold text-[#008770] hover:text-[#006b58] hover:bg-emerald-100/50 px-2.5 py-1 rounded-md transition-all inline-flex items-center gap-1">
+                <svg class="icon w-3.5 h-3.5 text-[#008770]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>
+                门槛规则调优
+              </button>
+              <button @click="currentTab = 'rejected'; fetchCandidates()" class="text-xs font-medium text-slate-500 hover:text-slate-800 px-2 py-1 rounded transition-colors">
+                查看拦截记录 ({{ counts.rejected }})
+              </button>
+            </div>
+          </div>
+
+          <!-- Filter Tabs & Controls Area -->
+          <div class="bg-white p-3 rounded-xl shadow-sm border border-[#EBEEF2] flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
+            <!-- Left Tabs -->
+            <div class="flex items-center gap-1.5 overflow-x-auto pb-1 lg:pb-0">
+              <button @click="currentTab = 'all'; fetchCandidates()"
+                class="h-9 px-3.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 flex-shrink-0 transition-all"
+                :class="currentTab === 'all' ? 'bg-[#e6faf6] text-[#008770] shadow-sm' : 'text-slate-600 hover:bg-slate-100'">
+                全部投递 <span class="text-[11px] font-bold opacity-80">({{ counts.all }})</span>
+              </button>
+
+              <button @click="currentTab = 'recommended'; fetchCandidates()"
+                class="h-9 px-3.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 flex-shrink-0 transition-all"
+                :class="currentTab === 'recommended' ? 'bg-[#e6faf6] text-[#008770] shadow-sm' : 'text-slate-600 hover:bg-slate-100'">
+                <span class="w-2 h-2 rounded-full bg-[#5039f6]"></span>
+                AI极高推荐 <span class="text-[11px] font-bold text-[#5039f6]">({{ counts.recommended }})</span>
+              </button>
+
+              <button @click="currentTab = 'review'; fetchCandidates()"
+                class="h-9 px-3.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 flex-shrink-0 transition-all"
+                :class="currentTab === 'review' ? 'bg-[#e6faf6] text-[#008770] shadow-sm' : 'text-slate-600 hover:bg-slate-100'">
+                待人工复核 <span class="text-[11px] font-bold">({{ counts.review }})</span>
+              </button>
+
+              <button @click="currentTab = 'scheduled'; fetchCandidates()"
+                class="h-9 px-3.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 flex-shrink-0 transition-all"
+                :class="currentTab === 'scheduled' ? 'bg-[#e6faf6] text-[#008770] shadow-sm' : 'text-slate-600 hover:bg-slate-100'">
+                已约面 <span class="text-[11px] font-bold">({{ counts.scheduled }})</span>
+              </button>
+
+              <button @click="currentTab = 'rejected'; fetchCandidates()"
+                class="h-9 px-3.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 flex-shrink-0 transition-all"
+                :class="currentTab === 'rejected' ? 'bg-red-50 text-red-700 shadow-sm' : 'text-slate-600 hover:bg-slate-100'">
+                淘汰/拦截库 <span class="text-[11px] font-bold text-red-600">({{ counts.rejected }})</span>
+              </button>
+            </div>
+
+            <!-- Right Interactive Filters & Sort -->
+            <div class="flex flex-wrap items-center gap-2">
+              <!-- Education Filter Dropdown -->
+              <select v-model="eduFilter" @change="fetchCandidates"
+                class="h-8 px-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium rounded-full border border-slate-200 focus:outline-none cursor-pointer">
+                <option value="all">学历: 全部</option>
+                <option value="985">985名校专项</option>
+                <option value="master">硕士及以上</option>
+                <option value="bachelor">统招本科及以上</option>
+              </select>
+
+              <!-- Experience Filter Dropdown -->
+              <select v-model="expFilter" @change="fetchCandidates"
+                class="h-8 px-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium rounded-full border border-slate-200 focus:outline-none cursor-pointer">
+                <option value="all">经验: 全部</option>
+                <option value="5+">5年以上经验</option>
+                <option value="3-5">3-5年经验</option>
+                <option value="1-3">1-3年经验</option>
+              </select>
+
+              <!-- Sort Toggle -->
+              <button @click="toggleSort"
+                class="h-8 px-3 bg-[#e6faf6] hover:bg-[#d0f5ee] text-[#008770] text-xs font-semibold rounded-full inline-flex items-center gap-1.5 transition-colors border border-[#00B395]/20">
+                <svg class="icon w-3.5 h-3.5 text-[#008770]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 7 13.5 15.5 8.5 10.5 1 18"/><polyline points="16 7 22 7 22 13"/></svg>
+                <span>{{ sortMode === 'score' ? 'AI匹配度优先' : '时间优先' }}</span>
+                <svg class="icon w-3.5 h-3.5 text-[#008770]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="7 15 12 20 17 15"/><polyline points="7 9 12 4 17 9"/></svg>
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <!-- 5. Candidate Stream Cards List -->
+        <section class="flex flex-col space-y-3 pb-24">
+          <!-- Empty State -->
+          <div v-if="candidates.length === 0" class="bg-white rounded-xl p-12 text-center text-slate-500 flex flex-col items-center justify-center space-y-3 border border-[#EBEEF2]">
+            <svg class="w-12 h-12 text-slate-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <div class="text-sm font-semibold text-slate-800">未找到符合条件的候选人</div>
+            <div class="text-xs text-slate-400">您可以尝试切换 Tab、清除筛选条件，或直接上传新的简历文档</div>
+            <button @click="showUploadModal = true" class="mt-2 h-9 px-4 bg-[#00B395] hover:bg-[#008770] text-white rounded-lg text-xs font-semibold inline-flex items-center gap-1.5">
+              <svg class="icon w-4 h-4 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              上传新简历
+            </button>
+          </div>
+
+          <!-- Candidate Card Loop -->
+          <div v-for="c in candidates" :key="c.id"
+            class="bg-white rounded-xl p-5 shadow-sm hover:shadow-md transition-all relative overflow-hidden border border-[#EBEEF2]"
+            :class="{'opacity-85 hover:opacity-100': c.state === 'rejected'}">
+
+            <!-- Glow indicator bar on the left edge -->
+            <div class="absolute left-0 top-0 bottom-0 w-1.5"
+              :class="{
+                'bg-gradient-to-b from-[#5039f6] via-[#00B395] to-[#006b58]': c.ai_tier === 'S',
+                'bg-[#00B395]': c.ai_tier === 'A',
+                'bg-slate-400': c.ai_tier === 'B' || c.state === 'review',
+                'bg-red-500': c.ai_tier === 'D' || c.state === 'rejected'
+              }"></div>
+
+            <div class="flex flex-col space-y-3.5 pl-1.5">
+              <!-- Top Row -->
+              <div class="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                <div class="flex items-start gap-3">
+                  <label class="relative flex items-center justify-center mt-1 cursor-pointer">
+                    <input type="checkbox" :checked="selectedIds.has(c.id)" @change="toggleSelect(c.id)"
+                      class="w-4 h-4 rounded text-[#00B395] accent-[#00B395] focus:ring-0 cursor-pointer"/>
+                  </label>
+
+                  <!-- Avatar -->
+                  <div class="relative flex-shrink-0">
+                    <div class="w-11 h-11 rounded-full flex items-center justify-center text-sm font-bold text-white shadow-sm ring-2 ring-white"
+                      :style="{ backgroundColor: getAvatarColor(c.name) }">
+                      {{ (c.name || '人').slice(0, 1) }}
+                    </div>
+                    <span v-if="c.state !== 'rejected'" class="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-[#00B395] ring-2 ring-white" title="当前在线"></span>
+                  </div>
+
+                  <!-- Details -->
+                  <div class="flex flex-col space-y-1">
+                    <div class="flex items-center gap-2 flex-wrap">
+                      <span class="text-base font-bold text-slate-900">{{ c.name }}</span>
+                      
+                      <!-- Verified Badge -->
+                      <span v-if="c.verified" class="inline-flex items-center text-[#008770]" title="企业实名及学历官方双核验">
+                        <svg class="icon w-4 h-4 text-[#008770]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 3.26 4.41.45.9 4.34 3.6 2.65-2.07 3.99.78 4.37-4.39 1.13-2.32 3.81L12 22l-3.09-3.26-4.41-.45-.9-4.34L0 11.3l2.07-3.99-.78-4.37 4.39-1.13L8.91 2z"/><polyline points="9 12 11 14 15 10"/></svg>
+                      </span>
+
+                      <!-- Status Badge -->
+                      <span v-if="c.state === 'rejected'" class="text-[11px] text-red-700 bg-red-50 px-2 py-0.5 rounded-full font-bold flex items-center gap-1 border border-red-200">
+                        <svg class="icon w-3 h-3 text-red-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
+                        门槛不符 · 系统已拦截
+                      </span>
+                      <span v-else-if="c.state === 'scheduled'" class="text-[11px] text-[#008770] bg-emerald-50 px-2 py-0.5 rounded-full font-bold flex items-center gap-1 border border-[#00B395]/20">
+                        <svg class="icon w-3 h-3 text-[#008770]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><polyline points="9 14 11 16 15 12"/></svg>
+                        已约面
+                      </span>
+                      <span v-else class="text-[11px] text-[#008770] bg-[#e6faf6] px-2 py-0.5 rounded-full font-semibold border border-[#00B395]/15">
+                        {{ c.status === 'employed' ? '在职 · ' + (c.available_time || '月内到岗') : '离职 · 随时到岗' }}
+                      </span>
+
+                      <span class="text-[11px] text-slate-400">投递时间: {{ c.apply_time }}</span>
+                    </div>
+
+                    <!-- Work Trajectory -->
+                    <div class="text-xs text-slate-600 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                      <span>{{ c.age ? c.age + '岁' : '年轻求职者' }}</span>
+                      <span class="text-slate-300">•</span>
+                      <span class="font-medium" :class="c.state === 'rejected' ? 'text-red-600 font-bold' : 'text-slate-800'">
+                        {{ c.experience_years }}年工作经验
+                      </span>
+                      <span class="text-slate-300">•</span>
+                      <span class="inline-flex items-center gap-1" :class="c.state === 'rejected' ? 'text-red-600 font-bold' : 'text-slate-800'">
+                        <svg class="icon w-3.5 h-3.5 text-[#008770]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
+                        {{ c.school }} · {{ c.major }} ({{ formatEdu(c.education) }}{{ c.school_tier === '985' ? ' / 985' : (c.school_tier === '211' ? ' / 211' : '') }})
+                      </span>
+                      <span class="text-slate-300">•</span>
+                      <span class="font-medium text-slate-800">{{ c.current_company }} · {{ c.current_title }}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Expected Salary & AI Rating Badge -->
+                <div class="flex items-center gap-4 self-start md:self-center pl-12 md:pl-0">
+                  <div class="flex flex-col text-left md:text-right">
+                    <span class="text-[11px] text-slate-400 font-medium">期望薪资</span>
+                    <span class="text-sm font-bold text-[#008770]">{{ c.salary_expect || '面议' }}</span>
+                  </div>
+
+                  <!-- AI Score Badge -->
+                  <div class="px-3 py-1.5 rounded-xl flex items-center gap-2 shadow-sm"
+                    :class="{
+                      'badge-s': c.ai_tier === 'S',
+                      'badge-a': c.ai_tier === 'A',
+                      'badge-b': c.ai_tier === 'B',
+                      'badge-d': c.ai_tier === 'D' || c.state === 'rejected'
+                    }">
+                    <svg class="icon w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <template v-if="c.ai_tier === 'S'">
+                        <path d="M12 2l2.4 7.2L22 12l-7.6 2.8L12 22l-2.4-7.2L2 12l7.6-2.8z"/>
+                      </template>
+                      <template v-else-if="c.ai_tier === 'A'">
+                        <path d="M12 2l3.09 3.26 4.41.45.9 4.34 3.6 2.65-2.07 3.99.78 4.37-4.39 1.13-2.32 3.81L12 22l-3.09-3.26-4.41-.45-.9-4.34L0 11.3l2.07-3.99-.78-4.37 4.39-1.13L8.91 2z"/><polyline points="9 12 11 14 15 10"/>
+                      </template>
+                      <template v-else-if="c.ai_tier === 'D'">
+                        <circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>
+                      </template>
+                      <template v-else>
+                        <circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+                      </template>
+                    </svg>
+
+                    <div class="flex flex-col">
+                      <div class="flex items-baseline gap-1">
+                        <span class="text-sm font-bold">{{ c.ai_score }}%</span>
+                        <span class="text-[11px] font-bold">{{ c.ai_label || (c.ai_tier + '级') }}</span>
+                      </div>
+                      <span class="text-[10px] opacity-80 leading-none">
+                        {{ c.ai_tier === 'S' ? '全维画像完全拟合' : (c.ai_tier === 'A' ? '核心技术高度契合' : (c.ai_tier === 'D' ? '硬性门槛未通过' : '需人工评估复核')) }}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- AI Match Radar Strip & Explanation -->
+              <div class="bg-slate-50 rounded-xl p-3 flex flex-col md:flex-row md:items-center justify-between gap-3 border border-slate-100">
+                <div class="flex flex-col space-y-1.5 max-w-4xl">
+                  <div class="flex flex-wrap items-center gap-1.5 text-[11px]">
+                    <span v-for="(tag, tidx) in (c.tags || [])" :key="tidx"
+                      class="font-medium px-2 py-0.5 rounded-md"
+                      :class="tag.startsWith('✓') ? 'bg-[#e6faf6] text-[#008770] border border-[#00B395]/20' : (tag.startsWith('✗') ? 'bg-red-50 text-red-700 border border-red-200' : 'bg-slate-200/70 text-slate-700')">
+                      {{ tag }}
+                    </span>
+                  </div>
+
+                  <p class="text-xs text-slate-700 flex items-start gap-1.5 leading-relaxed">
+                    <svg class="icon w-4 h-4 text-[#5039f6] mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 4.44-2.04z"/><path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-4.44-2.04z"/></svg>
+                    <span>
+                      <strong class="text-[#5039f6]">AI 甄选理由：</strong>
+                      {{ c.ai_reason }}
+                    </span>
+                  </p>
+                </div>
+
+                <!-- Candidate Action Buttons -->
+                <div class="flex items-center gap-2 self-end md:self-center flex-shrink-0">
+                  <button @click="openDetail(c)"
+                    class="h-8 px-3 bg-white hover:bg-slate-100 text-slate-800 text-xs font-semibold rounded-full transition-all inline-flex items-center gap-1 border border-slate-200 shadow-sm cursor-pointer">
+                    <svg class="icon w-3.5 h-3.5 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                    查看简历
+                  </button>
+
+                  <template v-if="c.state !== 'rejected'">
+                    <button v-if="c.state !== 'scheduled'" @click="updateState(c.id, 'scheduled')"
+                      class="h-8 px-3 bg-[#e6faf6] hover:bg-[#d0f5ee] text-[#008770] text-xs font-semibold rounded-full transition-all inline-flex items-center gap-1 border border-[#00B395]/30 cursor-pointer">
+                      <svg class="icon w-3.5 h-3.5 text-[#008770]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><polyline points="9 14 11 16 15 12"/></svg>
+                      发起面试
+                    </button>
+                    <button @click="openChatWindow(c)"
+                      class="h-8 px-3.5 bg-[#00B395] hover:bg-[#008770] text-white text-xs font-bold rounded-full transition-all inline-flex items-center gap-1.5 shadow-sm cursor-pointer">
+                      <svg class="icon w-3.5 h-3.5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                      立即开聊
+                    </button>
+                  </template>
+
+                  <template v-else>
+                    <button @click="updateState(c.id, 'review')"
+                      class="h-8 px-2.5 bg-white hover:bg-slate-100 text-slate-600 hover:text-slate-900 text-xs rounded-full transition-all border border-slate-200 cursor-pointer">
+                      移入初级储备库
+                    </button>
+                    <button @click="rejectCandidate(c)"
+                      class="h-8 px-2.5 bg-red-50 hover:bg-red-100 text-red-700 text-xs rounded-full transition-all border border-red-200 cursor-pointer">
+                      一键委婉回绝
+                    </button>
+                  </template>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 6. Bottom Sticky Batch Actions Bar -->
+        <aside class="fixed bottom-4 left-0 right-0 z-30 w-full max-w-4xl mx-auto px-4 pointer-events-none">
+          <div class="pointer-events-auto bg-white/95 backdrop-blur-xl rounded-2xl p-3 shadow-xl flex flex-col sm:flex-row items-center justify-between gap-3 border border-slate-200">
+            <div class="flex items-center gap-3 pl-2">
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" :checked="isAllSelected" @change="toggleSelectAll"
+                  class="w-4 h-4 rounded text-[#00B395] accent-[#00B395]"/>
+                <span class="text-xs font-semibold text-slate-800">全选本页 ({{ candidates.length }})</span>
+              </label>
+              <span class="h-4 w-px bg-slate-200"></span>
+              <span class="text-xs text-slate-700 font-medium flex items-center gap-1">
+                已勾选 <span class="text-[#008770] font-bold">{{ selectedIds.size }}</span> 位候选人
+              </span>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-2 pr-1">
+              <button @click="batchExport" :disabled="selectedIds.size === 0"
+                class="h-8 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg inline-flex items-center gap-1 transition-all disabled:opacity-40 cursor-pointer">
+                <svg class="icon w-3.5 h-3.5 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                导出简历清单
+              </button>
+
+              <button @click="batchPool" :disabled="selectedIds.size === 0"
+                class="h-8 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg inline-flex items-center gap-1 transition-all disabled:opacity-40 cursor-pointer">
+                <svg class="icon w-3.5 h-3.5 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8"/></svg>
+                转入公海
+              </button>
+
+              <button @click="batchGreet" :disabled="selectedIds.size === 0"
+                class="h-8 px-3 bg-[#e6faf6] hover:bg-[#d0f5ee] text-[#008770] text-xs font-semibold rounded-lg inline-flex items-center gap-1 transition-all disabled:opacity-40 border border-[#00B395]/20 cursor-pointer">
+                <svg class="icon w-3.5 h-3.5 text-[#008770]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                批量打招呼
+              </button>
+
+              <button @click="batchSchedule" :disabled="selectedIds.size === 0"
+                class="h-8 px-4 bg-[#00B395] hover:bg-[#008770] text-white text-xs font-bold rounded-lg inline-flex items-center gap-1.5 shadow-sm transition-all disabled:opacity-40 cursor-pointer">
+                <svg class="icon w-3.5 h-3.5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                批量发起面试 ({{ selectedIds.size }}人)
+              </button>
+            </div>
+          </div>
+        </aside>
+
+      </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="w-full bg-white py-4 mt-auto border-t border-[#EBEEF2]">
+      <div class="w-full px-6 max-w-[1560px] mx-auto flex flex-col md:flex-row items-center justify-between gap-2 text-[11px] text-slate-500">
+        <div class="flex items-center gap-4">
+          <span>© 2025 RecruitAI 企业智能招聘与简历初筛工作台 · 纯端侧演示专版</span>
+          <span class="inline-flex items-center gap-1 text-[#008770] font-semibold">
+            <span class="w-1.5 h-1.5 rounded-full bg-[#00B395] animate-pulse"></span>
+            AI 双轨初筛引擎已就绪 (v4.2-Pro)
+          </span>
+        </div>
+        <div class="flex items-center gap-4">
+          <span>纯端侧离线部署 · 数据脱敏保障</span>
+          <button @click="showModelModal = true" class="text-[#008770] hover:underline cursor-pointer">AI引擎配置</button>
+        </div>
+      </div>
+    </footer>
+
+    <!-- MODAL 1: Candidate Detail & Complete Original Resume Drawer -->
+    <div v-if="showDetailDrawer && currentDetail" class="fixed inset-0 z-[70] overflow-hidden">
+      <!-- Backdrop -->
+      <div class="absolute inset-0 bg-black/45 backdrop-blur-sm transition-opacity" @click="closeDetailDrawer()"></div>
+      
+      <!-- Right Sliding Large Drawer (max-w-3xl for full resume readability) -->
+      <div class="absolute inset-y-0 right-0 max-w-full flex pl-6">
+        <div class="w-screen max-w-3xl bg-white shadow-2xl flex flex-col h-full animate-in slide-in-from-right duration-300">
+          
+          <!-- Drawer Header -->
+          <div class="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-white z-10">
+            <div class="flex items-center gap-3.5">
+              <!-- Back to Chat Button if opened from chat modal -->
+              <button v-if="openedFromChat" @click="returnToChat()"
+                class="px-3 py-1.5 bg-[#e6faf6] hover:bg-[#d0f5ee] text-[#008770] font-bold rounded-lg text-xs flex items-center gap-1.5 transition-colors cursor-pointer border border-[#00B395]/30 shrink-0"
+                title="返回微聊沟通窗口">
+                <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+                <span>返回微聊</span>
+              </button>
+
+              <div class="w-12 h-12 rounded-full flex items-center justify-center text-sm font-bold text-white shadow-sm ring-2 ring-white shrink-0"
+                :style="{ backgroundColor: getAvatarColor(currentDetail.name) }">
+                {{ (currentDetail.name || '候').slice(0, 1) }}
+              </div>
+              <div>
+                <div class="flex items-center gap-2">
+                  <h2 class="text-base font-bold text-slate-900">{{ currentDetail.name }}</h2>
+                  <span class="text-xs font-bold px-2 py-0.5 rounded-full"
+                    :class="currentDetail.ai_tier === 'S' ? 'bg-[#edeaff] text-[#5039f6]' : currentDetail.ai_tier === 'A' ? 'bg-[#e6faf6] text-[#008770]' : currentDetail.ai_tier === 'B' ? 'bg-slate-100 text-slate-700' : 'bg-red-50 text-red-600'">
+                    AI 匹配: {{ currentDetail.ai_score }}分 ({{ currentDetail.ai_tier }}级)
+                  </span>
+                  <span v-if="currentDetail.state === 'scheduled'" class="text-[10px] px-2 py-0.5 rounded bg-purple-50 text-purple-700 font-semibold">已约面</span>
+                  <span v-else-if="currentDetail.state === 'rejected'" class="text-[10px] px-2 py-0.5 rounded bg-red-50 text-red-600 font-semibold">已淘汰/回绝</span>
+                </div>
+                <div class="text-xs text-slate-500 mt-0.5">
+                  {{ currentDetail.current_company }} · {{ currentDetail.current_title }} · 期望: {{ currentDetail.salary_expect }} · {{ currentDetail.experience_years }}年经验
+                </div>
+              </div>
+            </div>
+
+            <!-- Close & Tab Toggle Controls -->
+            <div class="flex items-center gap-3">
+              <!-- View Switcher Tabs (PRIMARY: 完整原版简历) -->
+              <div class="flex items-center bg-slate-100 p-1 rounded-lg text-xs font-semibold">
+                <button @click="detailTab = 'resume'"
+                  class="px-3 py-1.5 rounded-md transition-all cursor-pointer flex items-center gap-1.5"
+                  :class="detailTab === 'resume' ? 'bg-white text-slate-900 shadow-xs font-bold' : 'text-slate-600 hover:text-slate-900'">
+                  <svg class="icon w-3.5 h-3.5 text-[#008770]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                  <span>求职者完整原版简历</span>
+                </button>
+                <button @click="detailTab = 'ai'"
+                  class="px-3 py-1.5 rounded-md transition-all cursor-pointer flex items-center gap-1.5"
+                  :class="detailTab === 'ai' ? 'bg-white text-[#5039f6] shadow-xs font-bold' : 'text-slate-600 hover:text-slate-900'">
+                  <svg class="icon w-3.5 h-3.5 text-[#5039f6]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+                  <span>AI 初筛评估与追问</span>
+                </button>
+              </div>
+
+              <button @click="closeDetailDrawer()" class="p-1.5 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-700 cursor-pointer" title="关闭简历">
+                <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- Drawer Content Body -->
+          <div class="flex-1 overflow-y-auto bg-[#F8FAFC]">
+
+            <!-- ══════════════════════════════════════════════════════════ -->
+            <!-- TAB 1: 完整原版简历 (PRIMARY VIEW 占据核心主要篇幅) ─────── -->
+            <!-- ══════════════════════════════════════════════════════════ -->
+            <div v-if="detailTab === 'resume'" class="p-6 space-y-5">
+              
+              <!-- Top Compact AI Assessment Capsule Banner -->
+              <div class="p-3.5 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs"
+                :class="currentDetail.ai_score >= 85 ? 'bg-[#e6faf6]/70 border-[#00B395]/30' : (currentDetail.ai_score >= 60 ? 'bg-amber-50/70 border-amber-200' : 'bg-red-50/70 border-red-200')">
+                <div class="flex items-center gap-2.5">
+                  <div class="w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs"
+                    :class="currentDetail.ai_score >= 85 ? 'bg-[#00B395] text-white' : (currentDetail.ai_score >= 60 ? 'bg-amber-500 text-white' : 'bg-red-500 text-white')">
+                    {{ currentDetail.ai_tier }}
+                  </div>
+                  <div>
+                    <div class="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                      <span>AI 初筛匹配得分：{{ currentDetail.ai_score }} 分</span>
+                      <span class="text-[11px] font-normal text-slate-600">({{ currentDetail.ai_label }})</span>
+                    </div>
+                    <div class="text-[11px] text-slate-500 mt-0.5 line-clamp-1">
+                      {{ currentDetail.ai_reason }}
+                    </div>
+                  </div>
+                </div>
+
+                <div class="flex items-center gap-2 shrink-0">
+                  <button @click="detailTab = 'ai'" class="text-xs font-semibold text-[#008770] hover:underline flex items-center gap-1 cursor-pointer">
+                    <span>查看完整 AI 评估维度与追问</span>
+                    <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+                  </button>
+                  <button @click="exportSingleReport(currentDetail)" class="px-2.5 py-1 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold rounded-md border border-slate-200 flex items-center gap-1 cursor-pointer" title="导出为标准评审报告">
+                    <svg class="icon w-3 h-3 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    <span>导出简历</span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Formal Resume Paper Document Container (高保真标准简历纸张) -->
+              <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-8 space-y-7 text-slate-800">
+                
+                <!-- 1. 个人基本概况 (Header Particulars) -->
+                <div class="pb-6 border-b border-slate-200">
+                  <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                    <div class="space-y-1.5">
+                      <div class="flex items-center gap-3">
+                        <h1 class="text-2xl font-black tracking-tight text-slate-900">{{ currentDetail.name }}</h1>
+                        <span class="px-2.5 py-0.5 text-xs font-bold bg-[#e6faf6] text-[#008770] rounded-full border border-[#00B395]/20">
+                          求职中 · {{ currentDetail.available_time || '随时到岗' }}
+                        </span>
+                      </div>
+                      <div class="text-xs text-slate-600 font-medium flex flex-wrap items-center gap-x-3 gap-y-1 pt-1">
+                        <span>{{ currentDetail.age }}岁</span>
+                        <span>•</span>
+                        <span>{{ currentDetail.experience_years }}年工作经验</span>
+                        <span>•</span>
+                        <span>{{ formatEdu(currentDetail.education) }} ({{ currentDetail.school }})</span>
+                        <span>•</span>
+                        <span>现居 {{ currentDetail.full_resume?.basic_info?.city || '深圳' }}</span>
+                      </div>
+                    </div>
+
+                    <!-- Contact & Intention Badge -->
+                    <div class="text-xs text-slate-600 space-y-1 sm:text-right bg-slate-50 p-3 rounded-xl border border-slate-100">
+                      <div><span class="text-slate-400">期望职位：</span><span class="font-bold text-slate-800">{{ currentDetail.full_resume?.basic_info?.target_title || '资深前端开发 / 全栈工程师' }}</span></div>
+                      <div><span class="text-slate-400">期望薪酬：</span><span class="font-bold text-[#008770]">{{ currentDetail.salary_expect }}</span></div>
+                      <div><span class="text-slate-400">联系电话：</span><span class="font-mono text-slate-700">{{ currentDetail.full_resume?.basic_info?.phone || '138-****-8888 (已实名核验)' }}</span></div>
+                      <div><span class="text-slate-400">电子邮箱：</span><span class="font-mono text-slate-700">{{ currentDetail.full_resume?.basic_info?.email || 'candidate@recruitai.com' }}</span></div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- 2. 个人优势与职业综述 (Personal Summary) -->
+                <div class="space-y-3">
+                  <h3 class="text-sm font-bold text-slate-900 flex items-center gap-2 border-l-4 border-[#00B395] pl-2.5">
+                    <span>💡 个人优势与核心综述</span>
+                  </h3>
+                  <div class="bg-slate-50/80 rounded-xl p-4 space-y-2 border border-slate-100 text-xs text-slate-700 leading-relaxed">
+                    <template v-if="currentDetail.full_resume?.summary">
+                      <div v-for="(sumItem, sIdx) in currentDetail.full_resume.summary" :key="sIdx" class="flex items-start gap-2">
+                        <span class="text-[#008770] font-bold">•</span>
+                        <span>{{ sumItem }}</span>
+                      </div>
+                    </template>
+                    <template v-else>
+                      <p>{{ currentDetail.ai_reason }}</p>
+                    </template>
+                  </div>
+                </div>
+
+                <!-- 3. 完整工作经历 (Work Experiences) -->
+                <div class="space-y-4">
+                  <h3 class="text-sm font-bold text-slate-900 flex items-center gap-2 border-l-4 border-[#00B395] pl-2.5">
+                    <span>💼 完整工作经历</span>
+                  </h3>
+
+                  <div v-if="currentDetail.full_resume?.work_experience" class="space-y-4">
+                    <div v-for="(work, wIdx) in currentDetail.full_resume.work_experience" :key="wIdx"
+                      class="relative pl-4 border-l-2 border-slate-200 pb-2 space-y-2">
+                      <div class="absolute -left-[5px] top-1.5 w-2 h-2 rounded-full bg-[#00B395]"></div>
+                      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                        <div class="flex items-center gap-2">
+                          <span class="text-sm font-bold text-slate-900">{{ work.company }}</span>
+                          <span class="text-xs text-slate-500">| {{ work.department }}</span>
+                        </div>
+                        <span class="text-xs text-slate-400 font-mono font-medium">{{ work.period }}</span>
+                      </div>
+
+                      <div class="text-xs font-bold text-[#008770]">{{ work.title }}</div>
+                      
+                      <div class="text-xs text-slate-600 leading-relaxed space-y-1">
+                        <div><strong class="text-slate-700">工作职责：</strong>{{ work.responsibilities }}</div>
+                        <div><strong class="text-slate-700">核心业绩：</strong><span class="text-slate-800">{{ work.achievements }}</span></div>
+                      </div>
+                    </div>
+                  </div>
+                  <div v-else class="text-xs text-slate-600 bg-slate-50 p-4 rounded-xl">
+                    <div class="font-bold text-slate-900">{{ currentDetail.current_company }} · {{ currentDetail.current_title }}</div>
+                    <div class="text-slate-500 mt-1">工作资历：{{ currentDetail.experience_years }} 年</div>
+                  </div>
+                </div>
+
+                <!-- 4. 深度项目经历 (Project Experiences - STAR 原则) -->
+                <div class="space-y-4">
+                  <h3 class="text-sm font-bold text-slate-900 flex items-center gap-2 border-l-4 border-[#00B395] pl-2.5">
+                    <span>🚀 核心重点项目经历</span>
+                  </h3>
+
+                  <div v-if="currentDetail.full_resume?.project_experience" class="space-y-4">
+                    <div v-for="(proj, pIdx) in currentDetail.full_resume.project_experience" :key="pIdx"
+                      class="bg-slate-50/70 rounded-xl p-4.5 border border-slate-200 space-y-2.5">
+                      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                        <div class="flex items-center gap-2">
+                          <h4 class="text-xs font-bold text-slate-900">{{ proj.name }}</h4>
+                          <span class="text-[10px] px-2 py-0.5 rounded bg-slate-200 text-slate-700 font-semibold">{{ proj.role }}</span>
+                        </div>
+                        <span class="text-xs text-slate-400 font-mono">{{ proj.period }}</span>
+                      </div>
+
+                      <!-- Tech stack pills -->
+                      <div class="flex flex-wrap items-center gap-1.5">
+                        <span class="text-[10px] font-bold text-slate-500">所用技术栈:</span>
+                        <span v-for="t in (proj.tech_stack || '').split(',')" :key="t"
+                          class="text-[10px] px-2 py-0.5 rounded-full bg-white text-[#008770] font-medium border border-slate-200">
+                          {{ t.trim() }}
+                        </span>
+                      </div>
+
+                      <div class="text-xs text-slate-600 space-y-1.5 leading-relaxed pt-1">
+                        <div><strong class="text-slate-800">项目背景与难点：</strong>{{ proj.background }}</div>
+                        <div><strong class="text-slate-800">关键架构方案：</strong>{{ proj.solutions }}</div>
+                        <div class="p-2 bg-emerald-50/80 rounded-lg text-[#00705e] border border-emerald-100">
+                          <strong>量化产出效益：</strong>{{ proj.metrics }}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div v-else class="text-xs text-slate-600 bg-slate-50 p-4 rounded-xl">
+                    包含于简历附件中，技术栈匹配度达 {{ currentDetail.ai_score }}%。
+                  </div>
+                </div>
+
+                <!-- 5. 完整教育背景 (Education History) -->
+                <div class="space-y-3">
+                  <h3 class="text-sm font-bold text-slate-900 flex items-center gap-2 border-l-4 border-[#00B395] pl-2.5">
+                    <span>🎓 教育背景</span>
+                  </h3>
+
+                  <div v-if="currentDetail.full_resume?.educations" class="space-y-3">
+                    <div v-for="(edu, eIdx) in currentDetail.full_resume.educations" :key="eIdx"
+                      class="flex flex-col sm:flex-row sm:items-center justify-between gap-1 p-3.5 bg-slate-50 rounded-xl border border-slate-100">
+                      <div class="space-y-0.5">
+                        <div class="flex items-center gap-2">
+                          <span class="text-xs font-bold text-slate-900">{{ edu.school }}</span>
+                          <span class="text-[10px] px-2 py-0.2 rounded-full bg-slate-200/80 text-slate-700 font-semibold">{{ edu.tier }}</span>
+                        </div>
+                        <div class="text-xs text-slate-600">
+                          {{ edu.degree }} · {{ edu.major }}
+                          <span v-if="edu.honors" class="text-slate-400"> ({{ edu.honors }})</span>
+                        </div>
+                      </div>
+                      <span class="text-xs text-slate-400 font-mono shrink-0">{{ edu.period }}</span>
+                    </div>
+                  </div>
+                  <div v-else class="text-xs text-slate-700 bg-slate-50 p-3.5 rounded-xl flex items-center justify-between">
+                    <div><strong>{{ currentDetail.school }}</strong> ({{ currentDetail.school_tier }}高校) · {{ formatEdu(currentDetail.education) }}</div>
+                  </div>
+                </div>
+
+                <!-- 6. 专业技术矩阵 (Skill Matrix) -->
+                <div class="space-y-3">
+                  <h3 class="text-sm font-bold text-slate-900 flex items-center gap-2 border-l-4 border-[#00B395] pl-2.5">
+                    <span>🛠️ 核心专业技能矩阵</span>
+                  </h3>
+                  <div v-if="currentDetail.full_resume?.skills_matrix" class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                    <div v-for="(matrix, mIdx) in currentDetail.full_resume.skills_matrix" :key="mIdx"
+                      class="bg-slate-50 p-3.5 rounded-xl border border-slate-100 space-y-1.5">
+                      <div class="font-bold text-slate-800">{{ matrix.category }}</div>
+                      <div class="flex flex-wrap gap-1.5">
+                        <span v-for="sk in matrix.skills" :key="sk"
+                          class="px-2 py-0.5 bg-white text-slate-700 rounded-md border border-slate-200 text-[11px] font-medium">
+                          {{ sk }}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <div v-else class="flex flex-wrap gap-1.5">
+                    <span v-for="sk in (currentDetail.skills || [])" :key="sk" class="px-2.5 py-1 bg-slate-100 text-slate-800 rounded-md text-xs font-semibold">
+                      {{ sk }}
+                    </span>
+                  </div>
+                </div>
+
+                <!-- 7. 荣誉证书与资质 (Certificates) -->
+                <div v-if="currentDetail.full_resume?.certificates" class="space-y-2 pt-2 border-t border-slate-100">
+                  <div class="text-xs font-bold text-slate-700">🏆 职业资质与语言能力：</div>
+                  <div class="flex flex-wrap gap-2 text-xs text-slate-600">
+                    <span v-for="c in currentDetail.full_resume.certificates" :key="c" class="px-2.5 py-1 bg-slate-50 rounded-lg border border-slate-200">
+                      {{ c }}
+                    </span>
+                  </div>
+                </div>
+
+                <!-- 8. 上传文件提取原文展示 (若有提取的原版文本) -->
+                <div v-if="currentDetail.resume_text && !currentDetail.full_resume" class="pt-4 border-t border-slate-200 space-y-2">
+                  <div class="text-xs font-bold text-slate-700">📄 简历原文解析文本：</div>
+                  <pre class="text-xs text-slate-700 font-mono p-4 bg-slate-50 rounded-xl whitespace-pre-wrap leading-relaxed border border-slate-200 max-h-96 overflow-y-auto">{{ currentDetail.resume_text }}</pre>
+                </div>
+              </div>
+            </div>
+
+            <!-- ══════════════════════════════════════════════════════════ -->
+            <!-- TAB 2: AI 初筛评估报告 (SECONDARY TAB 辅助初筛与追问) ──── -->
+            <!-- ══════════════════════════════════════════════════════════ -->
+            <div v-else-if="detailTab === 'ai'" class="p-6 space-y-5">
+              
+              <!-- 5-Dimension Radar Score -->
+              <div class="bg-white rounded-2xl p-5 space-y-3.5 border border-slate-200 shadow-xs">
+                <div class="flex items-center justify-between">
+                  <h3 class="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                    <svg class="icon w-4 h-4 text-[#008770]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+                    <span>AI 五维岗位拟合度评分</span>
+                  </h3>
+                  <span class="text-xs font-bold text-[#008770]">综合拟合指数: {{ currentDetail.ai_score }} / 100</span>
+                </div>
+                
+                <div class="space-y-2.5">
+                  <div v-for="(val, key) in (currentDetail.radar || {})" :key="key" class="flex items-center gap-3 text-xs">
+                    <span class="w-20 font-medium text-slate-500">{{ key }}</span>
+                    <div class="flex-1 h-2.5 bg-slate-100 rounded-full overflow-hidden">
+                      <div class="h-full rounded-full transition-all duration-500"
+                        :style="{ width: val + '%' }"
+                        :class="val >= 90 ? 'bg-[#5039f6]' : (val >= 80 ? 'bg-[#00B395]' : 'bg-slate-400')"></div>
+                    </div>
+                    <span class="w-8 font-bold text-right" :class="val >= 80 ? 'text-[#008770]' : 'text-slate-500'">{{ val }}</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- AI Reason Detailed -->
+              <div class="bg-white rounded-2xl p-5 space-y-2 border-l-4 border-[#00B395] border border-slate-200 shadow-xs">
+                <h3 class="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                  <svg class="icon w-4 h-4 text-[#5039f6]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 4.44-2.04z"/><path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-4.44-2.04z"/></svg>
+                  <span>AI 深度甄选评价与背调建议</span>
+                </h3>
+                <p class="text-xs text-slate-700 leading-relaxed">{{ currentDetail.ai_reason }}</p>
+                <div class="flex flex-wrap gap-1.5 pt-2">
+                  <span v-for="tag in (currentDetail.tags || [])" :key="tag" class="px-2.5 py-1 bg-slate-50 text-slate-700 rounded-md text-[11px] font-medium border border-slate-200">
+                    {{ tag }}
+                  </span>
+                </div>
+              </div>
+
+              <!-- Tailored Interview Questions with REGENERATE BUTTON -->
+              <div class="bg-white rounded-2xl p-5 space-y-3 border border-slate-200 shadow-xs">
+                <div class="flex items-center justify-between">
+                  <h3 class="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                    <svg class="icon w-4 h-4 text-[#008770]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                    <span>AI 针对性面试追问题库（基于履历薄弱点与深度挑战）</span>
+                  </h3>
+                  <button @click="regenerateQuestions(currentDetail.id)" :disabled="regeneratingQuestions"
+                    class="text-xs font-semibold text-[#008770] hover:underline flex items-center gap-1 cursor-pointer">
+                    <svg class="icon w-3.5 h-3.5" :class="{'animate-spin': regeneratingQuestions}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+                    <span>AI换一批追问</span>
+                  </button>
+                </div>
+
+                <div class="space-y-2.5">
+                  <div v-for="(q, idx) in (currentDetail.interview_questions || [])" :key="idx" class="p-3 bg-slate-50 rounded-xl text-xs leading-relaxed flex gap-2.5 border border-slate-200">
+                    <span class="font-bold text-[#008770] flex-shrink-0">Q{{ idx + 1 }}.</span>
+                    <span class="text-slate-800">{{ q }}</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Export Button in AI tab -->
+              <div class="text-center pt-2">
+                <button @click="exportSingleReport(currentDetail)" class="h-9 px-4 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold rounded-lg border border-slate-300 shadow-xs inline-flex items-center gap-1.5 cursor-pointer">
+                  <svg class="icon w-4 h-4 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                  <span>导出该候选人结构化评审档案 (Markdown)</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Drawer Footer Action Bar -->
+          <div class="p-4 border-t border-slate-200 flex items-center justify-between bg-white z-10">
+            <button @click="updateState(currentDetail.id, 'rejected'); closeDetailDrawer()"
+              class="h-9 px-3.5 bg-red-50 hover:bg-red-100 text-red-700 rounded-lg text-xs font-semibold border border-red-200 cursor-pointer transition-colors">
+              移入淘汰库
+            </button>
+            <div class="flex items-center gap-2.5">
+              <button @click="returnToChat()"
+                class="h-9 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 border border-slate-200 cursor-pointer transition-all">
+                <svg class="icon w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                <span>{{ openedFromChat ? '返回微聊沟通' : '进入微聊沟通' }}</span>
+              </button>
+              <button @click="updateState(currentDetail.id, 'scheduled'); closeDetailDrawer()"
+                class="h-9 px-4 bg-[#00B395] hover:bg-[#008770] text-white rounded-lg text-xs font-bold shadow-sm cursor-pointer transition-all">
+                发起面试邀约
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL 2: 候选人即时沟通中心 (左侧沟通列表 + 右侧会话流) -->
+    <div v-if="showChatModal" class="fixed inset-0 z-50 flex items-center justify-center p-3 md:p-6 overflow-hidden">
+      <!-- Backdrop -->
+      <div class="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity" @click="showChatModal = false"></div>
+
+      <!-- Main Center Window (Dual Pane) -->
+      <div class="relative w-full max-w-5xl h-[92vh] max-h-[700px] bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col md:flex-row z-10 animate-in fade-in zoom-in-95 duration-200">
+        
+        <!-- ── Left Column: 沟通候选人列表 ── -->
+        <div class="w-full md:w-80 lg:w-88 bg-[#F8FAFC] border-r border-slate-200 flex flex-col h-full flex-shrink-0">
+          <!-- List Header -->
+          <div class="p-3.5 border-b border-slate-200 bg-white flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <div class="w-7 h-7 rounded-lg bg-[#e6faf6] text-[#008770] flex items-center justify-center font-bold">
+                <svg class="icon w-4 h-4 text-[#008770]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+              </div>
+              <span class="text-sm font-bold text-slate-900">候选人沟通列表</span>
+              <span class="text-[11px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
+                {{ filteredChatCandidates.length }}人
+              </span>
+            </div>
+            <button @click="loadChatList(); fetchCandidates()" class="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-md transition-colors cursor-pointer" title="刷新沟通列表">
+              <svg class="icon w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+            </button>
+          </div>
+
+          <!-- List Search & Filter Tabs -->
+          <div class="p-2.5 bg-white border-b border-slate-200/80 space-y-2">
+            <div class="relative flex items-center">
+              <svg class="icon w-3.5 h-3.5 absolute left-2.5 text-slate-400 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <input v-model="chatSearchQuery"
+                type="text"
+                placeholder="搜索候选人姓名/公司/技能..."
+                class="w-full pl-8 pr-3 py-1 bg-slate-100/90 rounded-lg text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:bg-white focus:ring-1 focus:ring-[#00B395] transition-all"/>
+            </div>
+
+            <!-- Filter Pills -->
+            <div class="flex items-center gap-1 overflow-x-auto text-[11px] font-medium pt-0.5">
+              <button @click="chatTabFilter = 'all'"
+                class="px-2 py-0.5 rounded-md whitespace-nowrap transition-colors cursor-pointer"
+                :class="chatTabFilter === 'all' ? 'bg-[#00B395] text-white font-bold' : 'text-slate-600 hover:bg-slate-100'">
+                全部
+              </button>
+              <button @click="chatTabFilter = 'recommended'"
+                class="px-2 py-0.5 rounded-md whitespace-nowrap transition-colors cursor-pointer"
+                :class="chatTabFilter === 'recommended' ? 'bg-[#00B395] text-white font-bold' : 'text-slate-600 hover:bg-slate-100'">
+                极高推荐
+              </button>
+              <button @click="chatTabFilter = 'scheduled'"
+                class="px-2 py-0.5 rounded-md whitespace-nowrap transition-colors cursor-pointer"
+                :class="chatTabFilter === 'scheduled' ? 'bg-[#00B395] text-white font-bold' : 'text-slate-600 hover:bg-slate-100'">
+                已约面
+              </button>
+              <button @click="chatTabFilter = 'rejected'"
+                class="px-2 py-0.5 rounded-md whitespace-nowrap transition-colors cursor-pointer"
+                :class="chatTabFilter === 'rejected' ? 'bg-rose-500 text-white font-bold' : 'text-slate-600 hover:bg-slate-100'">
+                已回绝/淘汰
+              </button>
+            </div>
+          </div>
+
+          <!-- Candidates Scrollable List -->
+          <div class="flex-1 overflow-y-auto divide-y divide-slate-100">
+            <div v-if="filteredChatCandidates.length === 0" class="p-8 text-center text-xs text-slate-400">
+              未找到符合条件的候选人
+            </div>
+            <div v-for="cand in filteredChatCandidates" :key="cand.id"
+              @click="selectChatCandidate(cand)"
+              class="p-3 cursor-pointer transition-all flex items-start gap-2.5 relative border-l-4"
+              :class="chatCandidate?.id === cand.id 
+                ? 'bg-white shadow-sm border-l-[#00B395]' 
+                : 'border-l-transparent hover:bg-slate-100/70'">
+              
+              <!-- Avatar -->
+              <div class="w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0 relative mt-0.5 shadow-sm"
+                :style="{ backgroundColor: getAvatarColor(cand.name) }">
+                {{ (cand.name || '候').slice(0, 1) }}
+                <!-- Corner state indicator -->
+                <span v-if="cand.state === 'rejected'" class="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-red-500 rounded-full border-2 border-white" title="已委婉回绝"></span>
+                <span v-else-if="cand.state === 'scheduled'" class="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-purple-500 rounded-full border-2 border-white" title="已约面"></span>
+                <span v-else class="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-[#00B395] rounded-full border-2 border-white" title="沟通中"></span>
+              </div>
+
+              <!-- Main Info -->
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center justify-between gap-1 mb-0.5">
+                  <div class="flex items-center gap-1.5 truncate">
+                    <span class="text-xs font-bold text-slate-900 truncate">{{ cand.name }}</span>
+                    <span class="text-[10px] px-1 py-0.2 rounded font-bold"
+                      :class="cand.ai_tier === 'S' ? 'bg-[#edeaff] text-[#5039f6]' : cand.ai_tier === 'A' ? 'bg-[#e6faf6] text-[#008770]' : cand.ai_tier === 'B' ? 'bg-slate-100 text-slate-600' : 'bg-red-50 text-red-600'">
+                      {{ cand.ai_tier }}级·{{ cand.ai_score }}分
+                    </span>
+                  </div>
+                  <!-- State tag -->
+                  <span v-if="cand.state === 'scheduled'" class="text-[9px] px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 font-semibold shrink-0">已约面</span>
+                  <span v-else-if="cand.state === 'rejected'" class="text-[9px] px-1.5 py-0.5 rounded bg-red-50 text-red-600 font-semibold shrink-0">已回绝</span>
+                  <span v-else-if="cand.state === 'recommended'" class="text-[9px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 font-semibold shrink-0">极高推荐</span>
+                  <span v-else class="text-[9px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 font-semibold shrink-0">待复核</span>
+                </div>
+
+                <div class="text-[11px] text-slate-500 truncate mb-1">
+                  {{ cand.current_company }} · {{ cand.current_title || '工程师' }}
+                </div>
+
+                <!-- Last Message Snippet -->
+                <div class="text-[11px] truncate"
+                  :class="cand.state === 'rejected' ? 'text-red-500/90 font-medium' : 'text-slate-400'">
+                  <span v-if="cand.state === 'rejected'">[回绝信已送达] 尊敬的{{ cand.name }}...</span>
+                  <span v-else>{{ getChatLastMessage(cand.id) }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── Right Column: 聊天会话详情与操作 ── -->
+        <div class="flex-1 flex flex-col h-full bg-white min-w-0">
+          
+          <!-- Empty State if no candidate selected -->
+          <div v-if="!chatCandidate" class="flex-1 flex flex-col items-center justify-center p-8 text-center text-slate-400">
+            <svg class="w-12 h-12 text-slate-300 mb-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            <span class="text-sm font-medium">请从左侧列表选择候选人开始沟通</span>
+          </div>
+
+          <template v-else>
+            <!-- Chat Header -->
+            <div class="p-3.5 border-b border-slate-200 flex items-center justify-between bg-white">
+              <div class="flex items-center gap-3 min-w-0">
+                <div class="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold text-white shadow-sm shrink-0"
+                  :style="{ backgroundColor: getAvatarColor(chatCandidate?.name) }">
+                  {{ (chatCandidate?.name || '候').slice(0, 1) }}
+                </div>
+                <div class="flex flex-col min-w-0">
+                  <div class="flex items-center gap-2">
+                    <span class="text-sm font-bold text-slate-900 truncate">{{ chatCandidate?.name }}</span>
+                    <span class="text-[10px] px-2 py-0.5 rounded-full font-bold"
+                      :class="chatCandidate?.ai_tier === 'S' ? 'bg-[#edeaff] text-[#5039f6]' : chatCandidate?.ai_tier === 'A' ? 'bg-[#e6faf6] text-[#008770]' : chatCandidate?.ai_tier === 'B' ? 'bg-slate-100 text-slate-600' : 'bg-red-50 text-red-600'">
+                      AI 匹配: {{ chatCandidate?.ai_score }}分 ({{ chatCandidate?.ai_tier }}级)
+                    </span>
+                    <span v-if="chatCandidate?.state === 'rejected'" class="text-[10px] px-2 py-0.5 rounded-full bg-red-100 text-red-700 font-semibold">
+                      已淘汰·已发回绝信
+                    </span>
+                    <span v-else-if="chatCandidate?.state === 'scheduled'" class="text-[10px] px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 font-semibold">
+                      面试流程中
+                    </span>
+                  </div>
+                  <span class="text-[11px] text-slate-500 truncate">
+                    {{ chatCandidate?.current_company }} · {{ chatCandidate?.current_title }} · 期望: {{ chatCandidate?.salary_expect }} · {{ chatCandidate?.experience_years }}年经验
+                  </span>
+                </div>
+              </div>
+
+              <!-- Action Buttons -->
+              <div class="flex items-center gap-2 shrink-0">
+                <!-- Inline View Switcher: 微聊 vs 完整简历 -->
+                <div class="flex items-center bg-slate-100 p-0.5 rounded-lg text-xs font-semibold mr-1">
+                  <button @click="chatPaneTab = 'chat'"
+                    class="px-2.5 py-1 rounded-md transition-all cursor-pointer flex items-center gap-1"
+                    :class="chatPaneTab === 'chat' ? 'bg-white text-slate-900 shadow-xs font-bold' : 'text-slate-600 hover:text-slate-900'">
+                    <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                    <span>微聊</span>
+                  </button>
+                  <button @click="chatPaneTab = 'resume'"
+                    class="px-2.5 py-1 rounded-md transition-all cursor-pointer flex items-center gap-1"
+                    :class="chatPaneTab === 'resume' ? 'bg-white text-[#008770] shadow-xs font-bold' : 'text-slate-600 hover:text-slate-900'">
+                    <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                    <span>完整简历</span>
+                  </button>
+                </div>
+
+                <button @click="openDetailFromChat(chatCandidate)"
+                  class="h-8 px-2.5 bg-slate-100 hover:bg-[#e6faf6] hover:text-[#008770] text-slate-700 rounded-lg text-xs font-semibold inline-flex items-center gap-1 transition-all cursor-pointer border border-slate-200"
+                  title="在独立大抽屉中清晰全屏查看完整履历（自动关闭模糊背景）">
+                  <svg class="icon w-3.5 h-3.5 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                  <span>大抽屉看简历</span>
+                </button>
+
+                <button v-if="chatCandidate.state !== 'scheduled'"
+                  @click="updateState(chatCandidate.id, 'scheduled'); selectChatCandidate(chatCandidate)"
+                  class="h-8 px-3 bg-purple-50 hover:bg-purple-100 text-purple-700 rounded-lg text-xs font-semibold inline-flex items-center gap-1 border border-purple-200 transition-all cursor-pointer">
+                  <svg class="icon w-3.5 h-3.5 text-purple-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                  <span>推进约面</span>
+                </button>
+
+                <button v-if="chatCandidate.state !== 'rejected'"
+                  @click="rejectCandidate(chatCandidate)"
+                  class="h-8 px-2.5 bg-red-50 hover:bg-red-100 text-red-700 rounded-lg text-xs font-semibold inline-flex items-center gap-1 border border-red-200 transition-all cursor-pointer"
+                  title="发送标准化企业委婉回绝通知">
+                  <svg class="icon w-3.5 h-3.5 text-red-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+                  <span>委婉回绝</span>
+                </button>
+
+                <button @click="showChatModal = false" class="p-1 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer ml-1">
+                  <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+              </div>
+            </div>
+
+            <!-- TAB 1: 微聊消息流与输入 (chatPaneTab === 'chat') -->
+            <div v-show="chatPaneTab === 'chat'" class="flex-1 flex flex-col min-h-0">
+              <!-- Messages Stream Area -->
+              <div class="flex-1 p-4 overflow-y-auto space-y-3.5 bg-[#F8FAFC]" ref="chatBox">
+              <div v-for="(msg, i) in chatMessages" :key="i">
+                
+                <!-- SPECIAL CARD: System Rejection Notice (委婉回绝通知专用卡片) -->
+                <div v-if="msg.is_reject || msg.sender === 'system'"
+                  class="max-w-xl mx-auto my-3 p-4 bg-red-50/90 border border-red-200 rounded-xl shadow-sm text-left animate-in fade-in duration-300">
+                  <div class="flex items-center justify-between pb-2 border-b border-red-200/80 mb-2.5">
+                    <div class="flex items-center gap-2 text-xs font-bold text-red-700">
+                      <svg class="w-4 h-4 text-red-500 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+                      <span>企业招聘系统 · 标准化委婉回绝通知已送达</span>
+                    </div>
+                    <span class="text-[10px] text-red-400 font-medium">{{ msg.time }}</span>
+                  </div>
+                  <div class="p-3 bg-white rounded-lg border border-red-100 text-xs text-slate-700 leading-relaxed shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
+                    {{ msg.text }}
+                  </div>
+                  <div class="mt-2 text-[10px] text-red-600/90 flex items-center justify-between">
+                    <span>✓ 候选人已被标记为【已淘汰】，履历资料归档入战略人才储备池</span>
+                    <span class="font-medium text-red-500">已正式向候选人发送</span>
+                  </div>
+                </div>
+
+                <!-- Regular Chat Message (Candidate or HR) -->
+                <div v-else class="flex flex-col" :class="msg.sender === 'hr' ? 'items-end' : 'items-start'">
+                  <span class="text-[10px] text-slate-400 px-1 mb-1">{{ msg.name }} · {{ msg.time }}</span>
+                  <div class="max-w-[80%] p-3 rounded-2xl text-xs leading-relaxed shadow-sm"
+                    :class="msg.sender === 'hr' 
+                      ? 'bg-[#00B395] text-white rounded-tr-none' 
+                      : 'bg-white text-slate-800 border border-slate-200 rounded-tl-none'">
+                    {{ msg.text }}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Quick Suggestion Chips -->
+            <div class="px-4 py-2 bg-slate-50 border-t border-slate-200 flex items-center gap-1.5 overflow-x-auto text-[11px]">
+              <span class="text-slate-400 font-semibold whitespace-nowrap text-[10px] mr-1">快捷回复:</span>
+              <button @click="sendQuickPrompt('您好，我们对您的核心架构履历非常看好，请问您目前的最快到岗时间是？')"
+                class="px-2.5 py-1 bg-white hover:bg-emerald-50 text-[#008770] rounded-full border border-[#00B395]/30 whitespace-nowrap cursor-pointer transition-colors shadow-2xs">
+                👋 询问到岗时间
+              </button>
+              <button @click="sendQuickPrompt('方便发一下您过往主导的核心技术项目作品集或 GitHub 仓库地址吗？')"
+                class="px-2.5 py-1 bg-white hover:bg-emerald-50 text-[#008770] rounded-full border border-[#00B395]/30 whitespace-nowrap cursor-pointer transition-colors shadow-2xs">
+                💼 索要技术作品集
+              </button>
+              <button @click="sendQuickPrompt('您好，业务负责人希望本周与您进行一次线上面试交流，请问您周三下午或周五上午哪个时间更方便？')"
+                class="px-2.5 py-1 bg-white hover:bg-emerald-50 text-[#008770] rounded-full border border-[#00B395]/30 whitespace-nowrap cursor-pointer transition-colors shadow-2xs">
+                📅 发起技术初试
+              </button>
+              <button v-if="chatCandidate.state !== 'rejected'"
+                @click="rejectCandidate(chatCandidate)"
+                class="px-2.5 py-1 bg-white hover:bg-red-50 text-red-600 rounded-full border border-red-200 whitespace-nowrap cursor-pointer transition-colors shadow-2xs">
+                ✉️ 发送委婉回绝信
+              </button>
+            </div>
+
+            <!-- Message Input Bar -->
+            <div class="p-3 bg-white border-t border-slate-200 flex items-center gap-2">
+              <input v-model="chatInput" @keyup.enter="sendChatMessage" type="text"
+                placeholder="输入回复内容，按 Enter 发送..."
+                class="flex-1 h-9 px-3.5 bg-slate-100/90 rounded-lg text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:bg-white focus:ring-1 focus:ring-[#00B395] transition-all"/>
+              <button @click="sendChatMessage" :disabled="!chatInput.trim() || sendingChat"
+                class="h-9 px-4 bg-[#00B395] hover:bg-[#008770] text-white rounded-lg text-xs font-bold disabled:opacity-40 flex items-center gap-1.5 shadow-sm cursor-pointer transition-all">
+                <svg class="icon w-3.5 h-3.5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                <span>发送</span>
+              </button>
+            </div>
+            </div>
+
+            <!-- TAB 2: 在沟通窗内无缝查看求职者原版完整简历 (chatPaneTab === 'resume') -->
+            <div v-show="chatPaneTab === 'resume'" class="flex-1 overflow-y-auto p-5 bg-[#F8FAFC] space-y-4">
+              
+              <!-- Fast Top Banner -->
+              <div class="p-3 bg-white rounded-xl border border-slate-200 flex items-center justify-between shadow-xs">
+                <div class="flex items-center gap-2">
+                  <span class="text-xs font-bold text-slate-800">📄 {{ chatCandidate.name }} · 完整原版简历</span>
+                  <span class="text-[10px] px-2 py-0.5 rounded-full font-bold"
+                    :class="chatCandidate.ai_tier === 'S' ? 'bg-[#edeaff] text-[#5039f6]' : 'bg-[#e6faf6] text-[#008770]'">
+                    AI 初筛: {{ chatCandidate.ai_score }}分 ({{ chatCandidate.ai_tier }}级)
+                  </span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <button @click="chatPaneTab = 'chat'" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-md text-xs font-medium cursor-pointer">
+                    ← 切换回微聊
+                  </button>
+                  <button @click="openDetailFromChat(chatCandidate)" class="px-2.5 py-1 bg-[#00B395] hover:bg-[#008770] text-white rounded-md text-xs font-bold cursor-pointer flex items-center gap-1">
+                    <span>全屏大抽屉查看 ↗</span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- High-Fidelity Resume Document inside Chat Modal -->
+              <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 space-y-6 text-slate-800">
+                
+                <!-- 1. 基本信息 -->
+                <div class="pb-5 border-b border-slate-200 flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                  <div class="space-y-1">
+                    <div class="flex items-center gap-2">
+                      <h2 class="text-xl font-bold text-slate-900">{{ chatCandidate.name }}</h2>
+                      <span class="px-2 py-0.2 text-[10px] font-bold bg-[#e6faf6] text-[#008770] rounded-full border border-[#00B395]/20">
+                        {{ chatCandidate.available_time || '随时到岗' }}
+                      </span>
+                    </div>
+                    <div class="text-xs text-slate-600 flex flex-wrap items-center gap-2 pt-0.5">
+                      <span>{{ chatCandidate.age }}岁</span>
+                      <span>•</span>
+                      <span>{{ chatCandidate.experience_years }}年经验</span>
+                      <span>•</span>
+                      <span>{{ formatEdu(chatCandidate.education) }} ({{ chatCandidate.school }})</span>
+                    </div>
+                  </div>
+
+                  <div class="text-xs text-slate-600 bg-slate-50 p-2.5 rounded-lg border border-slate-100 space-y-0.5 sm:text-right">
+                    <div><span class="text-slate-400">期望职位：</span><span class="font-bold">{{ chatCandidate.full_resume?.basic_info?.target_title || '资深工程师' }}</span></div>
+                    <div><span class="text-slate-400">期望薪酬：</span><span class="font-bold text-[#008770]">{{ chatCandidate.salary_expect }}</span></div>
+                    <div><span class="text-slate-400">已核验电话：</span><span class="font-mono text-slate-700">{{ chatCandidate.full_resume?.basic_info?.phone || '138-****-8888' }}</span></div>
+                  </div>
+                </div>
+
+                <!-- 2. 个人优势与职业综述 -->
+                <div class="space-y-2">
+                  <h3 class="text-xs font-bold text-slate-900 flex items-center gap-1.5 border-l-3 border-[#00B395] pl-2">
+                    <span>💡 个人优势与核心综述</span>
+                  </h3>
+                  <div class="bg-slate-50 rounded-xl p-3 space-y-1.5 border border-slate-100 text-xs text-slate-700 leading-relaxed">
+                    <template v-if="chatCandidate.full_resume?.summary">
+                      <div v-for="(sumItem, sIdx) in chatCandidate.full_resume.summary" :key="sIdx" class="flex items-start gap-1.5">
+                        <span class="text-[#008770] font-bold">•</span>
+                        <span>{{ sumItem }}</span>
+                      </div>
+                    </template>
+                    <template v-else>
+                      <p>{{ chatCandidate.ai_reason }}</p>
+                    </template>
+                  </div>
+                </div>
+
+                <!-- 3. 工作经历 -->
+                <div class="space-y-3">
+                  <h3 class="text-xs font-bold text-slate-900 flex items-center gap-1.5 border-l-3 border-[#00B395] pl-2">
+                    <span>💼 完整工作经历</span>
+                  </h3>
+                  <div v-if="chatCandidate.full_resume?.work_experience" class="space-y-3">
+                    <div v-for="(work, wIdx) in chatCandidate.full_resume.work_experience" :key="wIdx"
+                      class="relative pl-3.5 border-l-2 border-slate-200 pb-1 space-y-1.5 text-xs">
+                      <div class="absolute -left-[5px] top-1 w-2 h-2 rounded-full bg-[#00B395]"></div>
+                      <div class="flex items-center justify-between">
+                        <span class="font-bold text-slate-900">{{ work.company }} · {{ work.department }}</span>
+                        <span class="text-slate-400 font-mono">{{ work.period }}</span>
+                      </div>
+                      <div class="font-bold text-[#008770]">{{ work.title }}</div>
+                      <div class="text-slate-600 leading-relaxed space-y-0.5">
+                        <div><strong>职责：</strong>{{ work.responsibilities }}</div>
+                        <div><strong>业绩：</strong><span class="text-slate-800">{{ work.achievements }}</span></div>
+                      </div>
+                    </div>
+                  </div>
+                  <div v-else class="text-xs text-slate-600 bg-slate-50 p-3 rounded-lg">
+                    {{ chatCandidate.current_company }} · {{ chatCandidate.current_title }} ({{ chatCandidate.experience_years }}年经验)
+                  </div>
+                </div>
+
+                <!-- 4. STAR 核心重点项目 -->
+                <div class="space-y-3">
+                  <h3 class="text-xs font-bold text-slate-900 flex items-center gap-1.5 border-l-3 border-[#00B395] pl-2">
+                    <span>🚀 核心重点项目经历 (STAR 原则)</span>
+                  </h3>
+                  <div v-if="chatCandidate.full_resume?.project_experience" class="space-y-3">
+                    <div v-for="(proj, pIdx) in chatCandidate.full_resume.project_experience" :key="pIdx"
+                      class="bg-slate-50 rounded-xl p-3.5 border border-slate-200 space-y-1.5 text-xs">
+                      <div class="flex items-center justify-between">
+                        <span class="font-bold text-slate-900">{{ proj.name }} ({{ proj.role }})</span>
+                        <span class="text-slate-400 font-mono">{{ proj.period }}</span>
+                      </div>
+                      <div class="text-[11px] text-[#008770] font-medium">技术栈: {{ proj.tech_stack }}</div>
+                      <div class="text-slate-600 space-y-1 pt-0.5 leading-relaxed">
+                        <div><strong>难点：</strong>{{ proj.background }}</div>
+                        <div><strong>架构：</strong>{{ proj.solutions }}</div>
+                        <div class="p-1.5 bg-emerald-50 rounded text-[#00705e] border border-emerald-100">
+                          <strong>效益：</strong>{{ proj.metrics }}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- 5. 教育背景 -->
+                <div class="space-y-2">
+                  <h3 class="text-xs font-bold text-slate-900 flex items-center gap-1.5 border-l-3 border-[#00B395] pl-2">
+                    <span>🎓 教育背景</span>
+                  </h3>
+                  <div v-if="chatCandidate.full_resume?.educations" class="space-y-2">
+                    <div v-for="(edu, eIdx) in chatCandidate.full_resume.educations" :key="eIdx"
+                      class="flex items-center justify-between p-2.5 bg-slate-50 rounded-lg border border-slate-100 text-xs">
+                      <div>
+                        <span class="font-bold text-slate-900">{{ edu.school }}</span>
+                        <span class="text-slate-500 ml-2">{{ edu.degree }} · {{ edu.major }}</span>
+                        <span class="ml-1.5 text-[10px] px-1.5 py-0.2 rounded bg-slate-200 text-slate-700">{{ edu.tier }}</span>
+                      </div>
+                      <span class="text-slate-400 font-mono">{{ edu.period }}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- 6. 技能矩阵 -->
+                <div class="space-y-2">
+                  <h3 class="text-xs font-bold text-slate-900 flex items-center gap-1.5 border-l-3 border-[#00B395] pl-2">
+                    <span>🛠️ 核心专业技能矩阵</span>
+                  </h3>
+                  <div v-if="chatCandidate.full_resume?.skills_matrix" class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                    <div v-for="(matrix, mIdx) in chatCandidate.full_resume.skills_matrix" :key="mIdx"
+                      class="bg-slate-50 p-2.5 rounded-lg border border-slate-100 space-y-1">
+                      <div class="font-bold text-slate-700 text-[11px]">{{ matrix.category }}</div>
+                      <div class="flex flex-wrap gap-1">
+                        <span v-for="sk in matrix.skills" :key="sk" class="px-1.5 py-0.5 bg-white text-slate-700 rounded border border-slate-200 text-[10px]">
+                          {{ sk }}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+          </template>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL 3: Interview Schedule Modal -->
+    <div v-if="showInterviewModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+      <div class="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl space-y-4 border border-slate-200 max-h-[85vh] flex flex-col">
+        <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+          <div class="flex items-center gap-2">
+            <div class="w-8 h-8 rounded-lg bg-[#e6faf6] text-[#008770] flex items-center justify-center font-bold">
+              <svg class="icon w-4 h-4 text-[#008770]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><polyline points="9 14 11 16 15 12"/></svg>
+            </div>
+            <div>
+              <div class="flex items-center gap-2">
+                <h3 class="text-sm font-bold text-slate-900">面试日程管理看板</h3>
+                <span class="text-xs font-bold px-2 py-0.5 rounded-full bg-[#e6faf6] text-[#008770] border border-[#00B395]/20">
+                  {{ interviews.length }} 场待面 (已约面 {{ counts.scheduled }} 人)
+                </span>
+              </div>
+              <p class="text-[10px] text-slate-400">已对齐企业统一日历，支持线上视频会议一键直达与评价流转</p>
+            </div>
+          </div>
+          <button @click="showInterviewModal = false" class="text-slate-400 hover:text-slate-700 cursor-pointer">
+            <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+
+        <div class="flex-1 overflow-y-auto space-y-3">
+          <div v-if="interviews.length === 0" class="p-8 text-center text-slate-400 text-xs">
+            当前暂无排期的面试，您可以在候选人卡片中点击“发起面试”。
+          </div>
+          <div v-for="iv in interviews" :key="iv.id"
+            class="p-4 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-slate-50 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div class="space-y-1">
+              <div class="flex items-center gap-2">
+                <span class="text-sm font-bold text-slate-900">{{ iv.candidate_name }}</span>
+                <span class="text-[11px] px-2 py-0.5 rounded-full bg-emerald-100 text-[#008770] font-semibold">{{ iv.round }}</span>
+                <span v-if="iv.status === 'passed'" class="text-[10px] px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-bold">初试已通过</span>
+              </div>
+              <div class="text-xs text-slate-600 font-medium">{{ iv.job_title }}</div>
+              <div class="text-xs text-slate-500 flex items-center gap-2">
+                <span>⏰ 时间：{{ iv.time }}</span>
+                <span>👨‍💼 面试官：{{ iv.interviewer }}</span>
+              </div>
+            </div>
+
+            <div class="flex items-center gap-2">
+              <button @click="passInterview(iv)" v-if="iv.status !== 'passed'"
+                class="h-8 px-3 bg-[#e6faf6] hover:bg-[#d0f5ee] text-[#008770] rounded-lg text-xs font-semibold border border-[#00B395]/30 cursor-pointer">
+                通过本轮
+              </button>
+              <button @click="showToast('已复制面试间地址: ' + iv.meeting_link)"
+                class="h-8 px-3 bg-white hover:bg-slate-100 text-slate-700 rounded-lg text-xs font-semibold border border-slate-200 shadow-sm cursor-pointer">
+                复制会议号
+              </button>
+              <button @click="showToast('正在进入专属企业音视频面试间...')"
+                class="h-8 px-4 bg-[#00B395] hover:bg-[#008770] text-white rounded-lg text-xs font-bold shadow-sm cursor-pointer">
+                进入面试间
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="pt-3 border-t border-slate-100 flex items-center justify-end">
+          <button @click="showInterviewModal = false" class="h-8 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold cursor-pointer">
+            关闭
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL 4: Talent Pool (人才公海) Modal -->
+    <div v-if="showTalentPoolModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+      <div class="bg-white rounded-2xl max-w-3xl w-full p-6 shadow-2xl space-y-4 border border-slate-200 max-h-[85vh] flex flex-col">
+        <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+          <div class="flex items-center gap-2">
+            <div class="w-8 h-8 rounded-lg bg-indigo-50 text-[#5039f6] flex items-center justify-center font-bold">
+              <svg class="icon w-4 h-4 text-[#5039f6]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8"/></svg>
+            </div>
+            <div>
+              <h3 class="text-sm font-bold text-slate-900">企业人才公海池</h3>
+              <p class="text-[10px] text-slate-400">历史储备及战略转存候选人，支持一键重新激活至当前招聘岗位</p>
+            </div>
+          </div>
+          <button @click="showTalentPoolModal = false" class="text-slate-400 hover:text-slate-700 cursor-pointer">
+            <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+
+        <div class="flex-1 overflow-y-auto space-y-3">
+          <div v-if="talentPool.length === 0" class="p-8 text-center text-slate-400 text-xs">
+            人才公海池当前暂无归档人才。
+          </div>
+          <div v-for="p in talentPool" :key="p.id"
+            class="p-4 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-slate-50 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div class="space-y-1">
+              <div class="flex items-center gap-2">
+                <span class="text-sm font-bold text-slate-900">{{ p.name }}</span>
+                <span class="text-xs text-slate-500">{{ p.age }}岁 · {{ p.experience_years }}年经验 · {{ p.school }}</span>
+                <span class="text-[10px] px-2 py-0.5 rounded-full bg-indigo-50 text-[#5039f6] font-bold">AI {{ p.ai_score }}分</span>
+              </div>
+              <div class="text-xs text-slate-700 font-medium">{{ p.current_company }} · {{ p.current_title }}</div>
+              <div class="text-[11px] text-slate-400 flex items-center gap-2">
+                <span>入库原因: {{ p.reason || '储备人才' }}</span>
+                <span>入库时间: {{ p.archived_date }}</span>
+              </div>
+            </div>
+
+            <button @click="restoreTalent(p.id)"
+              class="h-8 px-4 bg-[#00B395] hover:bg-[#008770] text-white rounded-lg text-xs font-bold shadow-sm whitespace-nowrap cursor-pointer">
+              重新激活至本岗位
+            </button>
+          </div>
+        </div>
+
+        <div class="pt-3 border-t border-slate-100 flex items-center justify-end">
+          <button @click="showTalentPoolModal = false" class="h-8 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold cursor-pointer">
+            关闭
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL 5: AI Diagnostics Full Report Modal -->
+    <div v-if="showDiagnosticsModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+      <div class="bg-white rounded-2xl max-w-xl w-full p-6 shadow-2xl space-y-4 border border-slate-200">
+        <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+          <div class="flex items-center gap-2">
+            <div class="w-8 h-8 rounded-lg bg-[#edeaff] text-[#5039f6] flex items-center justify-center font-bold">
+              <svg class="icon w-4 h-4 text-[#5039f6]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l2.4 7.2L22 12l-7.6 2.8L12 22l-2.4-7.2L2 12l7.6-2.8z"/></svg>
+            </div>
+            <div>
+              <h3 class="text-sm font-bold text-slate-900">AI 招聘全景智能诊断报告</h3>
+              <p class="text-[10px] text-slate-400">基于岗位JD硬性门槛与候选人全量画像实时推算</p>
+            </div>
+          </div>
+          <button @click="showDiagnosticsModal = false" class="text-slate-400 hover:text-slate-700 cursor-pointer">
+            <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+
+        <div class="grid grid-cols-3 gap-3">
+          <div class="p-3 bg-slate-50 rounded-xl text-center border border-slate-100">
+            <div class="text-2xl font-bold text-[#008770]">{{ diagnosticsData?.health_score || 92 }}</div>
+            <div class="text-[10px] text-slate-500 font-medium">招聘健康度评分</div>
+          </div>
+          <div class="p-3 bg-slate-50 rounded-xl text-center border border-slate-100">
+            <div class="text-2xl font-bold text-[#5039f6]">{{ diagnosticsData?.high_match_rate || '50%' }}</div>
+            <div class="text-[10px] text-slate-500 font-medium">高匹配画像比例</div>
+          </div>
+          <div class="p-3 bg-slate-50 rounded-xl text-center border border-slate-100">
+            <div class="text-2xl font-bold text-red-600">{{ diagnosticsData?.rejection_rate || '25%' }}</div>
+            <div class="text-[10px] text-slate-500 font-medium">硬性门槛拦截率</div>
+          </div>
+        </div>
+
+        <div class="bg-slate-50 rounded-xl p-4 space-y-2 border border-slate-100">
+          <h4 class="text-xs font-bold text-slate-800">AI 深度洞察与策略建议：</h4>
+          <ul class="space-y-1.5 text-xs text-slate-700">
+            <li v-for="(insight, idx) in (diagnosticsData?.insights || [])" :key="idx" class="flex items-start gap-1.5">
+              <span class="text-[#008770] font-bold">•</span>
+              <span>{{ insight }}</span>
+            </li>
+          </ul>
+        </div>
+
+        <div class="pt-2 flex items-center justify-end">
+          <button @click="showDiagnosticsModal = false" class="h-8 px-4 bg-[#00B395] hover:bg-[#008770] text-white rounded-lg text-xs font-bold shadow-sm cursor-pointer">
+            我知道了
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL 6: Job Management Modal (职位全景列表) -->
+    <div v-if="showJobManagementModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+      <div class="bg-white rounded-2xl max-w-3xl w-full p-6 shadow-2xl space-y-4 border border-slate-200 max-h-[85vh] flex flex-col">
+        <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+          <div class="flex items-center gap-2">
+            <div class="w-8 h-8 rounded-lg bg-[#e6faf6] text-[#008770] flex items-center justify-center font-bold">
+              <svg class="icon w-4 h-4 text-[#008770]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+            </div>
+            <div>
+              <h3 class="text-sm font-bold text-slate-900">企业职位全景管理</h3>
+              <p class="text-[10px] text-slate-400">统一管理所有在招职位与HC预算，支持一键切换并维护JD规则</p>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <button @click="openCreateJobModal" class="h-8 px-3 bg-[#00B395] hover:bg-[#008770] text-white rounded-lg text-xs font-bold shadow-sm flex items-center gap-1 cursor-pointer">
+              <span>+ 新建招聘岗位</span>
+            </button>
+            <button @click="showJobManagementModal = false" class="text-slate-400 hover:text-slate-700 cursor-pointer">
+              <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="flex-1 overflow-y-auto space-y-3">
+          <div v-for="j in jobs" :key="j.id"
+            class="p-4 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-slate-50 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+            :class="{'border-[#00B395] bg-[#e6faf6]/20': currentJobId === j.id}">
+            <div class="space-y-1">
+              <div class="flex items-center gap-2">
+                <span class="text-sm font-bold text-slate-900">{{ j.title }}</span>
+                <span class="text-xs text-[#008770] font-bold bg-[#e6faf6] px-2 py-0.5 rounded-full">{{ j.salary }}</span>
+                <span v-if="currentJobId === j.id" class="text-[10px] px-2 py-0.5 rounded-full bg-[#00B395] text-white font-bold">当前查看</span>
+              </div>
+              <div class="text-xs text-slate-600 font-medium">{{ j.department }} · {{ j.location }} · HC需求: {{ j.hc }}人</div>
+              <div class="text-[11px] text-slate-400">门槛：{{ j.experience_years }}年经验 · {{ formatEdu(j.education) }} · 核心技能: {{ (j.required_skills || []).join(', ') }}</div>
+            </div>
+
+            <div class="flex items-center gap-2">
+              <button @click="selectJob(j.id); showJobManagementModal = false"
+                class="h-8 px-3 bg-white hover:bg-slate-100 text-slate-700 rounded-lg text-xs font-semibold border border-slate-200 shadow-sm cursor-pointer">
+                切换至此职位
+              </button>
+              <button @click="editJobConfig(j)"
+                class="h-8 px-3 bg-[#e6faf6] hover:bg-[#d0f5ee] text-[#008770] rounded-lg text-xs font-bold border border-[#00B395]/30 cursor-pointer">
+                编辑JD与规则
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="pt-3 border-t border-slate-100 flex items-center justify-end">
+          <button @click="showJobManagementModal = false" class="h-8 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold cursor-pointer">
+            关闭
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL 7: Create New Job Modal -->
+    <div v-if="showCreateJobModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+      <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4 border border-slate-200">
+        <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+          <h3 class="text-sm font-bold text-slate-900">发布新招聘职位</h3>
+          <button @click="showCreateJobModal = false" class="text-slate-400 hover:text-slate-700 cursor-pointer">
+            <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+
+        <div class="space-y-3 text-xs">
+          <div class="space-y-1">
+            <label class="font-bold text-slate-600">职位名称</label>
+            <input v-model="newJob.title" placeholder="如: 后端微服务架构师" class="w-full h-8 px-2.5 rounded bg-slate-50 border border-slate-200 text-slate-800"/>
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div class="space-y-1">
+              <label class="font-bold text-slate-600">所属部门</label>
+              <input v-model="newJob.department" placeholder="如: 云原生中台研发组" class="w-full h-8 px-2.5 rounded bg-slate-50 border border-slate-200 text-slate-800"/>
+            </div>
+            <div class="space-y-1">
+              <label class="font-bold text-slate-600">薪资范围</label>
+              <input v-model="newJob.salary" placeholder="如: 30-45K · 16薪" class="w-full h-8 px-2.5 rounded bg-slate-50 border border-slate-200 text-slate-800"/>
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div class="space-y-1">
+              <label class="font-bold text-slate-600">最低年限要求</label>
+              <input v-model.number="newJob.experience_years" type="number" class="w-full h-8 px-2.5 rounded bg-slate-50 border border-slate-200 text-slate-800"/>
+            </div>
+            <div class="space-y-1">
+              <label class="font-bold text-slate-600">最低学历要求</label>
+              <select v-model="newJob.education" class="w-full h-8 px-2.5 rounded bg-slate-50 border border-slate-200 text-slate-800">
+                <option value="bachelor">统招本科及以上</option>
+                <option value="master">硕士及以上</option>
+                <option value="associate">大专及以上</option>
+              </select>
+            </div>
+          </div>
+          <div class="space-y-1">
+            <label class="font-bold text-slate-600">岗位职责与要求 (JD)</label>
+            <textarea v-model="newJob.jd" rows="3" placeholder="填写核心职责和任职要求..." class="w-full p-2 rounded bg-slate-50 border border-slate-200 text-slate-800"></textarea>
+          </div>
+        </div>
+
+        <div class="pt-2 flex items-center justify-end gap-2 border-t border-slate-100">
+          <button @click="showCreateJobModal = false" class="h-8 px-3.5 bg-slate-100 text-slate-700 rounded-lg text-xs font-semibold cursor-pointer">取消</button>
+          <button @click="submitCreateJob" class="h-8 px-4 bg-[#00B395] hover:bg-[#008770] text-white rounded-lg text-xs font-bold shadow-sm cursor-pointer">立即发布</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL 8: Upload Resume Modal -->
+    <div v-if="showUploadModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+      <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4 border border-slate-200">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <div class="w-8 h-8 rounded-lg bg-[#00B395] text-white flex items-center justify-center">
+              <svg class="icon w-4 h-4 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            </div>
+            <h3 class="text-sm font-bold text-slate-900">批量导入简历并执行初筛</h3>
+          </div>
+          <button @click="showUploadModal = false" class="text-slate-400 hover:text-slate-700 cursor-pointer">
+            <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+
+        <div class="space-y-1">
+          <label class="text-xs font-bold text-slate-500">目标招聘岗位</label>
+          <select v-model="uploadJobId" class="w-full h-9 px-3 rounded-lg bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-800">
+            <option v-for="j in jobs" :key="j.id" :value="j.id">{{ j.title }} ({{ j.department }})</option>
+          </select>
+        </div>
+
+        <div class="border-2 border-dashed border-[#00B395]/40 hover:border-[#00B395] rounded-xl p-8 text-center space-y-2 cursor-pointer transition-colors bg-[#00B395]/5"
+          @click="$refs.fileInput.click()">
+          <input type="file" ref="fileInput" multiple accept=".pdf,.docx,.doc,.txt,.md" class="hidden" @change="handleFileSelect"/>
+          <svg class="w-10 h-10 text-[#008770] mx-auto animate-bounce" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M16 16l-4-4-4 4"/><path d="M12 12v9"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg>
+          <div class="text-sm font-bold text-slate-900">点击或将简历拖拽至此处</div>
+          <div class="text-xs text-slate-400">支持 PDF、Word (.docx)、TXT、Markdown 等通用格式</div>
+        </div>
+
+        <div v-if="uploadFileList.length > 0" class="space-y-1 max-h-32 overflow-y-auto">
+          <div v-for="(f, i) in uploadFileList" :key="i" class="p-2 rounded bg-slate-50 text-xs flex items-center justify-between border border-slate-100">
+            <span class="truncate max-w-[280px] font-medium text-slate-800">{{ f.name }}</span>
+            <span class="text-slate-400 text-[10px]">{{ (f.size / 1024).toFixed(1) }} KB</span>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-end gap-2 pt-2">
+          <button @click="showUploadModal = false; uploadFileList = []" class="h-8 px-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold cursor-pointer">
+            取消
+          </button>
+          <button @click="executeUpload" :disabled="uploadFileList.length === 0 || uploading"
+            class="h-8 px-4 bg-[#00B395] hover:bg-[#008770] text-white rounded-lg text-xs font-bold inline-flex items-center gap-1.5 shadow-sm disabled:opacity-40 cursor-pointer">
+            <svg v-if="uploading" class="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+            <span>{{ uploading ? 'AI 正在极速初筛中...' : '开始初筛 (' + uploadFileList.length + '份)' }}</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL 9: Model Configuration Modal -->
+    <div v-if="showModelModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+      <div class="bg-white rounded-2xl max-w-xl w-full p-6 shadow-2xl space-y-4 border border-slate-200 max-h-[90vh] overflow-y-auto">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <div class="w-8 h-8 rounded-lg bg-[#edeaff] text-[#5039f6] flex items-center justify-center">
+              <svg class="icon w-4 h-4 text-[#5039f6]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>
+            </div>
+            <h3 class="text-sm font-bold text-slate-900">AI 引擎与服务商切换</h3>
+          </div>
+          <button @click="showModelModal = false" class="text-slate-400 hover:text-slate-700 cursor-pointer">
+            <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2 p-1 bg-slate-100 rounded-xl">
+          <button @click="editModel.active_provider = 'local'"
+            class="py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+            :class="editModel.active_provider === 'local' ? 'bg-white text-[#008770] shadow-sm' : 'text-slate-600 hover:text-slate-900'">
+            <svg class="icon w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+            本地端侧推理 (LM Studio / Ollama)
+          </button>
+          <button @click="editModel.active_provider = 'cloud'"
+            class="py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+            :class="editModel.active_provider === 'cloud' ? 'bg-white text-[#5039f6] shadow-sm' : 'text-slate-600 hover:text-slate-900'">
+            <svg class="icon w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>
+            云端商业大模型 (DeepSeek / 通义千问)
+          </button>
+        </div>
+
+        <div v-if="editModel.active_provider === 'local'" class="space-y-3 bg-slate-50 p-4 rounded-xl border border-slate-200">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-slate-800">本地模型服务探查</span>
+            <button @click="refreshModelStatus" :disabled="probing" class="text-xs text-[#008770] hover:underline inline-flex items-center gap-1 cursor-pointer">
+              <svg class="icon w-3 h-3" :class="{'animate-spin': probing}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+              重新检测
+            </button>
+          </div>
+          <div class="p-3 rounded-lg bg-white text-xs space-y-1.5 border border-slate-200">
+            <div class="flex items-center justify-between">
+              <span class="text-slate-500">服务状态:</span>
+              <span class="font-bold flex items-center gap-1" :class="modelStatus.local_status === 'available' ? 'text-[#008770]' : 'text-red-600'">
+                <span class="w-2 h-2 rounded-full" :class="modelStatus.local_status === 'available' ? 'bg-[#00B395]' : 'bg-red-500'"></span>
+                {{ modelStatus.local_status === 'available' ? '服务在线就绪' : '未检测到本地服务' }}
+              </span>
+            </div>
+            <div class="flex items-center justify-between">
+              <span class="text-slate-500">加载模型:</span>
+              <span class="font-mono font-bold text-slate-800">{{ modelStatus.local_model || 'qwen3.8-27b' }}</span>
+            </div>
+            <div class="flex items-center justify-between">
+              <span class="text-slate-500">推理延迟:</span>
+              <span class="font-bold text-[#008770]">{{ modelStatus.local_latency_ms >= 0 ? modelStatus.local_latency_ms + ' ms' : '就绪' }}</span>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="editModel.active_provider === 'cloud'" class="space-y-3">
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <div v-for="(preset, pkey) in cloudPresets" :key="pkey"
+              @click="selectCloudPreset(pkey, preset)"
+              class="p-2.5 rounded-xl border text-center cursor-pointer transition-all text-xs"
+              :class="editModel.cloud_model.provider === pkey ? 'border-[#5039f6] bg-[#edeaff] text-[#5039f6] font-bold shadow-sm' : 'border-slate-200 bg-slate-50 text-slate-600 hover:text-slate-900'">
+              {{ preset.name.split(' ')[0] }}
+            </div>
+          </div>
+
+          <div class="space-y-2.5 bg-slate-50 p-4 rounded-xl border border-slate-200 text-xs">
+            <div class="space-y-1">
+              <label class="font-bold text-slate-500">API Base URL</label>
+              <input v-model="editModel.cloud_model.base_url" type="text" class="w-full h-8 px-2.5 rounded bg-white border border-slate-200 font-mono text-xs"/>
+            </div>
+            <div class="space-y-1">
+              <label class="font-bold text-slate-500">API Key</label>
+              <input v-model="editModel.cloud_model.api_key" type="password" placeholder="sk-..." class="w-full h-8 px-2.5 rounded bg-white border border-slate-200 font-mono text-xs"/>
+            </div>
+            <div class="space-y-1">
+              <label class="font-bold text-slate-500">Model Name</label>
+              <input v-model="editModel.cloud_model.model_name" type="text" class="w-full h-8 px-2.5 rounded bg-white border border-slate-200 font-mono text-xs"/>
+            </div>
+            <div class="flex items-center justify-between pt-1">
+              <button @click="testCloudConnection" :disabled="testingCloud"
+                class="h-8 px-3 bg-[#e6faf6] hover:bg-[#d0f5ee] text-[#008770] rounded font-bold inline-flex items-center gap-1 border border-[#00B395]/20 cursor-pointer">
+                <svg v-if="testingCloud" class="w-3 h-3 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+                <span>测试连通性</span>
+              </button>
+              <span v-if="cloudTestMsg" class="text-[11px] font-semibold" :class="cloudTestSuccess ? 'text-[#008770]' : 'text-red-600'">
+                {{ cloudTestMsg }}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-end gap-2 pt-2">
+          <button @click="showModelModal = false" class="h-8 px-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold cursor-pointer">
+            取消
+          </button>
+          <button @click="saveModelConfig" class="h-8 px-4 bg-[#00B395] hover:bg-[#008770] text-white rounded-lg text-xs font-bold shadow-sm cursor-pointer">
+            确认应用配置
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL 10: 现实招聘软件全维度门槛调优弹窗 (与主流软件完全对齐) -->
+    <div v-if="showJDModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm overflow-y-auto">
+      <div class="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl border border-slate-200 max-h-[92vh] overflow-y-auto space-y-5 animate-in zoom-in-95 duration-200">
+        
+        <!-- Header -->
+        <div class="flex items-center justify-between pb-3 border-b border-slate-200">
+          <div class="flex items-center gap-2.5">
+            <div class="w-8 h-8 rounded-lg bg-[#00B395] text-white flex items-center justify-center shadow-sm">
+              <svg class="icon w-4 h-4 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>
+            </div>
+            <div>
+              <h3 class="text-sm font-bold text-slate-900">岗位职责 (JD) 与招聘硬性门槛调优</h3>
+              <p class="text-[11px] text-slate-400">门槛标准与现实主流招聘软件一致，保存后 AI 引擎将立即以此规则进行初筛硬性卡关</p>
+            </div>
+          </div>
+          <button @click="showJDModal = false" class="text-slate-400 hover:text-slate-700 cursor-pointer">
+            <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+
+        <div class="space-y-4 text-xs">
+          
+          <!-- PART 1: 职位基本属性与薪资待遇 -->
+          <div class="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
+            <div class="font-bold text-slate-800 text-xs flex items-center gap-1.5">
+              <span class="w-1.5 h-1.5 rounded-full bg-[#00B395]"></span>
+              <span>1. 基础岗位信息与薪酬预算</span>
+            </div>
+            
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div class="sm:col-span-2 space-y-1">
+                <label class="font-bold text-slate-600">岗位名称 <span class="text-red-500">*</span></label>
+                <input v-model="editJob.title" class="w-full h-8 px-2.5 rounded-lg bg-white border border-slate-200 font-semibold text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#00B395]"/>
+              </div>
+              <div class="space-y-1">
+                <label class="font-bold text-slate-600">招聘人数 (HC) <span class="text-red-500">*</span></label>
+                <input v-model.number="editJob.hc" type="number" min="1" class="w-full h-8 px-2.5 rounded-lg bg-white border border-slate-200 font-semibold text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#00B395]"/>
+              </div>
+            </div>
+
+            <!-- Salary Settings: Min - Max * Months -->
+            <div class="grid grid-cols-1 sm:grid-cols-4 gap-3">
+              <div class="space-y-1">
+                <label class="font-bold text-slate-600">最低月薪 (K)</label>
+                <input v-model.number="editJob.salary_min" type="number" step="1" class="w-full h-8 px-2.5 rounded-lg bg-white border border-slate-200 font-semibold text-slate-800"/>
+              </div>
+              <div class="space-y-1">
+                <label class="font-bold text-slate-600">最高月薪 (K)</label>
+                <input v-model.number="editJob.salary_max" type="number" step="1" class="w-full h-8 px-2.5 rounded-lg bg-white border border-slate-200 font-semibold text-slate-800"/>
+              </div>
+              <div class="space-y-1">
+                <label class="font-bold text-slate-600">发薪月数</label>
+                <select v-model.number="editJob.salary_months" class="w-full h-8 px-2.5 rounded-lg bg-white border border-slate-200 font-semibold text-slate-800">
+                  <option :value="12">12 薪</option>
+                  <option :value="13">13 薪</option>
+                  <option :value="14">14 薪</option>
+                  <option :value="15">15 薪</option>
+                  <option :value="16">16 薪 (大厂常见)</option>
+                  <option :value="18">18 薪</option>
+                </select>
+              </div>
+              <div class="space-y-1">
+                <label class="font-bold text-slate-600">所属部门</label>
+                <input v-model="editJob.department" class="w-full h-8 px-2.5 rounded-lg bg-white border border-slate-200 text-slate-800"/>
+              </div>
+            </div>
+          </div>
+
+          <!-- PART 2: 硬性初筛门槛 (现实招聘软件 8 维指标) -->
+          <div class="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3.5">
+            <div class="font-bold text-slate-800 text-xs flex items-center justify-between">
+              <div class="flex items-center gap-1.5">
+                <span class="w-1.5 h-1.5 rounded-full bg-[#5039f6]"></span>
+                <span>2. 硬性初筛过滤门槛 (与现实招聘软件完全一致)</span>
+              </div>
+              <span class="text-[10px] text-slate-400 font-normal">不满足门槛者将自动打上红色警示并移入淘汰拦截库</span>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              
+              <!-- 1. 工作经验范围 -->
+              <div class="space-y-1">
+                <label class="font-bold text-slate-600 flex items-center justify-between">
+                  <span>经验要求</span>
+                  <span class="text-[10px] text-slate-400">最低 {{ editJob.experience_years }} 年</span>
+                </label>
+                <select v-model="editJob.experience_range" @change="onExpRangeChange" class="w-full h-8 px-2.5 rounded-lg bg-white border border-slate-200 font-semibold text-slate-800">
+                  <option value="any">经验不限</option>
+                  <option value="应届生">在校 / 应届毕业生</option>
+                  <option value="1-3年">1 - 3 年经验</option>
+                  <option value="3-5年">3 - 5 年经验</option>
+                  <option value="5-10年">5 - 10 年经验 (中高级核心骨干)</option>
+                  <option value="10年以上">10 年以上 (技术专家/架构师)</option>
+                </select>
+              </div>
+
+              <!-- 2. 最低学历要求 -->
+              <div class="space-y-1">
+                <label class="font-bold text-slate-600">最低学历门槛</label>
+                <select v-model="editJob.education" class="w-full h-8 px-2.5 rounded-lg bg-white border border-slate-200 font-semibold text-slate-800">
+                  <option value="any">不限</option>
+                  <option value="associate">大专及以上</option>
+                  <option value="bachelor">统招本科及以上</option>
+                  <option value="master">硕士及以上</option>
+                  <option value="doctor">博士及以上</option>
+                </select>
+              </div>
+
+              <!-- 3. 学习形式 / 统招要求 -->
+              <div class="space-y-1">
+                <label class="font-bold text-slate-600">学习形式要求</label>
+                <select v-model="editJob.education_type" class="w-full h-8 px-2.5 rounded-lg bg-white border border-slate-200 font-semibold text-slate-800">
+                  <option value="any">不限</option>
+                  <option value="full_time">必须统招全日制</option>
+                  <option value="general">普通高等教育 (含自考/成教)</option>
+                </select>
+              </div>
+
+              <!-- 4. 院校层次要求 -->
+              <div class="space-y-1">
+                <label class="font-bold text-slate-600">院校背景门槛</label>
+                <select v-model="editJob.school_tier" class="w-full h-8 px-2.5 rounded-lg bg-white border border-slate-200 font-semibold text-slate-800">
+                  <option value="any">普通高校及以上 (不限)</option>
+                  <option value="double_first">双一流院校及以上</option>
+                  <option value="211">211 重点大学及以上</option>
+                  <option value="985">985 顶尖重点名校专项</option>
+                  <option value="qs100">海外 QS Top 100 名校</option>
+                </select>
+              </div>
+
+              <!-- 5. 专业对口要求 -->
+              <div class="space-y-1">
+                <label class="font-bold text-slate-600">专业对口要求</label>
+                <select v-model="editJob.major" class="w-full h-8 px-2.5 rounded-lg bg-white border border-slate-200 font-semibold text-slate-800">
+                  <option value="any">专业不限</option>
+                  <option value="computer">计算机科学与技术 / 软件工程类</option>
+                  <option value="electronic">电子信息 / 通信 / 物联网工程类</option>
+                  <option value="math">数学 / 统计学 / 数据科学类</option>
+                  <option value="science">理工科相关专业</option>
+                </select>
+              </div>
+
+              <!-- 6. 年龄偏好 / 上限 -->
+              <div class="space-y-1">
+                <label class="font-bold text-slate-600">年龄要求</label>
+                <select v-model.number="editJob.max_age" class="w-full h-8 px-2.5 rounded-lg bg-white border border-slate-200 font-semibold text-slate-800">
+                  <option :value="0">年龄不限</option>
+                  <option :value="28">28 岁以下 (青年技术储备)</option>
+                  <option :value="30">30 岁以下</option>
+                  <option :value="35">35 岁以下 (常见常规区间)</option>
+                  <option :value="40">40 岁以下 (资深管理/专家)</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- 7. 核心硬性技能 (必选技能标签) -->
+            <div class="space-y-1.5 pt-1">
+              <label class="font-bold text-slate-600 flex items-center justify-between">
+                <span>核心技术栈 / 必选技能标签</span>
+                <span class="text-[10px] text-slate-400">点击标签可删除，回车或点击添加</span>
+              </label>
+              <div class="flex flex-wrap items-center gap-1.5 p-2 bg-white rounded-lg border border-slate-200 min-h-10">
+                <span v-for="(sk, idx) in (editJob.required_skills || [])" :key="idx"
+                  class="inline-flex items-center gap-1 px-2.5 py-1 bg-[#e6faf6] text-[#008770] font-semibold rounded-md text-xs border border-[#00B395]/20">
+                  <span>{{ sk }}</span>
+                  <button @click="removeSkillTag(idx)" class="hover:text-red-500 font-bold ml-0.5 cursor-pointer">×</button>
+                </span>
+                <div class="flex items-center gap-1">
+                  <input v-model="newSkillInput" @keyup.enter="addSkillTag" type="text" placeholder="输入技能如 Next.js..."
+                    class="h-7 px-2 text-xs bg-slate-50 rounded border border-slate-200 focus:outline-none focus:bg-white focus:ring-1 focus:ring-[#00B395] w-28"/>
+                  <button @click="addSkillTag" type="button" class="h-7 px-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-xs font-semibold cursor-pointer">
+                    +添加
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- PART 3: 完整岗位职责与任职资格 (JD) -->
+          <div class="space-y-1">
+            <label class="font-bold text-slate-700 flex items-center justify-between">
+              <span>完整岗位职责与任职要求 (JD 原文)</span>
+              <span class="text-[10px] text-slate-400">大模型将据此进行 5 维语义深度打分</span>
+            </label>
+            <textarea v-model="editJob.jd" rows="4"
+              placeholder="请输入清晰详细的岗位职责与任职要求..."
+              class="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 leading-relaxed text-slate-800 text-xs focus:outline-none focus:bg-white focus:ring-1 focus:ring-[#00B395]"></textarea>
+          </div>
+        </div>
+
+        <!-- Action Footer -->
+        <div class="flex items-center justify-end gap-2.5 pt-2 border-t border-slate-200">
+          <button @click="showJDModal = false" class="h-9 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold cursor-pointer transition-colors">
+            取消
+          </button>
+          <button @click="saveJobConfig" class="h-9 px-5 bg-[#00B395] hover:bg-[#008770] text-white rounded-lg text-xs font-bold shadow-sm cursor-pointer transition-all flex items-center gap-1.5">
+            <svg class="icon w-3.5 h-3.5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+            <span>保存规则并生效</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div v-if="toastMsg" class="fixed bottom-6 right-6 z-50 px-4 py-2.5 bg-slate-900 text-white rounded-xl shadow-xl text-xs font-semibold flex items-center gap-2 animate-bounce">
+      <svg class="icon w-4 h-4 text-[#00B395]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+      <span>{{ toastMsg }}</span>
+    </div>
+
+  </div>
+
+  <script>
+    const { createApp, ref, computed, onMounted, nextTick } = Vue;
+
+    createApp({
+      setup() {
+        const jobs = ref([]);
+        const candidates = ref([]);
+        const counts = ref({ all: 0, recommended: 0, review: 0, scheduled: 0, rejected: 0 });
+        const currentJobId = ref('fe-fullstack');
+        const currentTab = ref('all');
+        const sortMode = ref('score');
+        const searchQuery = ref('');
+        const eduFilter = ref('all');
+        const expFilter = ref('all');
+        const selectedIds = ref(new Set());
+        const showJobDropdown = ref(false);
+
+        // Modals state
+        const showDetailDrawer = ref(false);
+        const currentDetail = ref(null);
+        const detailTab = ref('resume'); // 'resume' (完整原版简历) | 'ai' (AI评估报告)
+        const openedFromChat = ref(false); // 标记是否从微聊沟通窗口中唤起简历
+        const regeneratingQuestions = ref(false);
+        const newSkillInput = ref('');
+        const showUploadModal = ref(false);
+        const uploadJobId = ref('fe-fullstack');
+        const uploadFileList = ref([]);
+        const uploading = ref(false);
+
+        // Chat / Communication Center state
+        const showChatModal = ref(false);
+        const chatCandidate = ref(null);
+        const chatMessages = ref([]);
+        const chatInput = ref('');
+        const sendingChat = ref(false);
+        const chatBox = ref(null);
+        const chatSearchQuery = ref('');
+        const chatTabFilter = ref('all');
+        const chatList = ref([]);
+        const chatPaneTab = ref('chat'); // 'chat' (微聊消息流) | 'resume' (沟通窗内原版完整简历)
+
+        const filteredChatCandidates = computed(() => {
+          let list = candidates.value || [];
+          if (chatTabFilter.value === 'recommended') {
+            list = list.filter(c => c.state === 'recommended');
+          } else if (chatTabFilter.value === 'scheduled') {
+            list = list.filter(c => c.state === 'scheduled');
+          } else if (chatTabFilter.value === 'rejected') {
+            list = list.filter(c => c.state === 'rejected');
+          }
+          if (chatSearchQuery.value.trim()) {
+            const q = chatSearchQuery.value.toLowerCase().trim();
+            list = list.filter(c =>
+              (c.name || '').toLowerCase().includes(q) ||
+              (c.current_company || '').toLowerCase().includes(q) ||
+              (c.skills || []).some(s => s.toLowerCase().includes(q))
+            );
+          }
+          return list;
+        });
+
+        // Interview Schedule state
+        const showInterviewModal = ref(false);
+        const interviews = ref([]);
+
+        // Talent Pool state
+        const showTalentPoolModal = ref(false);
+        const talentPool = ref([]);
+
+        // Diagnostics state
+        const showDiagnosticsModal = ref(false);
+        const diagnosticsData = ref(null);
+
+        // Job Management state
+        const showJobManagementModal = ref(false);
+        const showCreateJobModal = ref(false);
+        const newJob = ref({
+          title: '',
+          department: '',
+          salary: '',
+          experience_years: 3,
+          education: 'bachelor',
+          jd: ''
+        });
+
+        // Model Settings state
+        const showModelModal = ref(false);
+        const modelStatus = ref({
+          active_provider: 'local',
+          local_status: 'available',
+          local_provider: 'lm_studio',
+          local_model: 'qwen3.8-27b',
+          local_latency_ms: 12,
+          cloud_status: 'unconfigured'
+        });
+        const cloudPresets = ref({});
+        const probing = ref(false);
+        const testingCloud = ref(false);
+        const cloudTestMsg = ref('');
+        const cloudTestSuccess = ref(false);
+        const editModel = ref({
+          active_provider: 'local',
+          cloud_model: {
+            provider: 'deepseek',
+            base_url: 'https://api.deepseek.com/v1',
+            api_key: '',
+            model_name: 'deepseek-chat'
+          }
+        });
+
+        const showJDModal = ref(false);
+        const editJob = ref({});
+        const toastMsg = ref('');
+
+        const currentJob = computed(() => {
+          return jobs.value.find(j => j.id === currentJobId.value) || {
+            title: '资深前端开发 / 全栈工程师',
+            salary: '25-40K · 16薪',
+            department: '国际电商架构组',
+            hc: 2,
+            location: '深圳 · 南山科技园',
+            experience_years: 5,
+            education: 'bachelor',
+            required_skills: ['React', 'TypeScript', 'Node.js']
+          };
+        });
+
+        const isAllSelected = computed(() => {
+          return candidates.value.length > 0 && selectedIds.value.size === candidates.value.length;
+        });
+
+        const showToast = (msg) => {
+          toastMsg.value = msg;
+          setTimeout(() => { toastMsg.value = ''; }, 3000);
+        };
+
+        const formatEdu = (edu) => {
+          const map = { bachelor: '统招本科及以上', master: '硕士及以上', doctor: '博士及以上', associate: '大专及以上', any: '学历不限' };
+          return map[edu] || edu;
+        };
+
+        const getAvatarColor = (name) => {
+          const colors = ['#00B395', '#5039f6', '#0284c7', '#d97706', '#e11d48', '#059669', '#7c3aed'];
+          let hash = 0;
+          for (let i = 0; i < (name || '').length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+          return colors[Math.abs(hash) % colors.length];
+        };
+
+        const fetchJobs = async () => {
+          try {
+            const res = await fetch('/api/jobs');
+            const json = await res.json();
+            if (json.ok) {
+              jobs.value = json.data;
+              editJob.value = { ...currentJob.value };
+            }
+          } catch (e) {
+            console.error('Fetch jobs error:', e);
+          }
+        };
+
+        const fetchCandidates = async () => {
+          try {
+            const url = `/api/candidates?job_id=${currentJobId.value}&tab=${currentTab.value}&sort=${sortMode.value}&q=${encodeURIComponent(searchQuery.value)}&edu_filter=${eduFilter.value}&exp_filter=${expFilter.value}`;
+            const res = await fetch(url);
+            const json = await res.json();
+            if (json.ok) {
+              candidates.value = json.data;
+              counts.value = json.counts;
+              const curIds = new Set(candidates.value.map(c => c.id));
+              selectedIds.value = new Set([...selectedIds.value].filter(id => curIds.has(id)));
+            }
+          } catch (e) {
+            console.error('Fetch candidates error:', e);
+          }
+        };
+
+        const selectJob = (id) => {
+          currentJobId.value = id;
+          uploadJobId.value = id;
+          showJobDropdown.value = false;
+          editJob.value = { ...currentJob.value };
+          fetchCandidates();
+        };
+
+        const toggleSort = () => {
+          sortMode.value = sortMode.value === 'score' ? 'time' : 'score';
+          fetchCandidates();
+        };
+
+        let searchTimer = null;
+        const debouncedSearch = () => {
+          clearTimeout(searchTimer);
+          searchTimer = setTimeout(() => { fetchCandidates(); }, 300);
+        };
+
+        const toggleSelect = (id) => {
+          if (selectedIds.value.has(id)) selectedIds.value.delete(id);
+          else selectedIds.value.add(id);
+        };
+
+        const toggleSelectAll = () => {
+          if (isAllSelected.value) selectedIds.value.clear();
+          else selectedIds.value = new Set(candidates.value.map(c => c.id));
+        };
+
+        const openDetail = (c) => {
+          openedFromChat.value = false;
+          currentDetail.value = c;
+          detailTab.value = 'resume';
+          showDetailDrawer.value = true;
+        };
+
+        // 从微聊窗口中唤起大抽屉：主动隐藏微聊窗口，消除模糊背景与遮挡
+        const openDetailFromChat = (c) => {
+          if (!c) return;
+          openedFromChat.value = true;
+          currentDetail.value = c;
+          detailTab.value = 'resume';
+          showChatModal.value = false; // 隐藏微聊窗口，彻底清除背景模糊与居中遮挡
+          showDetailDrawer.value = true;
+        };
+
+        // 从大抽屉无缝返回微聊沟通
+        const returnToChat = () => {
+          showDetailDrawer.value = false;
+          if (currentDetail.value) {
+            chatCandidate.value = currentDetail.value;
+          }
+          showChatModal.value = true;
+          openedFromChat.value = false;
+          chatPaneTab.value = 'chat';
+          if (chatCandidate.value) {
+            loadChatForCandidate(chatCandidate.value);
+          }
+        };
+
+        // 关闭大抽屉（点击遮罩或关闭按钮）
+        const closeDetailDrawer = () => {
+          showDetailDrawer.value = false;
+          if (openedFromChat.value) {
+            showChatModal.value = true;
+            openedFromChat.value = false;
+            if (chatCandidate.value) {
+              loadChatForCandidate(chatCandidate.value);
+            }
+          }
+        };
+
+        const addSkillTag = () => {
+          if (!newSkillInput.value.trim()) return;
+          if (!editJob.value.required_skills) editJob.value.required_skills = [];
+          if (!editJob.value.required_skills.includes(newSkillInput.value.trim())) {
+            editJob.value.required_skills.push(newSkillInput.value.trim());
+          }
+          newSkillInput.value = '';
+        };
+
+        const removeSkillTag = (idx) => {
+          if (editJob.value.required_skills) {
+            editJob.value.required_skills.splice(idx, 1);
+          }
+        };
+
+        const onExpRangeChange = () => {
+          const range = editJob.value.experience_range;
+          if (range === '应届生') editJob.value.experience_years = 0;
+          else if (range === '1-3年') editJob.value.experience_years = 1;
+          else if (range === '3-5年') editJob.value.experience_years = 3;
+          else if (range === '5-10年') editJob.value.experience_years = 5;
+          else if (range === '10年以上') editJob.value.experience_years = 10;
+        };
+
+        const regenerateQuestions = async (candidateId) => {
+          regeneratingQuestions.value = true;
+          try {
+            const res = await fetch(`/api/candidates/${candidateId}/generate-questions`, { method: 'POST' });
+            const json = await res.json();
+            if (json.ok) {
+              currentDetail.value.interview_questions = json.data.interview_questions;
+              showToast('已基于最新画像重新生成 3 道针对性面试追问！');
+            }
+          } catch (e) {
+            showToast('生成追问异常: ' + e);
+          } finally {
+            regeneratingQuestions.value = false;
+          }
+        };
+
+        const exportSingleReport = (c) => {
+          const lines = [
+            `# RecruitAI 候选人评审档案 · ${c.name}`,
+            `评估时间：${new Date().toLocaleString()}`,
+            `AI综合得分：${c.ai_score} 分 (${c.ai_tier}级 · ${c.ai_label})`,
+            `当前职位：${c.current_title} @ ${c.current_company}`,
+            `学历背景：${c.school} (${formatEdu(c.education)})`,
+            `期望薪资：${c.salary_expect}`,
+            `\n## AI 甄选理由\n${c.ai_reason}`,
+            `\n## 五维能力拟合度`,
+            ...Object.entries(c.radar || {}).map(([k, v]) => `- ${k}: ${v}/100`),
+            `\n## 针对性面试建议题`,
+            ...(c.interview_questions || []).map((q, i) => `${i+1}. ${q}`)
+          ];
+          const blob = new Blob([lines.join('\n')], { type: 'text/markdown;charset=utf-8;' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `RecruitAI_${c.name}_评审档案.md`;
+          a.click();
+          URL.revokeObjectURL(url);
+          showToast(`已导出【${c.name}】单人评审档案！`);
+        };
+
+        // Real Interactive Communication Center Functions
+        const loadChatList = async () => {
+          try {
+            const res = await fetch(`/api/chats?job_id=${currentJobId.value}`);
+            const json = await res.json();
+            if (json.ok) {
+              chatList.value = json.data;
+            }
+          } catch (e) {
+            console.error('Load chat list error:', e);
+          }
+        };
+
+        const getChatLastMessage = (cid) => {
+          const item = (chatList.value || []).find(x => x.candidate_id === cid);
+          if (item && item.last_message) return item.last_message;
+          const c = (candidates.value || []).find(x => x.id === cid);
+          if (c && c.state === 'rejected') return '[系统回绝通知] 感谢您关注并投递...';
+          return '您好，我对贵司的岗位很感兴趣，期待深入交流！';
+        };
+
+        const selectChatCandidate = async (c) => {
+          if (!c) return;
+          chatCandidate.value = c;
+          try {
+            const res = await fetch(`/api/candidates/${c.id}/chat`);
+            const json = await res.json();
+            if (json.ok) {
+              chatMessages.value = json.data;
+              scrollToBottom();
+            }
+          } catch (e) {
+            console.error('Load chat history error:', e);
+          }
+        };
+
+        const openChatCenter = async (targetCandidate = null) => {
+          showChatModal.value = true;
+          await loadChatList();
+          if (targetCandidate) {
+            selectChatCandidate(targetCandidate);
+          } else {
+            const initial = chatCandidate.value || filteredChatCandidates.value[0] || candidates.value[0];
+            if (initial) selectChatCandidate(initial);
+          }
+        };
+
+        const openChatWindow = async (c) => {
+          await openChatCenter(c);
+        };
+
+        const sendChatMessage = async () => {
+          if (!chatInput.value.trim() || sendingChat.value || !chatCandidate.value) return;
+          const text = chatInput.value.trim();
+          chatInput.value = '';
+          sendingChat.value = true;
+          chatMessages.value.push({
+            sender: 'hr',
+            name: 'HR 主管',
+            text: text,
+            time: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+          });
+          scrollToBottom();
+
+          try {
+            const res = await fetch(`/api/candidates/${chatCandidate.value.id}/chat`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ message: text })
+            });
+            const json = await res.json();
+            if (json.ok) {
+              chatMessages.value = json.data.history;
+              scrollToBottom();
+              loadChatList();
+            }
+          } catch (e) {
+            showToast('消息发送异常: ' + e);
+          } finally {
+            sendingChat.value = false;
+          }
+        };
+
+        const sendQuickPrompt = (prompt) => {
+          chatInput.value = prompt;
+          sendChatMessage();
+        };
+
+        const scrollToBottom = () => {
+          nextTick(() => {
+            if (chatBox.value) chatBox.value.scrollTop = chatBox.value.scrollHeight;
+          });
+        };
+
+        // Interview Schedule Functions
+        const openInterviewModal = async () => {
+          showInterviewModal.value = true;
+          try {
+            const res = await fetch('/api/interviews');
+            const json = await res.json();
+            if (json.ok) interviews.value = json.data;
+          } catch (e) {
+            console.error('Fetch interviews error:', e);
+          }
+        };
+
+        const passInterview = async (iv) => {
+          try {
+            const res = await fetch(`/api/interviews/${iv.id}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ status: 'passed', round: '终面 (待确认)' })
+            });
+            const json = await res.json();
+            if (json.ok) {
+              showToast(`候选人【${iv.candidate_name}】初试已评定通过，已推荐晋级终试！`);
+              openInterviewModal();
+            }
+          } catch (e) {
+            showToast('更新面试状态失败: ' + e);
+          }
+        };
+
+        // Talent Pool Functions
+        const openTalentPoolModal = async () => {
+          showTalentPoolModal.value = true;
+          try {
+            const res = await fetch('/api/talent-pool');
+            const json = await res.json();
+            if (json.ok) talentPool.value = json.data;
+          } catch (e) {
+            console.error('Fetch talent pool error:', e);
+          }
+        };
+
+        const restoreTalent = async (poolId) => {
+          try {
+            const res = await fetch('/api/talent-pool/restore', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ pool_id: poolId })
+            });
+            const json = await res.json();
+            if (json.ok) {
+              showToast(`成功将候选人【${json.data.name}】重新激活至初筛队列！`);
+              openTalentPoolModal();
+              fetchCandidates();
+            }
+          } catch (e) {
+            showToast('公海激活异常: ' + e);
+          }
+        };
+
+        // AI Diagnostics Report
+        const openDiagnosticsModal = async () => {
+          showDiagnosticsModal.value = true;
+          try {
+            const res = await fetch(`/api/diagnostics?job_id=${currentJobId.value}`);
+            const json = await res.json();
+            if (json.ok) diagnosticsData.value = json.data;
+          } catch (e) {
+            console.error('Fetch diagnostics error:', e);
+          }
+        };
+
+        // Job Management Functions
+        const openJobManagementModal = () => {
+          showJobManagementModal.value = true;
+        };
+
+        const editJobConfig = (j) => {
+          showJobManagementModal.value = false;
+          selectJob(j.id);
+          // 确保新设字段均有初始值
+          if (!editJob.value.salary_min) editJob.value.salary_min = 25;
+          if (!editJob.value.salary_max) editJob.value.salary_max = 40;
+          if (!editJob.value.salary_months) editJob.value.salary_months = 16;
+          if (!editJob.value.experience_range) editJob.value.experience_range = '5-10年';
+          if (!editJob.value.education_type) editJob.value.education_type = 'full_time';
+          if (!editJob.value.major) editJob.value.major = 'computer';
+          if (!editJob.value.max_age) editJob.value.max_age = 35;
+          showJDModal.value = true;
+        };
+
+        const openCreateJobModal = () => {
+          showJobDropdown.value = false;
+          newJob.value = {
+            title: '',
+            department: '技术研发中心',
+            salary: '25-40K · 15薪',
+            location: '深圳 · 南山',
+            hc: 2,
+            experience_years: 5,
+            education: 'bachelor',
+            jd: '负责相关业务线架构与技术实施...'
+          };
+          showCreateJobModal.value = true;
+        };
+
+        const submitCreateJob = async () => {
+          if (!newJob.value.title.trim()) {
+            showToast('请输入职位名称');
+            return;
+          }
+          try {
+            const res = await fetch('/api/jobs', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(newJob.value)
+            });
+            const json = await res.json();
+            if (json.ok) {
+              showToast(`成功发布新岗位【${json.data.title}】！`);
+              showCreateJobModal.value = false;
+              await fetchJobs();
+              selectJob(json.data.id);
+            }
+          } catch (e) {
+            showToast('创建岗位异常: ' + e);
+          }
+        };
+
+        const updateState = async (id, state) => {
+          try {
+            const res = await fetch(`/api/candidates/${id}/state`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ state })
+            });
+            const json = await res.json();
+            if (json.ok) {
+              showToast(state === 'scheduled' ? '已成功发起面试邀约，并同步至面试日程！' : '候选人状态更新成功');
+              fetchCandidates();
+              fetchJobs();
+              // Update interview list in background
+              const ivRes = await fetch('/api/interviews');
+              const ivJson = await ivRes.json();
+              if (ivJson.ok) interviews.value = ivJson.data;
+            }
+          } catch (e) {
+            showToast('状态更新失败: ' + e);
+          }
+        };
+
+        const rejectCandidate = async (c) => {
+          if (!c) return;
+          try {
+            const res = await fetch(`/api/candidates/${c.id}/reject-notify`, { method: 'POST' });
+            const json = await res.json();
+            if (json.ok) {
+              showToast(json.message);
+              c.state = 'rejected';
+              fetchCandidates();
+              loadChatList();
+              if (chatCandidate.value && chatCandidate.value.id === c.id) {
+                const chatRes = await fetch(`/api/candidates/${c.id}/chat`);
+                const chatJson = await chatRes.json();
+                if (chatJson.ok) {
+                  chatMessages.value = chatJson.data;
+                  scrollToBottom();
+                }
+              }
+            }
+          } catch (e) {
+            showToast('发送回绝异常: ' + e);
+          }
+        };
+
+        // Batch Action Handlers
+        const batchSchedule = async () => {
+          if (selectedIds.value.size === 0) return;
+          try {
+            const res = await fetch('/api/batch-action', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action: 'schedule', candidate_ids: Array.from(selectedIds.value) })
+            });
+            const json = await res.json();
+            if (json.ok) {
+              showToast(json.message || `成功将 ${selectedIds.value.size} 位候选人推进至面试流程！`);
+              fetchCandidates();
+              // Refresh interview count
+              const ivRes = await fetch('/api/interviews');
+              const ivJson = await ivRes.json();
+              if (ivJson.ok) interviews.value = ivJson.data;
+            }
+          } catch (e) {
+            showToast('批量操作失败: ' + e);
+          }
+        };
+
+        const batchReject = async () => {
+          if (selectedIds.value.size === 0) return;
+          try {
+            const res = await fetch('/api/batch-action', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action: 'reject', candidate_ids: Array.from(selectedIds.value) })
+            });
+            const json = await res.json();
+            if (json.ok) {
+              showToast(json.message || `已将 ${selectedIds.value.size} 位候选人批量移入淘汰库`);
+              fetchCandidates();
+            }
+          } catch (e) {
+            showToast('批量操作失败: ' + e);
+          }
+        };
+
+        const batchPool = async () => {
+          if (selectedIds.value.size === 0) return;
+          try {
+            const res = await fetch('/api/batch-action', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action: 'pool', candidate_ids: Array.from(selectedIds.value) })
+            });
+            const json = await res.json();
+            if (json.ok) {
+              showToast(json.message || `已将 ${selectedIds.value.size} 位候选人批量转入企业人才公海！`);
+              fetchCandidates();
+              openTalentPoolModal();
+            }
+          } catch (e) {
+            showToast('批量转入公海失败: ' + e);
+          }
+        };
+
+        const batchGreet = async () => {
+          if (selectedIds.value.size === 0) return;
+          try {
+            const res = await fetch('/api/batch-action', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action: 'greet', candidate_ids: Array.from(selectedIds.value) })
+            });
+            const json = await res.json();
+            if (json.ok) {
+              showToast(json.message || `已向选中的 ${selectedIds.value.size} 位候选人批量发送初筛微聊问候！`);
+            }
+          } catch (e) {
+            showToast('批量问候失败: ' + e);
+          }
+        };
+
+        const batchExport = async () => {
+          if (selectedIds.value.size === 0) return;
+          try {
+            const res = await fetch('/api/batch-action', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action: 'export', candidate_ids: Array.from(selectedIds.value) })
+            });
+            const json = await res.json();
+            if (json.ok && json.data.markdown) {
+              const blob = new Blob([json.data.markdown], { type: 'text/markdown;charset=utf-8;' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `RecruitAI_评审清单_${new Date().toISOString().slice(0,10)}.md`;
+              a.click();
+              URL.revokeObjectURL(url);
+              showToast('简历评审清单导出成功！');
+            }
+          } catch (e) {
+            showToast('导出失败: ' + e);
+          }
+        };
+
+        // File upload handling
+        const handleFileSelect = (e) => {
+          uploadFileList.value = Array.from(e.target.files);
+        };
+
+        const executeUpload = async () => {
+          if (uploadFileList.value.length === 0) return;
+          uploading.value = true;
+          try {
+            const formData = new FormData();
+            uploadFileList.value.forEach(f => formData.append('files', f));
+            formData.append('job_id', uploadJobId.value);
+
+            const res = await fetch('/api/upload', {
+              method: 'POST',
+              body: formData
+            });
+            const json = await res.json();
+            if (json.ok) {
+              showToast(`成功解析并完成初筛 ${json.data.length} 份简历！`);
+              showUploadModal.value = false;
+              uploadFileList.value = [];
+              fetchCandidates();
+            }
+          } catch (e) {
+            showToast('上传初筛发生异常: ' + e);
+          } finally {
+            uploading.value = false;
+          }
+        };
+
+        // Model Settings
+        const refreshModelStatus = async () => {
+          probing.value = true;
+          try {
+            const res = await fetch('/api/model/status');
+            const json = await res.json();
+            if (json.ok) {
+              modelStatus.value = json.data;
+              editModel.value.active_provider = json.data.active_provider;
+            }
+          } catch (e) {
+            console.error('Model status error:', e);
+          } finally {
+            probing.value = false;
+          }
+        };
+
+        const fetchCloudPresets = async () => {
+          try {
+            const res = await fetch('/api/model/presets');
+            const json = await res.json();
+            if (json.ok) cloudPresets.value = json.data;
+          } catch (e) {
+            console.error('Cloud presets error:', e);
+          }
+        };
+
+        const selectCloudPreset = (pkey, preset) => {
+          editModel.value.cloud_model.provider = pkey;
+          editModel.value.cloud_model.base_url = preset.base_url;
+          editModel.value.cloud_model.model_name = preset.models[0];
+        };
+
+        const testCloudConnection = async () => {
+          testingCloud.value = true;
+          cloudTestMsg.value = '';
+          try {
+            const res = await fetch('/api/model/test', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(editModel.value.cloud_model)
+            });
+            const json = await res.json();
+            if (json.ok) {
+              cloudTestSuccess.value = true;
+              cloudTestMsg.value = `连接成功！响应延迟: ${json.data.latency_ms} ms`;
+            } else {
+              cloudTestSuccess.value = false;
+              cloudTestMsg.value = `连接失败: ${json.data ? json.data.error : '网络超时'}`;
+            }
+          } catch (e) {
+            cloudTestSuccess.value = false;
+            cloudTestMsg.value = '测试异常: ' + e;
+          } finally {
+            testingCloud.value = false;
+          }
+        };
+
+        const saveModelConfig = async () => {
+          try {
+            const res = await fetch('/api/model/switch', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(editModel.value)
+            });
+            const json = await res.json();
+            if (json.ok) {
+              showToast('模型配置已生效并持久化！');
+              showModelModal.value = false;
+              refreshModelStatus();
+            }
+          } catch (e) {
+            showToast('保存模型配置失败: ' + e);
+          }
+        };
+
+        const saveJobConfig = async () => {
+          try {
+            if (editJob.value.salary_min && editJob.value.salary_max) {
+              editJob.value.salary = `${editJob.value.salary_min}-${editJob.value.salary_max}K·${editJob.value.salary_months || 15}薪`;
+            }
+            const res = await fetch(`/api/jobs/${currentJobId.value}`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(editJob.value)
+            });
+            const json = await res.json();
+            if (json.ok) {
+              showToast('岗位规则与硬性门槛调优成功！');
+              showJDModal.value = false;
+              await fetchJobs();
+            }
+          } catch (e) {
+            showToast('更新岗位规则失败: ' + e);
+          }
+        };
+
+        onMounted(async () => {
+          await fetchJobs();
+          await fetchCandidates();
+          await refreshModelStatus();
+          await fetchCloudPresets();
+          
+          try {
+            const ivRes = await fetch('/api/interviews');
+            const ivJson = await ivRes.json();
+            if (ivJson.ok) interviews.value = ivJson.data;
+
+            const tpRes = await fetch('/api/talent-pool');
+            const tpJson = await tpRes.json();
+            if (tpJson.ok) talentPool.value = tpJson.data;
+          } catch (e) {}
+
+          // Close job dropdown when clicking outside
+          window.addEventListener('click', (e) => {
+            if (!e.target.closest('.job-dropdown-container')) {
+              showJobDropdown.value = false;
+            }
+          });
+        });
+
+        return {
+          jobs,
+          candidates,
+          counts,
+          currentJobId,
+          currentJob,
+          currentTab,
+          sortMode,
+          searchQuery,
+          eduFilter,
+          expFilter,
+          selectedIds,
+          isAllSelected,
+          showJobDropdown,
+          showDetailDrawer,
+          currentDetail,
+          detailTab,
+          openedFromChat,
+          openDetailFromChat,
+          returnToChat,
+          closeDetailDrawer,
+          regeneratingQuestions,
+          newSkillInput,
+          addSkillTag,
+          removeSkillTag,
+          onExpRangeChange,
+          showUploadModal,
+          uploadJobId,
+          uploadFileList,
+          uploading,
+          showChatModal,
+          chatCandidate,
+          chatMessages,
+          chatInput,
+          sendingChat,
+          chatBox,
+          chatSearchQuery,
+          chatTabFilter,
+          chatList,
+          chatPaneTab,
+          filteredChatCandidates,
+          loadChatList,
+          getChatLastMessage,
+          openChatCenter,
+          selectChatCandidate,
+          showInterviewModal,
+          interviews,
+          showTalentPoolModal,
+          talentPool,
+          showDiagnosticsModal,
+          diagnosticsData,
+          showJobManagementModal,
+          showCreateJobModal,
+          newJob,
+          showModelModal,
+          modelStatus,
+          cloudPresets,
+          probing,
+          testingCloud,
+          cloudTestMsg,
+          cloudTestSuccess,
+          editModel,
+          showJDModal,
+          editJob,
+          toastMsg,
+          showToast,
+          formatEdu,
+          getAvatarColor,
+          selectJob,
+          toggleSort,
+          debouncedSearch,
+          toggleSelect,
+          toggleSelectAll,
+          openDetail,
+          regenerateQuestions,
+          exportSingleReport,
+          openChatWindow,
+          sendChatMessage,
+          sendQuickPrompt,
+          openInterviewModal,
+          passInterview,
+          openTalentPoolModal,
+          restoreTalent,
+          openDiagnosticsModal,
+          openJobManagementModal,
+          editJobConfig,
+          openCreateJobModal,
+          submitCreateJob,
+          updateState,
+          rejectCandidate,
+          batchSchedule,
+          batchReject,
+          batchPool,
+          batchGreet,
+          batchExport,
+          handleFileSelect,
+          executeUpload,
+          refreshModelStatus,
+          selectCloudPreset,
+          testCloudConnection,
+          saveModelConfig,
+          saveJobConfig,
+          fetchCandidates
+        };
+      }
+    }).mount('#app');
+  </script>
+</body>
+</html>
