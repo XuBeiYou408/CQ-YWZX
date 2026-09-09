@@ -130,10 +130,17 @@ LOCAL_DB_PATH='./data/faiss_db'                     # FAISS 持久化目录
 YUAN_SUCAI_PATH='./data/documents'                 # 文档目录
 ```
 
-### 2. 启动服务 (开箱即用)
+### 2. 前置条件与自举启动说明
+
+- **Python 环境**：建议 **Python 3.11 – 3.13**（安装时勾选 `Add Python to PATH`）。
+- **Node.js 前端环境**：前端基于 Vue 3 + Vite 构建。若本地无 `frontend/dist` 产物，需要 Node.js (v18+) 执行 `cd frontend && npm install && npm run build`（仓库已提交构建产物时可直接开箱运行）。
+- **模型支持**：
+  - 嵌入与重排模型：系统依赖 BGE 模型（`BAAI/bge-large-zh-v1.5`），启动时默认通过镜像源自动加载；
+  - 大模型：需启动 LM Studio（端口 `1234`）或在 `.env` 中配置云端 Key。
+
 ```bash
-# 双击运行 一键启动.bat 或终端执行：
-python run.py
+# 推荐：双击运行 一键启动.bat
+# 脚本将自动检测 py -3、自举创建 .venv 虚拟环境并安装所有依赖，随后拉起服务并唤起浏览器。
 ```
 启动后访问 `http://localhost:8010` 即可直接体验全套功能（点击侧边栏 **【模型管理】** 即可实时切换端云模式并自动识别本地大模型）。
 

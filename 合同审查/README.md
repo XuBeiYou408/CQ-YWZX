@@ -118,28 +118,29 @@ flowchart TD
 
 ---
 
-## 🚀 快速启动指南
+## 🚀 快速启动与自举说明
 
-### 1. 环境准备
-- 推荐使用 Python 3.10 或更高版本。
-- 安装项目依赖：
+### 1. 前置条件与环境准备
+- **Python 环境**：建议 **Python 3.11 – 3.13**（安装时请务必勾选 `Add Python to PATH` 以及 `Install launcher for all users (py)`）。
+- **推理服务**：
+  - **本地模式（推荐）**：后台启动 **LM Studio**，加载大模型（如 `qwen3.8-27b` 或 `qwen2.5-14b`），并在 1234 端口开启 Local Server。
+  - **云端模式**：工作台支持在线切换至 DeepSeek 等云端大模型 API。
+
+### 2. 一键自举启动 (推荐)
+- 直接在文件管理器中双击运行 **`一键启动.bat`**。
+- **自举特性**：
+  - 脚本将优先调用 `py -3`（防御微软商店假占位符）；
+  - 自动检测并创建本项目专属的独立的 `.venv` 虚拟环境；
+  - 自动安装并补全所有依赖组件（包含 `FastAPI`, `PyMuPDF`, `python-multipart`, `python-docx` 等）；
+  - 随后自动拉起服务并在浏览器中打开工作台：`http://localhost:8020`。
+  - 具备严格幂等性，日常反复双击秒级启动。
+
+### 3. 命令行启动
 ```bash
 cd 合同审查
-pip install -r requirements.txt
+# 激活虚拟环境后运行
+.venv\Scripts\python run.py
 ```
-
-### 2. 启动大模型服务
-- 打开 **LM Studio**（或 Ollama 等兼容 OpenAI 接口的本地端侧服务）。
-- 加载所选大模型（如 `qwen2.5-14b-instruct` / `qwen2.5-7b-instruct`）。
-- 启动 **Local Server**（默认监听端口 `1234`）。
-
-### 3. 一键启动合同审查系统
-- **方式一（便捷）**：双击运行项目根目录下的 `一键启动.bat`。
-- **方式二（命令行）**：
-```bash
-python run.py
-```
-服务将在 `http://localhost:8020` 启动，并会自动为您在默认浏览器中打开现代 SaaS 审查工作台。
 
 ---
 
