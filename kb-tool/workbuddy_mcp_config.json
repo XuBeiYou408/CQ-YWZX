@@ -5,6 +5,8 @@
       "args": [
         "C:\\Users\\ABC\\Desktop\\123\\kb-tool\\mcp_server.py"
       ],
+      "cwd": "C:\\Users\\ABC\\Desktop\\123\\kb-tool",
+      "defer_loading": false,
       "env": {
         "PYTHONIOENCODING": "utf-8",
         "PYTHONUNBUFFERED": "1",

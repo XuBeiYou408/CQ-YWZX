@@ -71,13 +71,13 @@ mcp = FastMCP(
 )
 async def search_knowledge_base(
     query: Union[str, dict] = "",
-    top_k: Union[int, str, dict] = 5,
+    top_k: Union[int, str, dict] = 3,
     keyword: Union[str, dict] = ""
 ) -> str:
     """
     Args:
         query: 自然语言查询词，例如："差旅报销规定"、"年假申请流程"、"工龄6年休假天数"
-        top_k: 返回的文档片段数量，默认 5，最多 10
+        top_k: 返回的文档片段数量，默认 3，最多 8
         keyword: 兼容备用参数，同 query
     """
     # 彻底容错：自动解包各种大模型可能传入的嵌套字典（例如 {"query": {"query": "...", "top_k": 5}}, {"top_k": {"top_k": 5}}）
