@@ -38,19 +38,36 @@ load_dotenv(os.path.join(_BASE_DIR, ".env"))
 
 from mcp.server.fastmcp import FastMCP
 
-# ---------- 主线程预加载 RAG 检索器核心 ----------
-# 关键架构防御：Windows 下严禁在 asyncio.to_thread 异步线程中动态 import PyTorch / OpenMP
-# 否则会触发 OS Loader Lock 与 Python GIL 之间的死锁，导致工具调用完全卡死挂起
+import threading
+
+# ---------- 预先在主线程加载底层 C++ 核心库，杜绝 Windows OS Loader Lock 死锁 ----------
+try:
+    import torch
+    import faiss
+    import pymupdf
+except Exception as e:
+    logging.warning(f"底层计算库导入预热警告: {e}")
+
+_rag_ready_event = threading.Event()
 _rag_ready = False
 _rag_error = None
 
-try:
-    from rag.retriever import get_retrievers, zhaohui_and_rerank
-    get_retrievers()
-    _rag_ready = True
-except Exception as e:
-    _rag_error = str(e)
-    logging.exception("主线程预加载 RAG 引擎异常: %s", e)
+def _warmup_rag():
+    global _rag_ready, _rag_error
+    try:
+        from rag.retriever import get_retrievers
+        get_retrievers()
+        _rag_ready = True
+        logging.info("RAG 检索器后台预热完成，知识库完全就绪。")
+    except Exception as e:
+        _rag_error = str(e)
+        logging.exception("后台预热 RAG 引擎异常: %s", e)
+    finally:
+        _rag_ready_event.set()
+
+# 后台启动预热，主流程立刻放行给 FastMCP 完成握手
+_warmup_thread = threading.Thread(target=_warmup_rag, daemon=True)
+_warmup_thread.start()
 
 mcp = FastMCP(
     name="enterprise-knowledge-base",
@@ -121,15 +138,22 @@ async def search_knowledge_base(
     top_k = min(max(1, final_k), 10)
     query_str = str(search_text or "企业制度")
 
+    global _rag_ready
     if not _rag_ready:
-        if _rag_error:
-            return f"知识库引擎未就绪：{_rag_error}\n请检查 data/models 目录中的 BGE 模型是否存在。"
-        try:
-            get_retrievers()
-        except Exception as e:
-            return f"知识库引擎初始化失败：{e}"
+        if not _rag_ready_event.is_set():
+            _rag_ready_event.wait(timeout=15)
+        if not _rag_ready:
+            if _rag_error:
+                return f"知识库引擎未就绪：{_rag_error}\n请检查 data/models 目录中的 BGE 模型是否存在。"
+            try:
+                from rag.retriever import get_retrievers
+                get_retrievers()
+                _rag_ready = True
+            except Exception as e:
+                return f"知识库引擎初始化失败：{e}"
 
     try:
+        from rag.retriever import zhaohui_and_rerank
         docs = await zhaohui_and_rerank(query_str, return_documents=True)
         docs = docs[:top_k]
 

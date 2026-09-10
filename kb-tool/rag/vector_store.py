@@ -8,10 +8,8 @@ import logging
 import threading
 from typing import Tuple, List, Dict, Any
 from langchain_community.vectorstores import FAISS
-from langchain_community.document_loaders import PyMuPDFLoader, TextLoader
 from langchain_core.documents import Document
 from rag.embeddings import embeddings
-from rag.splitter import pdf_qingxi, md_qingxi
 
 logger = logging.getLogger(__name__)
 
@@ -107,7 +105,7 @@ def sao_miao_geng_xin(target_folder: str) -> Dict[str, Dict[str, Any]]:
 def quan_liang_chong_jian(current_states: Dict[str, Dict[str, Any]]) -> Tuple[FAISS, List[Document]]:
     logger.info("正在全量重建向量数据库...")
     from rag.loader import load_all_documents
-    from rag.splitter import docx_qingxi, txt_qingxi
+    from rag.splitter import pdf_qingxi, md_qingxi, docx_qingxi, txt_qingxi
     pdf_list, md_list, docx_list, txt_list, _ = load_all_documents()
     result_pdf = pdf_qingxi(pdf_list)
     result_md = md_qingxi(md_list)
@@ -166,7 +164,7 @@ def qi_dong_lu_jin() -> Tuple[FAISS, List[Document]]:
     modified_files = [f for f in current_states if f in old_manifest and old_manifest[f]['hash'] != current_states[f]['hash']]
     
     from rag.loader import load_all_documents
-    from rag.splitter import docx_qingxi, txt_qingxi
+    from rag.splitter import pdf_qingxi, md_qingxi, docx_qingxi, txt_qingxi
 
     if not db_exists or modified_files or deleted_files:
         db, safe_docs = quan_liang_chong_jian(current_states)
