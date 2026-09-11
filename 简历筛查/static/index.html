@@ -1,9 +1,4 @@
--8 -*-
-from pathlib import Path
-
-target_file = Path(r'C:\Users\ABC\Desktop\123\简历筛查\static\index.html')
-
-frontend_code = r'''<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8"/>
@@ -116,26 +111,26 @@ frontend_code = r'''<!DOCTYPE html>
             </div>
           </div>
 
-          <!-- Top Navigation with Real Actions -->
-          <nav class="hidden xl:flex items-center gap-1.5 text-[14px]">
-            <button @click="openJobManagementModal" class="px-3 py-1.5 rounded-lg text-slate-600 hover:bg-slate-100 transition-colors flex items-center gap-1">
+          <!-- Top Navigation with Real Actions (Responsive md+ adapt) -->
+          <nav class="hidden md:flex items-center gap-1 lg:gap-1.5 text-xs lg:text-[13px] xl:text-[14px]">
+            <button @click="openJobManagementModal" class="px-2 py-1 lg:px-2.5 lg:py-1.5 rounded-lg text-slate-600 hover:bg-slate-100 transition-colors flex items-center gap-1">
               <span>职位管理</span>
-              <span class="text-[11px] font-bold px-1.5 py-0.2 bg-slate-200/80 rounded-full">{{ jobs.length }}</span>
+              <span class="text-[10px] font-bold px-1.5 py-0.2 bg-slate-200/80 rounded-full">{{ jobs.length }}</span>
             </button>
-            <button @click="currentTab = 'all'; fetchCandidates()" class="px-3 py-1.5 rounded-lg bg-[#e6faf6] text-[#008770] font-semibold flex items-center gap-1">
+            <button @click="currentTab = 'all'; fetchCandidates()" class="px-2 py-1 lg:px-2.5 lg:py-1.5 rounded-lg bg-[#e6faf6] text-[#008770] font-semibold flex items-center gap-1">
               <span>简历投递/初筛</span>
             </button>
-            <button @click="openChatCenter()" class="px-3 py-1.5 rounded-lg text-slate-600 hover:bg-slate-100 transition-colors flex items-center gap-1 cursor-pointer" title="打开候选人沟通中心">
+            <button @click="openChatCenter()" class="px-2 py-1 lg:px-2.5 lg:py-1.5 rounded-lg text-slate-600 hover:bg-slate-100 transition-colors flex items-center gap-1 cursor-pointer" title="打开候选人沟通中心">
               <span>候选人沟通</span>
               <span class="w-1.5 h-1.5 rounded-full bg-[#00B395]"></span>
             </button>
-            <button @click="openInterviewModal" class="px-3 py-1.5 rounded-lg text-slate-600 hover:bg-slate-100 transition-colors flex items-center gap-1">
+            <button @click="openInterviewModal" class="px-2 py-1 lg:px-2.5 lg:py-1.5 rounded-lg text-slate-600 hover:bg-slate-100 transition-colors flex items-center gap-1">
               <span>面试日程</span>
-              <span class="text-[11px] font-bold px-1.5 py-0.2 bg-slate-200/80 rounded-full">{{ interviews.length }}</span>
+              <span class="text-[10px] font-bold px-1.5 py-0.2 bg-slate-200/80 rounded-full">{{ interviews.length }}</span>
             </button>
-            <button @click="openTalentPoolModal" class="px-3 py-1.5 rounded-lg text-slate-600 hover:bg-slate-100 transition-colors flex items-center gap-1">
+            <button @click="openTalentPoolModal" class="px-2 py-1 lg:px-2.5 lg:py-1.5 rounded-lg text-slate-600 hover:bg-slate-100 transition-colors flex items-center gap-1">
               <span>人才公海</span>
-              <span class="text-[11px] font-bold px-1.5 py-0.2 bg-slate-200/80 rounded-full">{{ talentPool.length }}</span>
+              <span class="text-[10px] font-bold px-1.5 py-0.2 bg-slate-200/80 rounded-full">{{ talentPool.length }}</span>
             </button>
           </nav>
         </div>
@@ -143,7 +138,7 @@ frontend_code = r'''<!DOCTYPE html>
         <!-- Search, AI Diagnostics, Model Capsule & Actions -->
         <div class="flex items-center gap-3">
           <!-- Search Box -->
-          <div class="relative hidden lg:flex items-center w-60">
+          <div class="relative hidden xl:flex items-center w-52 2xl:w-60">
             <svg class="icon w-4 h-4 absolute left-3 text-slate-400 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
             <input v-model="searchQuery" @input="debouncedSearch"
               class="w-full pl-9 pr-7 py-1.5 h-9 bg-slate-100/90 rounded-full text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:bg-white focus:ring-1 focus:ring-[#00B395] transition-all"
@@ -279,23 +274,25 @@ frontend_code = r'''<!DOCTYPE html>
                   <svg class="icon w-3.5 h-3.5 text-slate-400 transition-transform" :class="{'rotate-180': showJobDropdown}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
                 </button>
 
-                <!-- Floating Dropdown (Not Clipped!) -->
+                <!-- Floating Dropdown (Responsive Left-Aligned: Prevents Left Clipping) -->
                 <div v-if="showJobDropdown"
-                  class="absolute right-0 top-11 w-72 bg-white rounded-xl shadow-2xl border border-slate-200 p-2 z-50 space-y-1">
-                  <div class="px-2 py-1 text-[11px] font-bold text-slate-400 border-b border-slate-100 flex items-center justify-between">
-                    <span>当前招聘职位列表</span>
-                    <button @click="openCreateJobModal" class="text-[#008770] hover:underline flex items-center gap-0.5">
+                  class="absolute left-0 top-11 w-72 sm:w-80 max-w-[calc(100vw-3rem)] bg-white rounded-xl shadow-2xl border border-slate-200 p-2 z-50 space-y-1 animate-in fade-in zoom-in-95 duration-150">
+                  <div class="px-2.5 py-1.5 text-[11px] font-bold text-slate-400 border-b border-slate-100 flex items-center justify-between">
+                    <span>当前招聘职位列表 ({{ jobs.length }})</span>
+                    <button @click="openCreateJobModal" class="text-[#008770] hover:underline flex items-center gap-0.5 font-semibold cursor-pointer">
                       <span>+ 新建岗位</span>
                     </button>
                   </div>
-                  <div v-for="j in jobs" :key="j.id" @click="selectJob(j.id)"
-                    class="p-2.5 rounded-lg cursor-pointer transition-colors flex items-center justify-between"
-                    :class="currentJobId === j.id ? 'bg-[#e6faf6] text-[#008770] font-semibold' : 'hover:bg-slate-100 text-slate-800'">
-                    <div class="flex flex-col">
-                      <div class="text-xs">{{ j.title }}</div>
-                      <div class="text-[10px] text-slate-400">{{ j.department }} · {{ j.salary }}</div>
+                  <div class="max-h-64 overflow-y-auto space-y-1 py-0.5">
+                    <div v-for="j in jobs" :key="j.id" @click="selectJob(j.id)"
+                      class="p-2.5 rounded-lg cursor-pointer transition-colors flex items-center justify-between gap-2"
+                      :class="currentJobId === j.id ? 'bg-[#e6faf6] text-[#008770] font-semibold ring-1 ring-[#00B395]/30' : 'hover:bg-slate-100 text-slate-800'">
+                      <div class="flex flex-col min-w-0 pr-1">
+                        <div class="text-xs font-medium truncate">{{ j.title }}</div>
+                        <div class="text-[10px] text-slate-400 truncate">{{ j.department }} · {{ j.salary }}</div>
+                      </div>
+                      <svg v-if="currentJobId === j.id" class="w-4 h-4 text-[#008770] flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
                     </div>
-                    <svg v-if="currentJobId === j.id" class="w-4 h-4 text-[#008770]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
                   </div>
                 </div>
               </div>
@@ -623,6 +620,16 @@ frontend_code = r'''<!DOCTYPE html>
                       class="font-medium px-2 py-0.5 rounded-md"
                       :class="tag.startsWith('✓') ? 'bg-[#e6faf6] text-[#008770] border border-[#00B395]/20' : (tag.startsWith('✗') ? 'bg-red-50 text-red-700 border border-red-200' : 'bg-slate-200/70 text-slate-700')">
                       {{ tag }}
+                    </span>
+                    <span v-if="c.deep_audit?.risk_warnings?.length"
+                      class="font-bold px-2 py-0.5 rounded-md bg-amber-50 text-amber-800 border border-amber-300 flex items-center gap-1"
+                      title="AI 尽调探查到疑似履历破绽或水分">
+                      ⚠️ 尽调存疑 ({{ c.deep_audit.risk_warnings.length }}项)
+                    </span>
+                    <span v-else-if="c.deep_audit?.verified_highlights?.length"
+                      class="font-bold px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-300 flex items-center gap-1"
+                      title="AI 尽调交叉取证全量保真">
+                      ✓ 经尽调核实验真
                     </span>
                   </div>
 
@@ -1036,6 +1043,84 @@ frontend_code = r'''<!DOCTYPE html>
             <!-- ══════════════════════════════════════════════════════════ -->
             <div v-else-if="detailTab === 'ai'" class="p-6 space-y-5">
               
+              <!-- ══════════════════════════════════════════════════════════ -->
+              <!-- NEW: AI 资深猎头深度尽调与测谎痕迹 (Agent ReAct 调查轨迹) ── -->
+              <!-- ══════════════════════════════════════════════════════════ -->
+              <div v-if="currentDetail.deep_audit" class="bg-white rounded-2xl p-5 space-y-4 border border-slate-200 shadow-xs">
+                <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                  <div class="flex items-center gap-2">
+                    <span class="text-lg">🕵️</span>
+                    <div>
+                      <h3 class="text-xs font-bold text-slate-900">AI 资深招聘尽调与测谎痕迹（ReAct 智能体调查档案）</h3>
+                      <p class="text-[11px] text-slate-500 mt-0.5">跨时间线交叉比对 · 外链技术资产真伪探查 · 项目水分挤压</p>
+                    </div>
+                  </div>
+                  <span class="text-[11px] font-bold text-[#5039f6] bg-[#edeaff] px-2.5 py-1 rounded-full border border-[#5039f6]/20">
+                    自主尽调闭环
+                  </span>
+                </div>
+
+                <!-- 1. 风险警示 (Risk Warnings) -->
+                <div v-if="currentDetail.deep_audit.risk_warnings && currentDetail.deep_audit.risk_warnings.length" class="space-y-1.5">
+                  <div class="text-xs font-bold text-amber-800 flex items-center gap-1.5">
+                    <span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
+                    <span>⚠️ 履历真实性与打假风险预警：</span>
+                  </div>
+                  <div class="space-y-1.5 pl-3 border-l-2 border-amber-300">
+                    <div v-for="(rw, rwIdx) in currentDetail.deep_audit.risk_warnings" :key="rwIdx"
+                      class="text-xs text-amber-900 bg-amber-50/90 p-2.5 rounded-lg border border-amber-200/80 leading-relaxed font-medium">
+                      {{ rw }}
+                    </div>
+                  </div>
+                </div>
+
+                <!-- 2. 实名核实亮点 (Verified Highlights) -->
+                <div v-if="currentDetail.deep_audit.verified_highlights && currentDetail.deep_audit.verified_highlights.length" class="space-y-1.5">
+                  <div class="text-xs font-bold text-emerald-800 flex items-center gap-1.5">
+                    <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                    <span>✓ 官方资质与工具链核验实锤：</span>
+                  </div>
+                  <div class="space-y-1.5 pl-3 border-l-2 border-emerald-300">
+                    <div v-for="(vh, vhIdx) in currentDetail.deep_audit.verified_highlights" :key="vhIdx"
+                      class="text-xs text-emerald-900 bg-emerald-50/90 p-2.5 rounded-lg border border-emerald-200/80 leading-relaxed font-medium">
+                      {{ vh }}
+                    </div>
+                  </div>
+                </div>
+
+                <!-- 3. ReAct 完整调查时间线日志 (Trace Logs) -->
+                <div v-if="currentDetail.deep_audit.investigation_trace && currentDetail.deep_audit.investigation_trace.length" class="space-y-2 pt-1">
+                  <div class="text-xs font-bold text-slate-800 flex items-center justify-between">
+                    <span class="flex items-center gap-1.5">
+                      <svg class="w-3.5 h-3.5 text-[#008770]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                      <span>智能体自主探查与反思时间线轨迹：</span>
+                    </span>
+                    <button @click="showTraceLog = !showTraceLog" class="text-[11px] text-[#008770] hover:underline font-medium cursor-pointer">
+                      {{ showTraceLog ? '收起日志 ▲' : '展开完整尽调日志 ▼' }}
+                    </button>
+                  </div>
+                  <div v-show="showTraceLog" class="bg-slate-900 text-slate-200 rounded-xl p-3.5 font-mono text-[11px] leading-relaxed space-y-1.5 max-h-60 overflow-y-auto border border-slate-800 shadow-inner">
+                    <div v-for="(step, sIdx) in currentDetail.deep_audit.investigation_trace" :key="sIdx" class="flex items-start gap-2">
+                      <span class="text-[#00C5A8] font-bold select-none">&gt;</span>
+                      <span class="whitespace-pre-wrap">{{ step }}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- 4. 靶向面试重点 (Targeted Interview Focus) -->
+                <div v-if="currentDetail.deep_audit.targeted_interview_focus && currentDetail.deep_audit.targeted_interview_focus.length" class="space-y-1.5 pt-1">
+                  <div class="text-xs font-bold text-slate-800 flex items-center gap-1">
+                    <span>🎯 面试官重点防线与攻防要点：</span>
+                  </div>
+                  <div class="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-1.5 text-xs text-slate-700">
+                    <div v-for="(tf, tfIdx) in currentDetail.deep_audit.targeted_interview_focus" :key="tfIdx" class="flex items-start gap-2">
+                      <span class="text-[#5039f6] font-bold">▶</span>
+                      <span>{{ tf }}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               <!-- 5-Dimension Radar Score -->
               <div class="bg-white rounded-2xl p-5 space-y-3.5 border border-slate-200 shadow-xs">
                 <div class="flex items-center justify-between">
@@ -1677,7 +1762,7 @@ frontend_code = r'''<!DOCTYPE html>
       </div>
     </div>
 
-    <!-- MODAL 5: AI Diagnostics Full Report Modal -->
+    <!-- MODAL 5: AI Diagnostics Modal (智能招聘全景动态诊断报告) -->
     <div v-if="showDiagnosticsModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
       <div class="bg-white rounded-2xl max-w-xl w-full p-6 shadow-2xl space-y-4 border border-slate-200">
         <div class="flex items-center justify-between border-b border-slate-100 pb-3">
@@ -1686,8 +1771,8 @@ frontend_code = r'''<!DOCTYPE html>
               <svg class="icon w-4 h-4 text-[#5039f6]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l2.4 7.2L22 12l-7.6 2.8L12 22l-2.4-7.2L2 12l7.6-2.8z"/></svg>
             </div>
             <div>
-              <h3 class="text-sm font-bold text-slate-900">AI 招聘全景智能诊断报告</h3>
-              <p class="text-[10px] text-slate-400">基于岗位JD硬性门槛与候选人全量画像实时推算</p>
+              <h3 class="text-sm font-bold text-slate-900">AI 招聘全景动态诊断报告</h3>
+              <p class="text-[10px] text-slate-400">基于当前岗位真实候选人画像动态推演 · {{ diagnosticsData?.generated_at || '刚刚更新' }}</p>
             </div>
           </div>
           <button @click="showDiagnosticsModal = false" class="text-slate-400 hover:text-slate-700 cursor-pointer">
@@ -1695,32 +1780,48 @@ frontend_code = r'''<!DOCTYPE html>
           </button>
         </div>
 
-        <div class="grid grid-cols-3 gap-3">
-          <div class="p-3 bg-slate-50 rounded-xl text-center border border-slate-100">
-            <div class="text-2xl font-bold text-[#008770]">{{ diagnosticsData?.health_score || 92 }}</div>
-            <div class="text-[10px] text-slate-500 font-medium">招聘健康度评分</div>
-          </div>
-          <div class="p-3 bg-slate-50 rounded-xl text-center border border-slate-100">
-            <div class="text-2xl font-bold text-[#5039f6]">{{ diagnosticsData?.high_match_rate || '50%' }}</div>
-            <div class="text-[10px] text-slate-500 font-medium">高匹配画像比例</div>
-          </div>
-          <div class="p-3 bg-slate-50 rounded-xl text-center border border-slate-100">
-            <div class="text-2xl font-bold text-red-600">{{ diagnosticsData?.rejection_rate || '25%' }}</div>
-            <div class="text-[10px] text-slate-500 font-medium">硬性门槛拦截率</div>
-          </div>
+        <div v-if="diagnosticsLoading" class="py-12 flex flex-col items-center justify-center space-y-3">
+          <div class="w-8 h-8 border-3 border-[#00B395] border-t-transparent rounded-full animate-spin"></div>
+          <div class="text-xs font-bold text-slate-700">AI 正在实时分析当前人才库全景数据与策略建议...</div>
+          <div class="text-[11px] text-slate-400">实时测算高潜储备、门槛拦截率与薪资拟合区间</div>
         </div>
 
-        <div class="bg-slate-50 rounded-xl p-4 space-y-2 border border-slate-100">
-          <h4 class="text-xs font-bold text-slate-800">AI 深度洞察与策略建议：</h4>
-          <ul class="space-y-1.5 text-xs text-slate-700">
-            <li v-for="(insight, idx) in (diagnosticsData?.insights || [])" :key="idx" class="flex items-start gap-1.5">
-              <span class="text-[#008770] font-bold">•</span>
-              <span>{{ insight }}</span>
-            </li>
-          </ul>
-        </div>
+        <template v-else>
+          <div class="grid grid-cols-3 gap-3">
+            <div class="p-3 bg-slate-50 rounded-xl text-center border border-slate-100">
+              <div class="text-2xl font-bold text-[#008770]">{{ diagnosticsData?.health_score || 92 }}</div>
+              <div class="text-[10px] text-slate-500 font-medium">招聘健康度评分</div>
+            </div>
+            <div class="p-3 bg-slate-50 rounded-xl text-center border border-slate-100">
+              <div class="text-2xl font-bold text-[#5039f6]">{{ diagnosticsData?.high_match_rate || '50%' }}</div>
+              <div class="text-[10px] text-slate-500 font-medium">高匹配画像比例</div>
+            </div>
+            <div class="p-3 bg-slate-50 rounded-xl text-center border border-slate-100">
+              <div class="text-2xl font-bold text-red-600">{{ diagnosticsData?.rejection_rate || '25%' }}</div>
+              <div class="text-[10px] text-slate-500 font-medium">硬性门槛拦截率</div>
+            </div>
+          </div>
 
-        <div class="pt-2 flex items-center justify-end">
+          <div class="bg-slate-50 rounded-xl p-4 space-y-2 border border-slate-100">
+            <h4 class="text-xs font-bold text-slate-800 flex items-center justify-between">
+              <span>AI 实时动态洞察与管理策略建议：</span>
+              <span class="text-[10px] font-normal text-slate-400">样本量: {{ diagnosticsData?.total_screened || 0 }} 人</span>
+            </h4>
+            <ul class="space-y-2 text-xs text-slate-700">
+              <li v-for="(insight, idx) in (diagnosticsData?.insights || [])" :key="idx" class="flex items-start gap-2 bg-white p-2.5 rounded-lg border border-slate-200/60 shadow-2xs">
+                <span class="text-[#008770] font-bold text-sm leading-none">•</span>
+                <span class="leading-relaxed">{{ insight }}</span>
+              </li>
+            </ul>
+          </div>
+        </template>
+
+        <div class="pt-2 flex items-center justify-between border-t border-slate-100">
+          <button @click="refreshDiagnostics()" :disabled="diagnosticsLoading"
+            class="h-8 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold flex items-center gap-1.5 cursor-pointer transition-colors disabled:opacity-50">
+            <svg class="w-3.5 h-3.5" :class="{'animate-spin': diagnosticsLoading}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+            <span>重新诊断</span>
+          </button>
           <button @click="showDiagnosticsModal = false" class="h-8 px-4 bg-[#00B395] hover:bg-[#008770] text-white rounded-lg text-xs font-bold shadow-sm cursor-pointer">
             我知道了
           </button>
@@ -2223,7 +2324,8 @@ frontend_code = r'''<!DOCTYPE html>
         // Modals state
         const showDetailDrawer = ref(false);
         const currentDetail = ref(null);
-        const detailTab = ref('resume'); // 'resume' (完整原版简历) | 'ai' (AI评估报告)
+        const detailTab = ref('resume');
+        const showTraceLog = ref(true); // 'resume' (完整原版简历) | 'ai' (AI评估报告)
         const openedFromChat = ref(false); // 标记是否从微聊沟通窗口中唤起简历
         const regeneratingQuestions = ref(false);
         const newSkillInput = ref('');
@@ -2669,15 +2771,23 @@ frontend_code = r'''<!DOCTYPE html>
           }
         };
 
-        // AI Diagnostics Report
+        // AI Diagnostics Report (动态实时分析)
+        const diagnosticsLoading = ref(false);
         const openDiagnosticsModal = async () => {
           showDiagnosticsModal.value = true;
+          await refreshDiagnostics();
+        };
+
+        const refreshDiagnostics = async () => {
+          diagnosticsLoading.value = true;
           try {
             const res = await fetch(`/api/diagnostics?job_id=${currentJobId.value}`);
             const json = await res.json();
             if (json.ok) diagnosticsData.value = json.data;
           } catch (e) {
             console.error('Fetch diagnostics error:', e);
+          } finally {
+            diagnosticsLoading.value = false;
           }
         };
 
@@ -3054,6 +3164,7 @@ frontend_code = r'''<!DOCTYPE html>
           showDetailDrawer,
           currentDetail,
           detailTab,
+          showTraceLog,
           openedFromChat,
           openDetailFromChat,
           returnToChat,
@@ -3087,6 +3198,8 @@ frontend_code = r'''<!DOCTYPE html>
           showTalentPoolModal,
           talentPool,
           showDiagnosticsModal,
+          diagnosticsLoading,
+          refreshDiagnostics,
           diagnosticsData,
           showJobManagementModal,
           showCreateJobModal,

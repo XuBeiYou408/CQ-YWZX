@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Optional
 import uuid
 
 from app.core.llm_client import generate_chat
+from app.core.recruitment_agent import RecruitmentAgent
 
 # 学历/院校层次数字映射
 EDU_RANK: Dict[str, int] = {
@@ -377,10 +378,29 @@ async def screen_resume_full(
             "apply_time": apply_time,
             "resume_text": resume_text,
             "raw_resume": resume_text,
+            "deep_audit": {
+                "investigation_trace": [
+                    "【阶段 1: 极速守门员 (Workflow)】启动硬性门槛快速筛查...",
+                    f"  ✗ 触发拦截：{'; '.join(hard_gate['fail_reasons'])}",
+                    "【初筛定案】未达标刚性门槛，自动移入淘汰库（未消耗模型推理Token）",
+                ],
+                "risk_warnings": [f"硬性门槛拦截：{r}" for r in hard_gate["fail_reasons"]],
+                "verified_highlights": [],
+                "targeted_interview_focus": ["建议暂不进入面试轮次"],
+            },
         }
 
-    # 硬性校验通过，调用大模型深度初筛
-    llm_eval = await llm_screen_resume(resume_text, job, cfg)
+    # 硬性校验通过，启动资深技术招聘尽调 Agent (ReAct 主循环)
+    enable_agent = cfg.get("enable_deep_agent", True)
+    if enable_agent:
+        try:
+            agent = RecruitmentAgent(cfg)
+            llm_eval = await agent.run_deep_screening(resume_text, job, hard_gate)
+        except Exception:
+            llm_eval = await llm_screen_resume(resume_text, job, cfg)
+    else:
+        llm_eval = await llm_screen_resume(resume_text, job, cfg)
+
     score = llm_eval.get("score", 50)
     tier = llm_eval.get("tier", "C")
     label = llm_eval.get("label", "待复核")
@@ -410,4 +430,10 @@ async def screen_resume_full(
         "apply_time": apply_time,
         "resume_text": resume_text,
         "raw_resume": resume_text,
+        "deep_audit": llm_eval.get("deep_audit", {
+            "investigation_trace": ["【阶段 1: 极速守门员 (Workflow)】学历、工龄硬性门槛达标通过。"],
+            "risk_warnings": [],
+            "verified_highlights": ["✓ 硬门槛全量校验通过"],
+            "targeted_interview_focus": ["全面考查全栈技术综合素养"],
+        }),
     }

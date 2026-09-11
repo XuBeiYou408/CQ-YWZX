@@ -72,6 +72,24 @@ PRESET_JOBS: List[Dict[str, Any]] = [
 PRESET_CANDIDATES: List[Dict[str, Any]] = [
     {
         "id": "preset-001",
+        "deep_audit": {
+        "investigation_trace": [
+                "【阶段 1: 感知 (Perceive)】扫描到候选人履历：浙大985硕士，自称8年全栈架构，附带腾讯大厂经历与微前端开源项目。",
+                "【阶段 2: 规划 (Plan)】启动 timeline_cross_auditor 进行履历起止时间交叉验证；启动 project_substance_evaluator 核实量化指标。",
+                "【阶段 3: 行动 (Act)】工具反馈：时间线逻辑自洽（2018年毕业，字节3年+腾讯近4年无缝衔接）；项目含金量得分 95分，命中微前端沙箱、千万级QPS、BFF高可用等多项硬核指标。",
+                "【阶段 4: 反思 (Reflect)】综合核验无任何虚假包装，技术深度与大厂主导工程完全吻合，评定为顶尖 S 级。"
+        ],
+        "risk_warnings": [],
+        "verified_highlights": [
+                "✓ 浙大985硕士学历真实，8年工龄连贯无断档",
+                "✓ 命中微前端沙箱/千万级QPS等深度指标，自研度95%+",
+                "✓ 经实名背景调查，字节+腾讯履历全部属实"
+        ],
+        "targeted_interview_focus": [
+                "建议重点考查微应用预加载策略与微前端容器崩溃时的容灾切流中枢",
+                "考查Node.js在日均2.8亿次请求场景下的EventLoop深度监控与内存调优"
+        ]
+},
         "name": "林远志",
         "job_id": "fe-fullstack",
         "age": 31,
@@ -199,6 +217,25 @@ PRESET_CANDIDATES: List[Dict[str, Any]] = [
     },
     {
         "id": "preset-002",
+        "deep_audit": {
+        "investigation_trace": [
+                "【阶段 1: 感知 (Perceive)】华南理工985统招，5年研发经历，主攻Next.js/React与出海性能调优。",
+                "【阶段 2: 规划 (Plan)】启动时间线自洽性工具与外部性能指标评测工具。",
+                "【阶段 3: 行动 (Act)】工具反馈：时间线无断档；SSR核心指标命中LCP/FCP优化，出海首屏加载提升40%，有真实量化指标。",
+                "【阶段 4: 反思 (Reflect)】工程实操能力扎实，微前端经验略少于全栈期望，但技术底子极好，定级 A 级。"
+        ],
+        "risk_warnings": [
+                "⚠️ 微前端与复杂全栈中间层经验相对较少，偏向现代化前端工程与性能优化"
+        ],
+        "verified_highlights": [
+                "✓ 华南理工985统招学历属实，5年资历连贯",
+                "✓ 出海电商性能优化有确凿量化指标（首屏提升40%）"
+        ],
+        "targeted_interview_focus": [
+                "面试重点考查复杂弱网环境下的前端容灾降级与离线包架构",
+                "考察其对微前端沙箱原理的理解，评估其架构拓展潜力"
+        ]
+},
         "name": "陈书婷",
         "job_id": "fe-fullstack",
         "age": 28,
@@ -308,6 +345,25 @@ PRESET_CANDIDATES: List[Dict[str, Any]] = [
     },
     {
         "id": "preset-003",
+        "deep_audit": {
+        "investigation_trace": [
+                "【阶段 1: 感知 (Perceive)】电子科大985本科，6年资历，美团经历，声称精通Flutter跨端与React。",
+                "【阶段 2: 规划 (Plan)】启动 project_substance_evaluator 评定技能重合度，启动 timeline_cross_auditor 校验经历。",
+                "【阶段 3: 行动 (Act)】工具反馈：近3年重心全面转向Flutter跨端与C++，React仅占早期经历；项目描述偏业务迭代，缺乏底层架构改造细节。",
+                "【阶段 4: 反思 (Reflect)】与本岗位‘资深React/Node全栈’要求存在明显技能栈偏离，且期望薪资偏高，触发反思下调评级至 B 级待复核。"
+        ],
+        "risk_warnings": [
+                "⚠️ 技术栈偏离：近3年主攻移动端跨端开发，Web前端/Node.js全栈存在技术生疏风险",
+                "⚠️ 项目量化指标不足，多为业务层封装"
+        ],
+        "verified_highlights": [
+                "✓ 电子科大985学历真实，美团大厂履历属实"
+        ],
+        "targeted_interview_focus": [
+                "面试重点考查其是否具备将跨端技术栈快速切换回React18/Node全栈的能力",
+                "现场手写React Fiber与并发更新原理，验证Web基础是否扎实"
+        ]
+},
         "name": "赵晨浩",
         "job_id": "fe-fullstack",
         "age": 29,
@@ -414,6 +470,22 @@ PRESET_CANDIDATES: List[Dict[str, Any]] = [
     },
     {
         "id": "preset-004",
+        "deep_audit": {
+        "investigation_trace": [
+                "【阶段 1: 极速守门员 (Workflow)】启动刚性门槛匹配：检测到学历为大专（要求本科以上）、院校为职业学院（要求985/211）、工龄仅1年（要求5年以上）。",
+                "【阶段 2: 拦截裁决】3 项硬性条件全量不达标，触发硬门槛直接熔断机制。",
+                "【初筛定案】自动判定为 D 级不予通过，移入淘汰库，未消耗任何大模型推理算力。"
+        ],
+        "risk_warnings": [
+                "⚠️ 学历不达标（大专未达到本科要求）",
+                "⚠️ 院校层次不达标（高职院校未达到985/211要求）",
+                "⚠️ 工作年限严重不足（1年未满足5年要求）"
+        ],
+        "verified_highlights": [],
+        "targeted_interview_focus": [
+                "暂不建议安排面试，可建议转投初级前端助理实习生岗位"
+        ]
+},
         "name": "张铭",
         "job_id": "fe-fullstack",
         "age": 23,
