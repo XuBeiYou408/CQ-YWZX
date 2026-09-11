@@ -97,6 +97,7 @@
 │   └── index.html               # 现代化销售战区参谋驾驶舱 SPA (Vue 3 + Tailwind CSS + Stitch 1:1)
 ├── data/                        # SQLite 本地运行时数据库目录（自动创建，已加入 .gitignore）
 │   └── sales_reports.db         # 核心数据库文件
+├── exports/                     # 导出产物目录 (Word 周报台账 / Markdown 决策内参)
 ├── .gitignore                   # 版本控制忽略清单
 ├── requirements.txt             # 项目核心依赖清单
 ├── 一键启动.bat                 # Windows 一键启动与自检脚本

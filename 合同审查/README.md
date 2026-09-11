@@ -1,8 +1,29 @@
 # 合同审查 AGENT · 企业级合同合规智能审查系统 (v2.0)
 
-基于 **FastAPI + Vue 3 + Tailwind CSS + OOXML Lite + LM Studio / 端侧大模型** 的企业级合同合规智能审查、风险诊断与原生 Word 修订批注导出系统。
+基于 **FastAPI + Vue 3 + Tailwind CSS + OOXML Lite + LM Studio / 端侧大模型** 的企业级合同合规智能审查、风险诊断与原生 Word 修订批注导出系统。同时提供 **WorkBuddy stdio MCP 工具**（`contract-reviewer`），在 WorkBuddy 对话中拖入合同即可直接审查。
 
 专为解决企业合同审查中**商业秘密上云泄露风险、传统大模型审查缺乏法律事实与判例支撑、审查意见停留在纯文本无法直接回填到 Word 原文档、以及审查标准不统一**等核心业务痛点而设计。
+
+> 新电脑部署见 `../部署指南.md`。本项目与 kb-tool 互相独立，可单独部署。
+
+---
+
+## 🤖 WorkBuddy MCP 工具（contract-reviewer）
+
+`mcp_server.py` 提供共 **10 个工具**，分双轨运行：
+
+| 轨道 | 工具 | 说明 |
+|---|---|---|
+| 轻量轨（纯规则引擎，零 LLM 依赖，秒级） | `scan_clause_risk` `lookup_statute` `search_precedent` `detect_contract_type` `get_clause_rewrite` | 实现 `contract/mcp_tools.py`，不依赖 LM Studio |
+| 完整轨（LLM 深度审查，需 LM Studio） | `review_contract` `review_contract_file` `export_annotated_docx` `draft_new_contract` | 返回审查摘要 + 原文件同目录自动生成 Word 红线批注版 |
+| 诊断 | `ping` | 环境体检验测（LM Studio 在线状态 / 可用模型 / 处理指引） |
+
+**一键接入**：进入本项目文件夹双击 `一键安装到WorkBuddy.bat`（等效
+`python install_to_workbuddy.py`），幂等完成 venv/依赖安装、mcp.json 注册、
+Skill 部署（`deploy/skills/contract-review`）、用户记忆路由规则写入，以及
+**端到端体检**（真实启动 MCP → 握手计时 → 列工具 → 调 `ping` 环境检测）。
+可选参数 `--mcp-only`、`--no-verify`。安装后唯一手动步骤：WorkBuddy 连接器页对
+`contract-reviewer` 点一次「信任」。
 
 ---
 
@@ -59,24 +80,24 @@ flowchart TD
    - 风险分级雷达标记：高危（红色）、中危（橙色）、低危（黄色）、放行（绿色），风险要点与原位条款智能关联。
    - 深度纯净清洗机制：彻底剔除前端多余的 Markdown、反引号、代码块残留，阅读体验丝滑清爽。
 
-2. **100% 物理隔离与本地隐私计算 (Zero Data Leakage)**：
+3. **100% 物理隔离与本地隐私计算 (Zero Data Leakage)**：
    - 专为企业核心商业合同、投资协议、保密协议打造。
    - 默认对接 `LM Studio` / 本地端侧推理服务（默认接入 `http://127.0.0.1:1234/v1`），审查全过程数据不离开本地物理设备。
 
-3. **16 大类专项审查门禁与深水区条款深挖**：
+4. **16 大类专项审查门禁与深水区条款深挖**：
    - 覆盖**股权转让与投资合伙、业绩对赌与补偿、反稀释保护、商业租赁、软件开发交付、买卖购销、劳动用工与保密竞业**等核心场景。
    - 自动识别隐蔽性极强的深水区免责套路、无限连带责任、违约金倒挂等不平等条款。
 
-4. **20 项最高人民法院/裁判文书网法条判例知识库**：
+5. **32 项最高人民法院/裁判文书网法条判例知识库**：
    - 融合《中华人民共和国民法典》、《最高人民法院关于适用〈民法典〉合同编通则若干问题的解释》以及代表性司法裁判指引。
    - 审查意见自动附带**司法案号**与**裁判规则**（例如违约金过高司法酌减 30% 裁判规则、业绩对赌回购认定标准等），权威可信。
 
-5. **真正的 Word 原生修订与批注导出 (OOXML Native Track Changes & Comments)**：
+6. **真正的 Word 原生修订与批注导出 (OOXML Native Track Changes & Comments)**：
    - 业界突破性轻量级方案，无需配置复杂的外部渲染服务或依赖 Office 进程。
    - 基于纯 Python 实现的 OOXML 语法树操作，将审查修改建议直接转换为 Word 原生**删除线 (`<w:del>`)、插入线 (`<w:ins>`) 与边栏气泡批注 (`<w:comment>`)**。
    - 导出的 Word 文档在 Microsoft Word、WPS 中打开时，法务可直接点击“接受所有修订”或“逐项审阅批注”，无缝嵌入企业流转协同。
 
-6. **三国立场切换与合同起草功能**：
+7. **三国立场切换与合同起草功能**：
    - 支持**【偏向甲方 (买方/委托方)】**、**【偏向乙方 (卖方/服务方)】**、**【客观中立 (法官/公证视角)】**三种立场深度审视。
    - 支持提供需求大纲一键自动起草严密标准的合同样本。
 
@@ -86,9 +107,14 @@ flowchart TD
 
 ```
 合同审查/
-├── run.py                         # 系统一键启动入口 (FastAPI + Uvicorn + 自动打开浏览器)
+├── mcp_server.py                  # [MCP] stdio MCP 服务入口（10 工具，握手先行、重库懒加载）
+├── install_to_workbuddy.py        # [MCP] WorkBuddy 一键安装脚本（venv/注册/Skill/记忆/体检）
+├── 一键安装到WorkBuddy.bat        # [MCP] 双击一键接入 WorkBuddy
+├── deploy/skills/contract-review/SKILL.md   # [MCP] 随项目分发的对话路由路标
+│
+├── run.py                         # [Web] 系统一键启动入口 (FastAPI + Uvicorn + 自动打开浏览器)
+├── 一键启动.bat                   # [Web] Windows 环境双击一键极速启动脚本
 ├── config.py                      # 统一运行时配置文件 (端口 8020 / LM Studio 接入配置)
-├── 一键启动.bat                   # Windows 环境双击一键极速启动脚本
 ├── README.md                      # 系统架构与使用指南
 ├── requirements.txt               # Python 依赖清单
 ├── .env.example                   # 环境变量配置参考范本
@@ -102,6 +128,7 @@ flowchart TD
 │       └── contract.py            # 审查、流式推理、判例检索与 Word 批注导出路由
 │
 ├── contract/                      # 智能体核心算法与风控逻辑层
+│   ├── mcp_tools.py               # [MCP] 轻量轨 5 工具（纯规则引擎，零 LLM 依赖）
 │   ├── agent.py                   # [Agent 核心] 感知→规划→行动→反思四阶段自主闭环状态机
 │   ├── planner.py                 # [规划层] 条款级分诊决策器（deep_dive / quick_scan / skip）
 │   ├── clause_splitter.py         # [感知层] 合同结构化拆条与特征提取引擎
@@ -128,13 +155,15 @@ flowchart TD
 │       └── marked.min.js          # 本地 Markdown 解析脚本
 │
 └── tests/                         # 自动化测试与质量检验套件
-    ├── verify_all.py              # 全链路 5 大核心模块自动化集成测试脚本
+    ├── verify_all.py              # 核心模块自动化集成测试脚本
     ├── test_agent_plan.py         # Agent 规划层单测（评分矛盾裁决、预算裁剪、兜底）
     ├── test_agent_loop_guard.py   # Agent 预算守卫与自愈循环单测
     ├── test_agent_reflect.py      # Agent 反思层单测（法条核查、交叉比对）
+    ├── test_reasoning.py          # 完整轨审查推理链路测试
+    ├── test_stream_debug.py       # 流式输出调试测试
     ├── test_contract_review.py    # 审查逻辑单元测试
     ├── test_annotator.py          # Word 批注导出功能验证
-    ├── test_api_endpoints.py      # FastAPI 接口自动化用例
+    ├── test_api.py / test_api_endpoints.py   # FastAPI 接口自动化用例
     ├── test_lmstudio_conn.py      # LM Studio 本地服务连通性测试
     └── test_universal_audit.py    # 通用风控规则测试
 ```
@@ -177,7 +206,7 @@ python tests/verify_all.py
 
 执行后将运行以下 5 大测试项并报告结果：
 1. `[1]` 验证 16 类专项门禁与条款级深水区门禁路由
-2. `[2]` 验证判例库与检索召回 (20 项司法判例)
+2. `[2]` 验证判例库与检索召回 (32 项司法判例)
 3. `[3]` 验证 Word 原生 Track Changes 批注导出 (带风险条款标注)
 4. `[4]` 验证 Word 原生批注导出 (无风险绿标放行)
 5. `[5]` 验证 FastAPI 核心接口与静态前端挂载

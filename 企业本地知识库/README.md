@@ -58,28 +58,31 @@ flowchart TD
 ## 📂 项目目录结构
 
 ```
-rag-enterprise/
+企业本地知识库/
 ├── run.py                         # FastAPI 服务启动入口 (Uvicorn)
 ├── config.py                      # 环境变量读取 (Firecrawl / DeepSeek / 路径预检)
 ├── README.md                      # [v3.0 UPGRADED] 项目最新架构与使用说明文档
 ├── requirements.txt               # 第三方依赖库列表 (已包含 firecrawl-py / langchain)
-├── .env.example                   # 环境变量安全配置范本 (已脱敏)
+├── .env / .env.example            # 环境变量配置（.env.example 为脱敏范本）
+├── start.bat / 一键启动.bat       # 自举环境并拉起服务
+├── 一键安装与修复环境.bat         # 依赖环境安装/修复
+├── test_agent.py                  # Agent 独立调试脚本
 │
 ├── app/                           # FastAPI 服务应用层
 │   ├── main.py                    # FastAPI 实例配置与前端 dist 静态目录挂载
 │   ├── schemas.py                 # Pydantic 接口入参校验模型 (支持 provider & model_name 校验)
 │   └── routes/
-│       └── ask.py                 # 问答/流式 SSE /本地模型探测/评估结果全套路由
+│       ├── ask.py                 # 问答/流式 SSE /本地模型探测/评估结果全套路由
+│       └── documents.py           # 文档入库与管理路由
 │
-├── frontend/                      # [v3.0 UPGRADED] Vue 3 + Pinia + Element Plus 前端生产项目
-│   ├── dist/                      # 编译打包构建产物 (开箱即用直接运行)
+├── frontend/                      # [v3.0 UPGRADED] Vue 3 + Pinia + Element Plus 前端源码项目
 │   ├── src/
 │   │   ├── api/                   # 接口请求封装 (含 SSE 流解析、端云模式透传)
 │   │   ├── stores/                # Pinia 状态中心 (chat.js 记忆隔离, model.js 端云配置)
 │   │   ├── views/                 # 页面视图 (ChatView, HistoryView, EvaluationView, SettingsView 模型管理)
 │   │   └── components/            # DeepSeek 思考流卡片、评分卡片、Sidebar 导航
 │   ├── package.json
-│   └── vite.config.js
+│   └── vite.config.js             # ⚠️ 需先构建: cd frontend && npm install && npm run build 生成 dist/
 │
 ├── rag/                           # 核心算法与智能体逻辑层
 │   ├── agent.py                   # [v3.0] 动态 ReAct Agent 装配中心与 Strict Format Protocol 防死锁
@@ -91,14 +94,23 @@ rag-enterprise/
 │   ├── embeddings.py              # BGE Embedding 惰性延迟加载器
 │   ├── vector_store.py            # FAISS 向量库增量构建与损坏自愈
 │   ├── retriever.py               # 混合检索 (语义 + BM25 并行重排)
+│   ├── reranker.py                # BGE-Reranker 重排器
+│   ├── splitter.py / loader.py    # 文档切分与多格式解析 (父子块扩展)
+│   ├── dedup.py / rewriter.py     # 召回去重与查询改写
 │   └── tools/                     # 协同工具箱
 │       ├── web_search_tool.py     # Firecrawl 云端主搜 + 本地降级 + 物理熔断器
+│       ├── rag_tool.py            # 知识库召回封装 (xiangliang_and_bm25_zhaohui)
 │       ├── calculator_tool.py     # 沙箱计算器
 │       └── summary_tool.py        # 全局摘要生成器
 │
-└── evaluator/                     # 自动化全链路评测框架
-    ├── test_dataset.py            # 黄金测试数据集自动生成器
-    └── evaluator.py               # 检索层/工程层/生成质量 3 维评估管道
+├── utils/                         # 日志 / 噪声抑制 / 容错
+├── evaluator/                     # 自动化全链路评测框架
+│   ├── test_dataset.py            # 黄金测试数据集自动生成器
+│   └── evaluator.py               # 检索层/工程层/生成质量 3 维评估管道
+└── data/
+    ├── documents/                 # 知识库文档源
+    ├── faiss_db/                  # FAISS 持久化索引
+    └── models/                    # 本地 BGE 模型
 ```
 
 ---
@@ -133,7 +145,7 @@ YUAN_SUCAI_PATH='./data/documents'                 # 文档目录
 ### 2. 前置条件与自举启动说明
 
 - **Python 环境**：建议 **Python 3.11 – 3.13**（安装时勾选 `Add Python to PATH`）。
-- **Node.js 前端环境**：前端基于 Vue 3 + Vite 构建。若本地无 `frontend/dist` 产物，需要 Node.js (v18+) 执行 `cd frontend && npm install && npm run build`（仓库已提交构建产物时可直接开箱运行）。
+- **Node.js 前端环境**：前端基于 Vue 3 + Vite 构建。项目**未附带 `frontend/dist` 构建产物**，首次使用需 Node.js (v18+) 执行 `cd frontend && npm install && npm run build` 生成 dist 后方可开箱运行。
 - **模型支持**：
   - 嵌入与重排模型：系统依赖 BGE 模型（`BAAI/bge-large-zh-v1.5`），启动时默认通过镜像源自动加载；
   - 大模型：需启动 LM Studio（端口 `1234`）或在 `.env` 中配置云端 Key。

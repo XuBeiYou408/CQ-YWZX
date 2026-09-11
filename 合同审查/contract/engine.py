@@ -559,6 +559,57 @@ class ContractReviewEngine:
             logger.error(f"合同起草异常: {e}", exc_info=True)
             raise RuntimeError(f"合同初稿起草失败: {str(e)}")
 
+    async def review_full(
+        self,
+        contract_text: str,
+        contract_type: str = None,
+        client_role: str = "中立合规把关",
+        review_stance: str = "对等平衡",
+        model_name: str = None,
+    ) -> Dict[str, Any]:
+        """
+        非流式完整审查（供 MCP Tool 调用）。
+        纯包装：内部复用 stream_review()，收集全部帧后返回结构化结果。
+        不改动任何现有审查逻辑。
+        返回: {
+            "report": str,          # 完整审查报告 Markdown
+            "draft": str,           # 合规修改初稿
+            "is_perfect": bool,     # 是否合规良好无需修改
+            "contract_type": str,   # 识别出的合同类型
+            "char_count": int,      # 合同字数
+        }
+        """
+        report_parts: List[str] = []
+        draft_text = ""
+        is_perfect = False
+        detected_type = contract_type or ""
+        char_count = 0
+
+        async for frame in self.stream_review(
+            contract_text=contract_text,
+            contract_type=contract_type,
+            client_role=client_role,
+            review_stance=review_stance,
+            model_name=model_name,
+        ):
+            ftype = frame.get("type")
+            if ftype == "status":
+                detected_type = frame.get("detected_type", detected_type)
+                char_count = frame.get("char_count", char_count)
+            elif ftype == "content":
+                report_parts.append(frame.get("delta", ""))
+            elif ftype == "draft":
+                draft_text = frame.get("data", "") or draft_text
+                is_perfect = bool(frame.get("is_perfect", False))
+
+        return {
+            "report": "".join(report_parts).strip(),
+            "draft": draft_text,
+            "is_perfect": is_perfect,
+            "contract_type": detected_type,
+            "char_count": char_count,
+        }
+
     def export_annotated_docx(self, original_text: str, review_report: str, title: str, output_path: str) -> str:
         """调用 DocumentAnnotator 导出带原生批注与修订的 Word 文档"""
         return annotator.generate_annotated_docx(original_text, review_report, title, output_path)
