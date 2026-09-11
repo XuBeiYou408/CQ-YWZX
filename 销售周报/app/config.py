@@ -2,7 +2,6 @@
 全局配置管理模块 - 销售周报自动汇总智能体
 """
 import json
-import os
 from pathlib import Path
 from typing import Any, Dict
 
@@ -24,7 +23,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "lm_studio_url": "http://127.0.0.1:1234/v1",
         "ollama_url": "http://127.0.0.1:11434/v1",
         "model_name": "qwen3.8-27b",
-        "timeout": 60,
+        "timeout": 240,  # 端侧推理模型生成完整内参实测约 2-3 分钟，留足余量
     },
     "cloud_model": {
         "provider": "deepseek",
@@ -81,7 +80,8 @@ def load_config() -> Dict[str, Any]:
         with open(CONFIG_FILE, "r", encoding="utf-8") as f:
             data = json.load(f)
         return _deep_merge(DEFAULT_CONFIG, data)
-    except Exception:
+    except Exception as exc:
+        print(f"[SalesAgent] 配置文件读取失败，已回退默认配置: {exc}")
         return DEFAULT_CONFIG.copy()
 
 

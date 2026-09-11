@@ -11,85 +11,31 @@ from app.config import CLOUD_PRESETS, load_config, save_config
 from app.core.llm_client import generate_chat, get_model_status, test_cloud_connection
 from app.core.parser import extract_text_from_bytes
 from app.core.presets import PRESET_CANDIDATES, PRESET_JOBS
-from app.core.screening import screen_resume_full
+from app.core.screening import (
+    screen_resume_full,
+    rescreen_job_candidates,
+    rescreen_candidate,
+    check_candidate_hard_gates,
+    recall_talent_to_candidates
+)
 
 router = APIRouter()
 
-_runtime_candidates: list = []
-_runtime_jobs: list = []
-_runtime_interviews: list = []
-_runtime_talent_pool: list = []
-_runtime_chat_history: dict = {}
-_runtime_rejections: list = []
-_initialized = False
+from app.core.storage import storage
 
 
 def _ensure_init():
-    global _initialized
-    if not _initialized:
-        _runtime_candidates.extend(copy.deepcopy(PRESET_CANDIDATES))
-        _runtime_jobs.extend(copy.deepcopy(PRESET_JOBS))
-        
-        # 预设面试日程：严格与初始 scheduled 状态的候选人（林远志）对齐 (counts.scheduled == 1)
-        _runtime_interviews.extend([
-            {
-                "id": "iv-001",
-                "candidate_id": "preset-001",
-                "candidate_name": "林远志",
-                "job_title": "资深前端开发 / 全栈工程师",
-                "round": "业务初试 (视频)",
-                "time": "今日 14:30 - 15:30",
-                "interviewer": "架构师 · 张工",
-                "meeting_link": "https://meeting.recruitai.com/room/888-999",
-                "status": "upcoming"
-            }
-        ])
-        
-        # 预设公海人才
-        _runtime_talent_pool.extend([
-            {
-                "id": "pool-001",
-                "name": "孙立强",
-                "age": 30,
-                "experience_years": 7,
-                "education": "bachelor",
-                "school": "华中科技大学 (985)",
-                "skills": ["Vue3", "TypeScript", "WebGL", "Three.js"],
-                "current_company": "字节跳动",
-                "current_title": "图形可视化架构师",
-                "ai_score": 89,
-                "ai_tier": "A",
-                "archived_date": "2025-08-15",
-                "reason": "上期HC满员转入公海战略储备"
-            },
-            {
-                "id": "pool-002",
-                "name": "郭少华",
-                "age": 33,
-                "experience_years": 10,
-                "education": "master",
-                "school": "同济大学 (985)",
-                "skills": ["Node.js", "Go", "K8s", "微服务架构"],
-                "current_company": "拼多多",
-                "current_title": "服务端高可用架构专家",
-                "ai_score": 93,
-                "ai_tier": "S",
-                "archived_date": "2025-07-20",
-                "reason": "薪酬超预算暂存公海"
-            }
-        ])
-
-        _initialized = True
+    storage.ensure_init()
 
 
 def _get_all_candidates():
-    _ensure_init()
-    return _runtime_candidates
+    storage.ensure_init()
+    return storage.candidates
 
 
 def _get_all_jobs():
-    _ensure_init()
-    return _runtime_jobs
+    storage.ensure_init()
+    return storage.jobs
 
 
 # ─────────────────────────── 模型管理接口 ───────────────────────────
@@ -155,7 +101,8 @@ def create_job(body: dict):
         "required_skills": body.get("required_skills", ["TypeScript", "微服务", "架构设计"]),
         "jd": body.get("jd", "岗位职责与要求待完善。")
     }
-    jobs.insert(0, new_job)
+    storage.jobs.insert(0, new_job)
+    storage.save()
     return {"ok": True, "data": new_job}
 
 
@@ -168,14 +115,138 @@ def get_job(job_id: str):
     return {"ok": True, "data": job}
 
 
+def _process_talent_pool_recall(job: dict) -> list:
+    """
+    当岗位门槛规则发生变更时，自动检索企业人才公海池：
+    比对公海中所有储备人才与目标岗位的最新硬性门槛，
+    凡符合门槛要求的储备人才，自动从公海唤醒召回并重新推入候选人初筛匹配队列。
+    """
+    _ensure_init()
+    recalled = []
+    remaining = []
+    existing_ids = {c["id"] for c in storage.candidates}
+
+    for talent in storage.talent_pool:
+        # 核验公海人才是否满足当前调整后的最新门槛
+        gate_res = check_candidate_hard_gates(talent, job)
+        if gate_res["passed"]:
+            cand = recall_talent_to_candidates(talent, job)
+            if cand["id"] in existing_ids:
+                cand["id"] = f"restored-{uuid.uuid4().hex[:6]}"
+            cand["job_id"] = job.get("id", "fe-fullstack")
+            storage.candidates.insert(0, cand)
+            existing_ids.add(cand["id"])
+            recalled.append(cand)
+        else:
+            remaining.append(talent)
+
+    storage.talent_pool[:] = remaining
+    return recalled
+
+
 @router.put("/api/jobs/{job_id}")
 def update_job(job_id: str, body: dict):
     jobs = _get_all_jobs()
     for i, j in enumerate(jobs):
         if j["id"] == job_id:
+            # 兼容处理 experience_range 与 experience_years 联动
+            if "experience_range" in body:
+                rng = body.get("experience_range")
+                if rng in ("any", "经验不限", "应届生"):
+                    body["experience_years"] = 0
+                elif rng == "1-3年":
+                    body["experience_years"] = 1
+                elif rng == "3-5年":
+                    body["experience_years"] = 3
+                elif rng == "5-10年":
+                    body["experience_years"] = 5
+                elif rng == "10年以上":
+                    body["experience_years"] = 10
+            elif "experience_years" in body:
+                try:
+                    body["experience_years"] = int(body["experience_years"])
+                except Exception:
+                    pass
+
             jobs[i].update({k: v for k, v in body.items() if k != "id"})
-            return {"ok": True, "data": jobs[i]}
+
+            # 核心闭环 1：自动比对人才公海，凡满足新门槛要求的储备人才立即唤醒召回，重新推入匹配池
+            recalled_cands = _process_talent_pool_recall(jobs[i])
+
+            # 核心闭环 2：对本岗位所有现有候选人（含新召回人员）执行全量初筛重新判定与状态同步
+            candidates = _get_all_candidates()
+            rescreen_job_candidates(candidates, jobs[i])
+
+            # 重新核算该岗位的即时统计数据
+            job_cands = [c for c in candidates if c.get("job_id") == job_id]
+            counts = {
+                "all": len(job_cands),
+                "recommended": sum(1 for c in job_cands if c.get("state") == "recommended"),
+                "review": sum(1 for c in job_cands if c.get("state") == "review"),
+                "scheduled": sum(1 for c in job_cands if c.get("state") == "scheduled"),
+                "rejected": sum(1 for c in job_cands if c.get("state") == "rejected"),
+            }
+
+            # 核心闭环 3：面试排期联动清洗
+            # 若门槛收紧导致原约面候选人被硬性拦截淘汰，联动撤销其待面试日程，避免无效约面
+            rejected_ids = {c["id"] for c in storage.candidates if c.get("state") == "rejected"}
+            storage.interviews[:] = [iv for iv in storage.interviews if iv.get("candidate_id") not in rejected_ids]
+
+            recalled_count = len(recalled_cands)
+            recalled_names = [c["name"] for c in recalled_cands]
+            if recalled_count > 0:
+                msg = f"岗位规则已生效！初筛结果已联动更新，并从人才公海自动召回 {recalled_count} 位符合最新门槛的储备人才（{'、'.join(recalled_names)}）重新进入匹配！"
+            else:
+                msg = "岗位规则与硬性门槛已生效，全量候选人初筛比对与拦截结果已闭环更新！"
+
+            # 核心闭环 4：全量状态即刻持久化落盘
+            storage.save()
+
+            return {
+                "ok": True,
+                "data": jobs[i],
+                "counts": counts,
+                "recalled_count": recalled_count,
+                "recalled_names": recalled_names,
+                "talent_pool_count": len(storage.talent_pool),
+                "message": msg
+            }
     raise HTTPException(status_code=404, detail="岗位不存在")
+
+
+@router.post("/api/jobs/{job_id}/rescreen")
+def trigger_rescreen(job_id: str):
+    jobs = _get_all_jobs()
+    job = next((j for j in jobs if j["id"] == job_id), None)
+    if not job:
+        raise HTTPException(status_code=404, detail="岗位不存在")
+    recalled_cands = _process_talent_pool_recall(job)
+    candidates = _get_all_candidates()
+    rescreen_job_candidates(candidates, job)
+    job_cands = [c for c in candidates if c.get("job_id") == job_id]
+    counts = {
+        "all": len(job_cands),
+        "recommended": sum(1 for c in job_cands if c.get("state") == "recommended"),
+        "review": sum(1 for c in job_cands if c.get("state") == "review"),
+        "scheduled": sum(1 for c in job_cands if c.get("state") == "scheduled"),
+        "rejected": sum(1 for c in job_cands if c.get("state") == "rejected"),
+    }
+    # 联动清洗被淘汰人员的排期
+    rejected_ids = {c["id"] for c in storage.candidates if c.get("state") == "rejected"}
+    storage.interviews[:] = [iv for iv in storage.interviews if iv.get("candidate_id") not in rejected_ids]
+
+    recalled_count = len(recalled_cands)
+    recalled_names = [c["name"] for c in recalled_cands]
+    msg = f"全量重筛完成，从公海召回 {recalled_count} 位符合门槛人才（{'、'.join(recalled_names)}）！" if recalled_count else "全量重筛完成"
+    storage.save()
+    return {
+        "ok": True,
+        "data": {"job": job, "counts": counts},
+        "recalled_count": recalled_count,
+        "recalled_names": recalled_names,
+        "talent_pool_count": len(storage.talent_pool),
+        "message": msg
+    }
 
 
 # ─────────────────────────── 候选人查询与操作接口 ───────────────────────────
@@ -269,10 +340,10 @@ def update_candidate_state(candidate_id: str, body: dict):
             _ensure_init()
             # 如果是约面状态，联动同步到面试日程库
             if new_state == "scheduled":
-                existing = next((iv for iv in _runtime_interviews if iv.get("candidate_id") == candidate_id), None)
+                existing = next((iv for iv in storage.interviews if iv.get("candidate_id") == candidate_id), None)
                 if not existing:
                     if candidate_id == "preset-002":
-                        _runtime_interviews.append({
+                        storage.interviews.append({
                             "id": "iv-002",
                             "candidate_id": "preset-002",
                             "candidate_name": "陈书婷",
@@ -284,7 +355,7 @@ def update_candidate_state(candidate_id: str, body: dict):
                             "status": "upcoming"
                         })
                     else:
-                        _runtime_interviews.append({
+                        storage.interviews.append({
                             "id": f"iv-{uuid.uuid4().hex[:6]}",
                             "candidate_id": candidate_id,
                             "candidate_name": c.get("name", "候选人"),
@@ -297,13 +368,13 @@ def update_candidate_state(candidate_id: str, body: dict):
                         })
             else:
                 # 候选人移出约面状态（如淘汰或转入待复核），从待面试日程中联动移除
-                _runtime_interviews[:] = [iv for iv in _runtime_interviews if iv.get("candidate_id") != candidate_id]
+                storage.interviews[:] = [iv for iv in storage.interviews if iv.get("candidate_id") != candidate_id]
 
             # 如果是回绝状态，联动注入回绝通知到聊天记录中
             if new_state == "rejected":
                 cid = c["id"]
                 cname = c.get("name", "候选人")
-                history = _runtime_chat_history.setdefault(cid, [
+                history = storage.chat_history.setdefault(cid, [
                     {
                         "sender": "candidate",
                         "name": cname,
@@ -319,6 +390,7 @@ def update_candidate_state(candidate_id: str, body: dict):
                         "time": datetime.now().strftime("%H:%M"),
                         "is_reject": True
                     })
+            storage.save()
             return {"ok": True, "data": c}
     raise HTTPException(status_code=404, detail="候选人不存在")
 
@@ -339,6 +411,7 @@ def regenerate_questions(candidate_id: str):
         f"如果业务线需要你主导跨端技术方案选型与研发团队技术培训，你将如何制定前30天的技术落地里程碑？"
     ]
     c["interview_questions"] = new_questions
+    storage.save()
     return {"ok": True, "data": {"interview_questions": new_questions}}
 
 
@@ -358,11 +431,11 @@ def reject_notify(candidate_id: str):
         "sent_time": datetime.now().strftime("%Y-%m-%d %H:%M"),
         "content": notice_text
     }
-    _runtime_rejections.append(notice)
+    storage.rejections.append(notice)
     
     # 核心闭环：同步注入到该候选人的微聊沟通记录中
     _ensure_init()
-    history = _runtime_chat_history.setdefault(candidate_id, [
+    history = storage.chat_history.setdefault(candidate_id, [
         {
             "sender": "candidate",
             "name": c.get("name", "候选人"),
@@ -379,6 +452,9 @@ def reject_notify(candidate_id: str):
             "is_reject": True
         })
         
+    # 联动清理面试排期
+    storage.interviews[:] = [iv for iv in storage.interviews if iv.get("candidate_id") != candidate_id]
+    storage.save()
     return {"ok": True, "data": notice, "message": f"已向候选人【{c.get('name')}】发送标准化委婉回绝通知及感谢信"}
 
 
@@ -395,7 +471,7 @@ def list_chats(job_id: str = ""):
     for c in candidates:
         cid = c["id"]
         cname = c.get("name", "候选人")
-        hist = _runtime_chat_history.get(cid)
+        hist = storage.chat_history.get(cid)
         if hist is None:
             hist = [
                 {
@@ -413,7 +489,7 @@ def list_chats(job_id: str = ""):
                     "time": "今天 10:15",
                     "is_reject": True
                 })
-            _runtime_chat_history[cid] = hist
+            storage.chat_history[cid] = hist
         
         last_msg = hist[-1] if hist else {}
         result.append({
@@ -422,7 +498,7 @@ def list_chats(job_id: str = ""):
             "last_message": last_msg.get("text", ""),
             "last_sender": last_msg.get("sender", ""),
             "last_time": last_msg.get("time", ""),
-            "is_rejected": any(m.get("is_reject") for m in hist) or c.get("state") == "rejected"
+            "is_rejected": c.get("state") == "rejected"
         })
     return {"ok": True, "data": result}
 
@@ -432,7 +508,8 @@ def get_chat_history(candidate_id: str):
     _ensure_init()
     c = next((x for x in _get_all_candidates() if x["id"] == candidate_id), None)
     cname = c["name"] if c else "候选人"
-    history = _runtime_chat_history.get(candidate_id)
+    history = storage.chat_history.get(candidate_id)
+    history_modified = False
     if history is None:
         history = [
             {
@@ -451,7 +528,8 @@ def get_chat_history(candidate_id: str):
                 "time": "今天 10:15",
                 "is_reject": True
             })
-        _runtime_chat_history[candidate_id] = history
+        storage.chat_history[candidate_id] = history
+        history_modified = True
     else:
         # 如果已经存在 history 但候选人是 rejected 状态且还没有回绝消息，自动补齐
         if c and c.get("state") == "rejected" and not any(m.get("is_reject") for m in history):
@@ -462,6 +540,19 @@ def get_chat_history(candidate_id: str):
                 "time": datetime.now().strftime("%H:%M"),
                 "is_reject": True
             })
+            history_modified = True
+        elif c and c.get("state") != "rejected" and any(m.get("is_reject") for m in history) and not any(m.get("is_reactivated") for m in history):
+            history.append({
+                "sender": "system",
+                "name": "企业招聘系统 · 重新激活通知",
+                "text": f"尊敬的{cname}先生/女士：经招聘委员会重新复核评估，您的简历已重新激活进入复核/约面流程！",
+                "time": datetime.now().strftime("%H:%M"),
+                "is_reactivated": True
+            })
+            history_modified = True
+
+    if history_modified:
+        storage.save()
     return {"ok": True, "data": history}
 
 
@@ -472,7 +563,7 @@ def send_chat_message(candidate_id: str, body: dict):
     if not msg_text:
         raise HTTPException(status_code=400, detail="消息内容不能为空")
         
-    history = _runtime_chat_history.setdefault(candidate_id, [])
+    history = storage.chat_history.setdefault(candidate_id, [])
     now_str = datetime.now().strftime("%H:%M")
     
     # 记录 HR 消息
@@ -504,6 +595,7 @@ def send_chat_message(candidate_id: str, body: dict):
         "time": now_str
     })
     
+    storage.save()
     return {"ok": True, "data": {"reply": reply, "history": history}}
 
 
@@ -515,7 +607,7 @@ def list_interviews(job_id: str = "fe-fullstack"):
     candidates_map = {c["id"]: c for c in _get_all_candidates()}
     # 严格对齐：仅返回关联候选人当前状态仍为 scheduled 的有效排期
     active_ivs = []
-    for iv in _runtime_interviews:
+    for iv in storage.interviews:
         cid = iv.get("candidate_id")
         cand = candidates_map.get(cid)
         if cand:
@@ -542,19 +634,21 @@ def schedule_interview(body: dict):
         "meeting_link": f"https://meeting.recruitai.com/room/{uuid.uuid4().hex[:6]}",
         "status": "upcoming"
     }
-    _runtime_interviews.append(item)
+    storage.interviews.append(item)
     if c:
         c["state"] = "scheduled"
+    storage.save()
     return {"ok": True, "data": item}
 
 
 @router.patch("/api/interviews/{interview_id}")
 def update_interview(interview_id: str, body: dict):
     _ensure_init()
-    iv = next((x for x in _runtime_interviews if x["id"] == interview_id), None)
+    iv = next((x for x in storage.interviews if x["id"] == interview_id), None)
     if not iv:
         raise HTTPException(status_code=404, detail="面试日程不存在")
     iv.update(body)
+    storage.save()
     return {"ok": True, "data": iv}
 
 
@@ -563,51 +657,31 @@ def update_interview(interview_id: str, body: dict):
 @router.get("/api/talent-pool")
 def list_talent_pool():
     _ensure_init()
-    return {"ok": True, "data": _runtime_talent_pool}
+    return {"ok": True, "data": storage.talent_pool}
 
 
 @router.post("/api/talent-pool/restore")
 def restore_talent(body: dict):
     _ensure_init()
     pool_id = body.get("pool_id") or body.get("candidate_id") or body.get("id")
-    target = next((x for x in _runtime_talent_pool if x["id"] == pool_id), None)
+    target = next((x for x in storage.talent_pool if x["id"] == pool_id), None)
     if not target:
         raise HTTPException(status_code=404, detail="公海候选人不存在")
         
-    _runtime_talent_pool.remove(target)
-    target_job = body.get("target_job_id", "fe-fullstack")
-    new_candidate = {
-        "id": f"restored-{uuid.uuid4().hex[:6]}",
-        "name": target.get("name"),
-        "age": target.get("age", 29),
-        "job_id": target_job,
-        "status": "available",
-        "available_time": "随时到岗",
-        "apply_time": datetime.now().strftime("%H:%M"),
-        "experience_years": target.get("experience_years", 6),
-        "education": target.get("education", "bachelor"),
-        "school": target.get("school", "知名高校"),
-        "school_tier": "985",
-        "major": "计算机",
-        "current_company": target.get("current_company", "知名大厂"),
-        "current_title": target.get("current_title", "资深架构师"),
-        "salary_expect": "28-35K",
-        "skills": target.get("skills", ["Vue3", "TypeScript", "微服务"]),
-        "verified": True,
-        "ai_score": target.get("ai_score", 88),
-        "ai_tier": target.get("ai_tier", "A"),
-        "ai_label": "公海重新激活",
-        "ai_reason": "从企业人才公海池高匹配库重新激活入池，其技术栈与项目体量高度贴合本岗位需求。",
-        "radar": {"技术深度": 88, "项目规模": 85, "技术栈匹配": 90, "学历背景": 92, "发展潜力": 88},
-        "tags": ["✓ 公海核心储备", "✓ 资质核验完成", "✓ 高契合度画像"],
-        "interview_questions": [
-            "请介绍你在大厂经历中主导过的最核心技术架构方案？",
-            "重新看新的工作机会，你对本业务线最关注的技术切入点是什么？"
-        ],
-        "state": "recommended"
-    }
-    _runtime_candidates.insert(0, new_candidate)
-    return {"ok": True, "data": new_candidate}
+    storage.talent_pool.remove(target)
+    target_job_id = body.get("target_job_id", "fe-fullstack")
+    job = next((j for j in _get_all_jobs() if j["id"] == target_job_id), None) or {"title": "当前岗位", "id": target_job_id}
+    
+    new_candidate = recall_talent_to_candidates(target, job)
+    new_candidate["tags"] = ["✓ 公海核心储备·手动激活", "✓ 资质核验完成", "✓ 高契合度画像"]
+    new_candidate["ai_label"] = f"{new_candidate['ai_tier']}级·公海激活"
+    new_candidate["label"] = new_candidate["ai_label"]
+    new_candidate["ai_reason"] = f"从企业人才公海池高匹配库重新激活至【{job.get('title','')}】岗位，技术栈与项目体量贴合业务需求。"
+    
+    new_candidate["job_id"] = target_job_id
+    storage.candidates.insert(0, new_candidate)
+    storage.save()
+    return {"ok": True, "data": new_candidate, "talent_pool_count": len(storage.talent_pool)}
 
 
 # ─────────────────────────── AI 智能全景诊断报告 ───────────────────────────
@@ -796,6 +870,7 @@ async def upload_resumes(
             results.append({"filename": f.filename, "ok": False, "error": str(e)})
         except Exception as e:
             results.append({"filename": f.filename, "ok": False, "error": f"处理失败: {e}"})
+    storage.save()
     return {"ok": True, "data": results}
 
 
@@ -812,7 +887,7 @@ def batch_action(body: dict):
         for c in candidates:
             if c["id"] in ids:
                 c["state"] = "scheduled"
-                _runtime_interviews.append({
+                storage.interviews.append({
                     "id": f"iv-{uuid.uuid4().hex[:6]}",
                     "candidate_id": c["id"],
                     "candidate_name": c.get("name", "候选人"),
@@ -823,6 +898,7 @@ def batch_action(body: dict):
                     "meeting_link": f"https://meeting.recruitai.com/room/{uuid.uuid4().hex[:6]}",
                     "status": "upcoming"
                 })
+        storage.save()
         return {"ok": True, "data": {"updated": len(target)}, "message": f"已成功将 {len(target)} 位候选人推进至约面流程并同步至面试日程！"}
         
     elif action == "reject":
@@ -833,7 +909,7 @@ def batch_action(body: dict):
                 c["state"] = "rejected"
                 cid = c["id"]
                 cname = c.get("name", "候选人")
-                history = _runtime_chat_history.setdefault(cid, [
+                history = storage.chat_history.setdefault(cid, [
                     {
                         "sender": "candidate",
                         "name": cname,
@@ -850,31 +926,23 @@ def batch_action(body: dict):
                         "is_reject": True
                     })
         # 批量淘汰时联动清除被淘汰人员的待面试排期
-        _runtime_interviews[:] = [iv for iv in _runtime_interviews if iv.get("candidate_id") not in ids]
+        storage.interviews[:] = [iv for iv in storage.interviews if iv.get("candidate_id") not in ids]
+        storage.save()
         return {"ok": True, "data": {"updated": len(target)}, "message": f"已将 {len(target)} 位候选人批量移入淘汰库并发送委婉回绝通知"}
         
     elif action == "pool":
         _ensure_init()
         # 移入公海时联动清除待面试排期
-        _runtime_interviews[:] = [iv for iv in _runtime_interviews if iv.get("candidate_id") not in [c["id"] for c in target]]
+        storage.interviews[:] = [iv for iv in storage.interviews if iv.get("candidate_id") not in [c["id"] for c in target]]
         for c in target:
             if c in candidates:
                 candidates.remove(c)
-            _runtime_talent_pool.append({
-                "id": f"pool-{uuid.uuid4().hex[:6]}",
-                "name": c.get("name"),
-                "age": c.get("age", 28),
-                "experience_years": c.get("experience_years", 5),
-                "education": c.get("education", "bachelor"),
-                "school": c.get("school", "大学"),
-                "skills": c.get("skills", []),
-                "current_company": c.get("current_company", ""),
-                "current_title": c.get("current_title", ""),
-                "ai_score": c.get("ai_score", 80),
-                "ai_tier": c.get("ai_tier", "A"),
-                "archived_date": datetime.now().strftime("%Y-%m-%d"),
-                "reason": "由HR从初筛列表批量移入公海储备"
-            })
+            talent_item = copy.deepcopy(c)
+            talent_item["id"] = f"pool-{uuid.uuid4().hex[:6]}"
+            talent_item["archived_date"] = datetime.now().strftime("%Y-%m-%d")
+            talent_item["reason"] = "由HR从初筛列表批量移入公海储备"
+            storage.talent_pool.append(talent_item)
+        storage.save()
         return {"ok": True, "data": {"updated": len(target)}, "message": f"已将 {len(target)} 位候选人批量转入企业人才公海！"}
         
     elif action == "greet":
@@ -900,13 +968,5 @@ def batch_action(body: dict):
 
 @router.post("/api/reset")
 def reset_runtime_state():
-    global _initialized
-    _runtime_candidates.clear()
-    _runtime_jobs.clear()
-    _runtime_interviews.clear()
-    _runtime_talent_pool.clear()
-    _runtime_chat_history.clear()
-    _runtime_rejections.clear()
-    _initialized = False
-    _ensure_init()
+    storage.reset()
     return {"ok": True, "message": "已成功重置为初始预设演示状态"}

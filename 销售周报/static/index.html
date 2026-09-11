@@ -3,13 +3,15 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SalesAgent · 企业销售周报自动汇总智能体</title>
+  <title>SalesAgent v2.0 · 企业销售战区督导与业绩尽调复合智能体</title>
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- Vue 3 CDN -->
   <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
   <!-- Marked for markdown parsing in raw report viewer -->
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <!-- DOMPurify：清洗上传周报与模型输出中的 HTML，防止 XSS 注入 -->
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
   <script>
     tailwind.config = {
       theme: {
@@ -18,6 +20,9 @@
             brand: {
               50: '#f0fdf9',
               100: '#ccfbf0',
+              200: '#99f6e0',
+              300: '#5eead4',
+              400: '#2dd4bf',
               500: '#00b395',
               600: '#006b58',
               700: '#005445',
@@ -145,6 +150,11 @@
             <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
           </button>
 
+          <!-- 战区动态诊断按键 (方案 B) -->
+          <button @click="openDiagnosticsModal" class="px-3 py-1.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white text-xs font-bold rounded-lg shadow-sm transition flex items-center space-x-1.5 border border-purple-500">
+            <span>🔬 AI 战区动态诊断</span>
+          </button>
+
           <!-- 批量上传按键 -->
           <button @click="showUploadModal = true" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg transition flex items-center space-x-1.5 border border-slate-300">
             <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
@@ -191,7 +201,7 @@
           </div>
           <div class="text-[11px] text-emerald-600 font-medium flex items-center space-x-1">
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"/></svg>
-            <span>较上周环比增长 +24.6%</span>
+            <span>基于 {{ metrics.rep_count }} 位销售提交的周报实时核算</span>
           </div>
         </div>
 
@@ -216,8 +226,8 @@
               <div class="bg-blue-500 h-2 rounded-full transition-all duration-500" :style="{ width: Math.min(metrics.collection_rate, 100) + '%' }"></div>
             </div>
           </div>
-          <div class="text-[11px] text-slate-500">
-            无死账坏账风险，主力款项正常落地
+          <div class="text-[11px]" :class="metrics.collection_rate >= 80 ? 'text-slate-500' : 'text-amber-600 font-medium'">
+            回款率 {{ metrics.collection_rate }}% · {{ metrics.collection_rate >= 80 ? '现金流质量健康' : '回款节奏偏慢，需重点跟进' }}
           </div>
         </div>
 
@@ -236,14 +246,14 @@
             </div>
             <div class="mt-2 flex items-center justify-between text-xs text-slate-500">
               <span>在途意向线索</span>
-              <span class="font-bold text-purple-600">{{ metrics.total_leads }} 条 (进入POC 3家)</span>
+              <span class="font-bold text-purple-600">{{ metrics.total_leads }} 条</span>
             </div>
             <div class="w-full bg-slate-100 rounded-full h-2 mt-1.5 overflow-hidden">
-              <div class="bg-purple-500 h-2 rounded-full w-3/4"></div>
+              <div class="bg-purple-500 h-2 rounded-full transition-all duration-500" :style="{ width: Math.min((metrics.total_leads || 0) / 30 * 100, 100) + '%' }"></div>
             </div>
           </div>
           <div class="text-[11px] text-purple-700 font-medium">
-            新人高频扫街带动外勤拓客量走高
+            共 {{ metrics.total_visits }} 家次有效客拜 · {{ metrics.growing_count > 0 ? '新人扫街贡献突出' : '全员外勤节奏平稳' }}
           </div>
         </div>
 
@@ -256,24 +266,17 @@
             </span>
           </div>
           <div class="my-3">
-            <div class="flex items-center space-x-3 text-xs">
-              <div class="flex-1 bg-emerald-50 border border-emerald-200 p-2 rounded-xl text-center">
-                <div class="text-lg font-bold text-emerald-700">{{ metrics.exceeded_count }}</div>
-                <div class="text-slate-500 text-[10px]">超额冲顶</div>
-              </div>
-              <div class="flex-1 bg-blue-50 border border-blue-200 p-2 rounded-xl text-center">
-                <div class="text-lg font-bold text-blue-700">{{ metrics.on_track_count }}</div>
-                <div class="text-slate-500 text-[10px]">稳步推进</div>
-              </div>
-              <div class="flex-1 bg-rose-50 border border-rose-200 p-2 rounded-xl text-center">
-                <div class="text-lg font-bold text-rose-700">{{ metrics.blocked_count }}</div>
-                <div class="text-slate-500 text-[10px]">遇阻卡单</div>
+            <div class="flex flex-wrap gap-2 text-xs">
+              <div v-for="b in teamBuckets" :key="b.key" class="flex-1 min-w-[64px] border p-2 rounded-xl text-center" :class="b.cls">
+                <div class="text-lg font-bold" :class="b.text">{{ b.count }}</div>
+                <div class="text-slate-500 text-[10px]">{{ b.label }}</div>
               </div>
             </div>
           </div>
-          <div class="text-[11px] text-rose-600 font-medium flex items-center space-x-1">
+          <div class="text-[11px] font-medium flex items-center space-x-1" :class="(metrics.blocked_count + metrics.at_risk_count) > 0 ? 'text-rose-600' : 'text-slate-500'">
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
-            <span>华北区央企项目高危预警中</span>
+            <span v-if="(metrics.blocked_count + metrics.at_risk_count) > 0">{{ metrics.blocked_count + metrics.at_risk_count }} 人存在卡点或差距，需重点介入</span>
+            <span v-else>全员节奏正常，无重大卡点</span>
           </div>
         </div>
 
@@ -311,7 +314,9 @@
               <button @click="filterStatus = 'all'" class="px-2.5 py-1 rounded-full font-medium transition" :class="filterStatus === 'all' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'">全部 ({{ counts.all }})</button>
               <button @click="filterStatus = 'exceeded'" class="px-2.5 py-1 rounded-full font-medium transition" :class="filterStatus === 'exceeded' ? 'bg-emerald-600 text-white' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'">超额 ({{ counts.exceeded }})</button>
               <button @click="filterStatus = 'on_track'" class="px-2.5 py-1 rounded-full font-medium transition" :class="filterStatus === 'on_track' ? 'bg-blue-600 text-white' : 'bg-blue-50 text-blue-700 hover:bg-blue-100'">稳健 ({{ counts.on_track }})</button>
+              <button @click="filterStatus = 'at_risk'" class="px-2.5 py-1 rounded-full font-medium transition" :class="filterStatus === 'at_risk' ? 'bg-amber-600 text-white' : 'bg-amber-50 text-amber-700 hover:bg-amber-100'">差距 ({{ counts.at_risk }})</button>
               <button @click="filterStatus = 'blocked'" class="px-2.5 py-1 rounded-full font-medium transition" :class="filterStatus === 'blocked' ? 'bg-rose-600 text-white' : 'bg-rose-50 text-rose-700 hover:bg-rose-100'">遇阻 ({{ counts.blocked }})</button>
+              <button @click="filterStatus = 'growing'" class="px-2.5 py-1 rounded-full font-medium transition" :class="filterStatus === 'growing' ? 'bg-purple-600 text-white' : 'bg-purple-50 text-purple-700 hover:bg-purple-100'">新人 ({{ counts.growing }})</button>
             </div>
           </div>
 
@@ -334,12 +339,20 @@
                   </div>
                 </div>
 
-                <!-- 状态徽章 -->
-                <div class="text-right">
-                  <span class="px-2.5 py-1 text-xs font-bold rounded-full inline-block" :class="getStatusBadgeClass(r.status)">
-                    {{ r.status_label || '正常' }} {{ r.completion_rate }}%
-                  </span>
-                  <div v-if="r.reviewed" class="text-[10px] text-emerald-600 mt-1 flex items-center justify-end space-x-0.5">
+                <!-- 状态与 Agent 尽调徽章 -->
+                <div class="text-right space-y-1">
+                  <div>
+                    <span class="px-2.5 py-1 text-xs font-bold rounded-full inline-block" :class="getStatusBadgeClass(r.status)">
+                      {{ r.status_label || '正常' }} {{ r.completion_rate }}%
+                    </span>
+                  </div>
+                  <div v-if="r.supervision_audit" class="flex items-center justify-end space-x-1.5">
+                    <span class="px-2 py-0.5 text-[10px] font-bold rounded border shadow-2xs" :class="r.supervision_audit.audit_badge_class || 'bg-slate-100 text-slate-700'">
+                      {{ r.supervision_audit.audit_badge }}
+                    </span>
+                    <span class="text-[10px] font-bold text-slate-500">置信度 {{ r.supervision_audit.confidence_score }}%</span>
+                  </div>
+                  <div v-if="r.reviewed" class="text-[10px] text-emerald-600 flex items-center justify-end space-x-0.5">
                     <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
                     <span>主管已批阅</span>
                   </div>
@@ -377,11 +390,15 @@
 
               <!-- 底部操作按钮栏（每一个按键都具备真实功能与闭环） -->
               <div class="pt-2 border-t border-slate-100 flex items-center justify-between">
-                <!-- 用户明确指定按键：查看原始周报 -->
-                <button @click="openRawViewer(r)" class="px-3 py-1.5 bg-brand-50 hover:bg-brand-100 text-brand-700 text-xs font-semibold rounded-lg transition flex items-center space-x-1.5 border border-brand-200">
-                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                  <span>查看原始周报原件</span>
-                </button>
+                <!-- 用户明确指定按键：查看参谋长尽调档案与原始周报 -->
+                <div class="flex items-center space-x-1.5">
+                  <button @click="openRawViewer(r, 'audit')" class="px-2.5 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 text-xs font-bold rounded-lg transition flex items-center space-x-1 border border-purple-200">
+                    <span>🕵️ 参谋长尽调</span>
+                  </button>
+                  <button @click="openRawViewer(r, 'raw')" class="px-2 py-1.5 text-xs text-slate-600 hover:text-slate-900 font-medium hover:bg-slate-100 rounded-lg transition border border-slate-200">
+                    <span>📄 原件</span>
+                  </button>
+                </div>
 
                 <div class="flex items-center space-x-2">
                   <!-- 主管批阅按钮 -->
@@ -389,7 +406,7 @@
                     {{ r.reviewed ? '修改批注' : '主管批阅' }}
                   </button>
                   <!-- 下载原件文本 -->
-                  <a :href="'/api/reports/' + r.id + '/raw'" :download="r.salesperson + '_周报原件.txt'" title="下载销售原始文件" class="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition">
+                  <a :href="'/api/reports/' + r.id + '/raw'" title="下载销售原始文件（文件名由服务端按源格式确定）" class="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
                   </a>
                 </div>
@@ -424,7 +441,7 @@
                     <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>
                   <svg v-else class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
-                  <span>{{ generatingAI ? '智能体推演中...' : '重新生成 AI 汇总' }}</span>
+                  <span>{{ generatingAI ? '端侧模型推理中（约2分钟）...' : '重新生成 AI 汇总' }}</span>
                 </button>
 
                 <!-- 编辑模式切换 -->
@@ -564,9 +581,12 @@
             </div>
           </div>
           <div class="flex items-center space-x-2">
-            <a :href="'/api/reports/' + activeRawReport?.id + '/raw'" :download="activeRawReport?.salesperson + '_周报原件.txt'" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg transition border border-slate-300 flex items-center space-x-1">
+            <button @click="triggerSingleDeepAudit(activeRawReport)" :disabled="deepAuditing" class="px-3 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 text-xs font-bold rounded-lg transition border border-purple-200 flex items-center space-x-1">
+              <span>{{ deepAuditing ? '智能体调查中...' : '🔄 重新触发 ReAct 尽调' }}</span>
+            </button>
+            <a :href="'/api/reports/' + activeRawReport?.id + '/raw'" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg transition border border-slate-300 flex items-center space-x-1">
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
-              <span>下载原件内容</span>
+              <span>下载原件</span>
             </a>
             <button @click="showRawModal = false" class="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition">
               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
@@ -574,9 +594,166 @@
           </div>
         </div>
 
-        <!-- 抽屉内容：仿真 A4 纸张排版 -->
+        <!-- 双标签页导航切换：参谋长尽调档案 vs A4 仿真原件 -->
+        <div class="flex border-b border-slate-200 bg-white px-6 text-xs font-bold">
+          <button @click="rawDrawerTab = 'audit'" class="py-3 px-4 border-b-2 flex items-center space-x-2 transition" :class="rawDrawerTab === 'audit' ? 'border-purple-600 text-purple-700 bg-purple-50/50' : 'border-transparent text-slate-500 hover:text-slate-800'">
+            <span>🕵️ AI 战区参谋长尽调档案与思维链</span>
+            <span v-if="activeRawReport?.supervision_audit" class="px-2 py-0.5 rounded text-[10px] font-bold border" :class="activeRawReport?.supervision_audit?.audit_badge_class">
+              {{ activeRawReport?.supervision_audit?.audit_badge }} (置信度 {{ activeRawReport?.supervision_audit?.confidence_score }}%)
+            </span>
+          </button>
+          <button @click="rawDrawerTab = 'raw'" class="py-3 px-4 border-b-2 flex items-center space-x-2 transition" :class="rawDrawerTab === 'raw' ? 'border-brand-600 text-brand-700 bg-brand-50/50' : 'border-transparent text-slate-500 hover:text-slate-800'">
+            <span>📄 100% 原始提交周报原件 (A4仿真纸)</span>
+          </button>
+        </div>
+
+        <!-- 抽屉内容区域 -->
         <div class="p-6 overflow-y-auto flex-1 bg-slate-100/70">
-          <div class="max-w-3xl mx-auto paper-sheet p-8 rounded-xl markdown-body" v-html="renderedRawMarkdown"></div>
+          
+          <!-- TAB 1: 战区参谋长尽调档案与思维链 -->
+          <div v-if="rawDrawerTab === 'audit'" class="max-w-4xl mx-auto space-y-4">
+            
+            <!-- 顶栏：终审评述与置信度大看板 -->
+            <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-2">
+                  <span class="text-xl">🎖️</span>
+                  <h4 class="text-sm font-bold text-slate-900">战区总参谋长业绩真伪终审裁决</h4>
+                  <span class="px-2 py-0.5 text-xs font-bold rounded border" :class="activeRawReport?.supervision_audit?.audit_badge_class">
+                    {{ activeRawReport?.supervision_audit?.audit_badge }}
+                  </span>
+                </div>
+                <div class="flex items-center space-x-2 text-xs">
+                  <span class="text-slate-500">真实业绩置信度：</span>
+                  <span class="text-base font-extrabold text-purple-700">{{ activeRawReport?.supervision_audit?.confidence_score }}%</span>
+                </div>
+              </div>
+
+              <!-- 置信度进度条 -->
+              <div class="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
+                <div class="h-2 rounded-full transition-all duration-500" :class="activeRawReport?.supervision_audit?.confidence_score >= 75 ? 'bg-emerald-500' : (activeRawReport?.supervision_audit?.confidence_score >= 60 ? 'bg-amber-500' : 'bg-rose-500')" :style="{ width: (activeRawReport?.supervision_audit?.confidence_score || 50) + '%' }"></div>
+              </div>
+
+              <!-- 裁决短评 -->
+              <div class="p-3.5 bg-purple-50/70 border border-purple-200 rounded-xl text-xs text-purple-950 leading-relaxed font-medium">
+                {{ activeRawReport?.supervision_audit?.summary_verdict }}
+              </div>
+            </div>
+
+            <!-- 四维行动层工具交叉取证卡片 (2x2 Grid) -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              
+              <!-- 工具 1：商机水分测谎 -->
+              <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-2.5">
+                <div class="flex items-center justify-between text-xs">
+                  <span class="font-bold text-slate-800 flex items-center space-x-1.5">
+                    <span>🔍</span>
+                    <span>商机水分剥离与虚词测谎</span>
+                  </span>
+                  <span class="px-2 py-0.5 rounded text-[10px] font-bold" :class="activeRawReport?.supervision_audit?.tools_data?.substance?.level === 'high' ? 'bg-emerald-100 text-emerald-800' : (activeRawReport?.supervision_audit?.tools_data?.substance?.level === 'medium' ? 'bg-blue-100 text-blue-800' : 'bg-rose-100 text-rose-800')">
+                    脱水得分: {{ activeRawReport?.supervision_audit?.tools_data?.substance?.substance_score }}
+                  </span>
+                </div>
+                <div class="text-[11px] text-slate-500">
+                  评级：{{ activeRawReport?.supervision_audit?.tools_data?.substance?.level_label }}
+                </div>
+                <div v-if="activeRawReport?.supervision_audit?.tools_data?.substance?.buzzword_flags?.length" class="space-y-1">
+                  <div v-for="(f, i) in activeRawReport.supervision_audit.tools_data.substance.buzzword_flags" :key="i" class="p-2 bg-amber-50 border border-amber-200 rounded-lg text-[11px] text-amber-900">
+                    ⚡ {{ f }}
+                  </div>
+                </div>
+                <div v-else class="p-2 bg-emerald-50 border border-emerald-200 rounded-lg text-[11px] text-emerald-900">
+                  ✓ 未捕获拖延与模糊虚饰话术，成单事实描述紧凑
+                </div>
+              </div>
+
+              <!-- 工具 2：漏斗断崖预测 -->
+              <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-2.5">
+                <div class="flex items-center justify-between text-xs">
+                  <span class="font-bold text-slate-800 flex items-center space-x-1.5">
+                    <span>📉</span>
+                    <span>商机漏斗蓄水与断崖预测</span>
+                  </span>
+                  <span class="px-2 py-0.5 rounded text-[10px] font-bold" :class="activeRawReport?.supervision_audit?.tools_data?.cliff?.cliff_level === 'high' ? 'bg-rose-100 text-rose-800' : (activeRawReport?.supervision_audit?.tools_data?.cliff?.cliff_level === 'medium' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800')">
+                    断崖指数: {{ activeRawReport?.supervision_audit?.tools_data?.cliff?.cliff_risk_score }}
+                  </span>
+                </div>
+                <div class="text-[11px] text-slate-500">
+                  评级：{{ activeRawReport?.supervision_audit?.tools_data?.cliff?.cliff_label }}
+                </div>
+                <div v-if="activeRawReport?.supervision_audit?.tools_data?.cliff?.cliff_flags?.length" class="space-y-1">
+                  <div v-for="(f, i) in activeRawReport.supervision_audit.tools_data.cliff.cliff_flags" :key="i" class="p-2 bg-rose-50 border border-rose-200 rounded-lg text-[11px] text-rose-900">
+                    🚨 {{ f }}
+                  </div>
+                </div>
+                <div v-else class="p-2 bg-emerald-50 border border-emerald-200 rounded-lg text-[11px] text-emerald-900">
+                  ✓ 在途商机蓄水健康，未来数周业务动能充沛
+                </div>
+              </div>
+
+              <!-- 工具 3：卡单死穴溯源 -->
+              <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-2.5">
+                <div class="flex items-center justify-between text-xs">
+                  <span class="font-bold text-slate-800 flex items-center space-x-1.5">
+                    <span>⚡</span>
+                    <span>卡单死穴定性与归因溯源</span>
+                  </span>
+                  <span class="px-2 py-0.5 rounded text-[10px] font-bold" :class="activeRawReport?.supervision_audit?.tools_data?.blocker?.severity === 'critical' ? 'bg-rose-100 text-rose-800 animate-pulse' : (activeRawReport?.supervision_audit?.tools_data?.blocker?.severity === 'high' ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-700')">
+                    {{ activeRawReport?.supervision_audit?.tools_data?.blocker?.severity_label || '无明显卡点' }}
+                  </span>
+                </div>
+                <div class="text-[11px] text-slate-600 font-semibold">
+                  主要归因：{{ activeRawReport?.supervision_audit?.tools_data?.blocker?.primary_cause || '正常' }}
+                </div>
+                <div class="space-y-1">
+                  <div v-for="(n, i) in (activeRawReport?.supervision_audit?.tools_data?.blocker?.diagnostic_notes || [])" :key="i" class="p-2 bg-slate-50 border border-slate-200 rounded-lg text-[11px] text-slate-700">
+                    • {{ n }}
+                  </div>
+                </div>
+              </div>
+
+              <!-- 工具 4：主管靶向破局锦囊 -->
+              <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-2.5">
+                <div class="flex items-center justify-between text-xs">
+                  <span class="font-bold text-purple-800 flex items-center space-x-1.5">
+                    <span>🎯</span>
+                    <span>主管靶向派工与攻坚锦囊</span>
+                  </span>
+                  <span class="text-[10px] text-slate-400">定制攻防对策</span>
+                </div>
+                <div class="space-y-1.5">
+                  <div v-for="(act, i) in (activeRawReport?.supervision_audit?.dispatch_actions || [])" :key="'act-'+i" class="p-2 bg-purple-50 border border-purple-200 rounded-lg text-[11px] text-purple-900 font-medium">
+                    → {{ act }}
+                  </div>
+                  <div v-for="(tip, i) in (activeRawReport?.supervision_audit?.tactical_tips || [])" :key="'tip-'+i" class="p-2 bg-slate-50 border border-slate-200 rounded-lg text-[11px] text-slate-700">
+                    💡 {{ tip }}
+                  </div>
+                </div>
+              </div>
+
+            </div>
+
+            <!-- 可折叠展开的完整 ReAct 探查思维链日志 -->
+            <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden text-xs">
+              <button @click="showTraceDetails = !showTraceDetails" class="w-full p-3.5 bg-slate-50 hover:bg-slate-100 flex items-center justify-between text-slate-800 font-bold transition">
+                <div class="flex items-center space-x-2">
+                  <span>🕵️</span>
+                  <span>ReAct 智能体探查时间线与思维链日志 (共 {{ activeRawReport?.supervision_audit?.investigation_trace?.length || 0 }} 步追踪)</span>
+                </div>
+                <span class="text-slate-400">{{ showTraceDetails ? '收起思维链 ▲' : '展开思维链 ▼' }}</span>
+              </button>
+              <div v-if="showTraceDetails" class="p-4 bg-slate-900 text-emerald-400 font-mono text-[11px] space-y-2 overflow-x-auto max-h-72 overflow-y-auto">
+                <div v-for="(trace, i) in (activeRawReport?.supervision_audit?.investigation_trace || [])" :key="i" class="leading-relaxed border-b border-slate-800/60 pb-1.5 whitespace-pre-wrap">
+                  {{ trace }}
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- TAB 2: 仿真 A4 纸张排版原件 -->
+          <div v-else class="max-w-3xl mx-auto paper-sheet p-8 rounded-xl markdown-body" v-html="renderedRawMarkdown"></div>
+
         </div>
 
         <!-- 底部栏 -->
@@ -617,7 +794,7 @@
         </div>
 
         <div class="border-2 border-dashed border-slate-300 hover:border-brand-500 rounded-xl p-6 text-center cursor-pointer transition bg-slate-50" @click="triggerFileInput">
-          <input type="file" ref="fileInput" multiple accept=".docx,.xlsx,.xls,.md,.txt" class="hidden" @change="handleFileSelected">
+          <input type="file" ref="fileInput" multiple accept=".docx,.xlsx,.md,.txt" class="hidden" @change="handleFileSelected">
           <svg class="w-10 h-10 text-slate-400 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
           <div class="text-xs font-semibold text-slate-700">点击选择或拖拽销售周报文件至此处</div>
           <div class="text-[11px] text-slate-400 mt-1">支持格式：Word (.docx), Excel (.xlsx), Markdown (.md), 文本 (.txt)</div>
@@ -694,7 +871,7 @@
           </div>
           <div>
             <label class="block text-slate-600 font-semibold mb-1">API Key</label>
-            <input v-model="cloudForm.api_key" type="password" placeholder="sk-..." class="w-full p-2 border rounded-lg bg-white border-slate-300">
+            <input v-model="cloudForm.api_key" type="password" :placeholder="modelStatus.cloud_api_key_set ? '已保存，留空则不修改' : 'sk-...'" class="w-full p-2 border rounded-lg bg-white border-slate-300">
           </div>
           <div>
             <label class="block text-slate-600 font-semibold mb-1">模型名称</label>
@@ -714,6 +891,104 @@
           <button @click="showModelModal = false" class="px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-100 rounded-lg">取消</button>
           <button @click="saveModelSettings" class="px-4 py-1.5 text-xs font-semibold bg-brand-600 text-white rounded-lg hover:bg-brand-700">保存设置并切换</button>
         </div>
+      </div>
+    </div>
+
+    <!-- 弹窗 5：【方案 B】AI 销售战区经营全景动态诊断模态框 (1:1 Stitch 风格) -->
+    <div v-if="showDiagnosticsModal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+      <div class="bg-white w-full max-w-4xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
+        
+        <!-- 弹窗头部 -->
+        <div class="px-6 py-4 border-b border-slate-200 bg-gradient-to-r from-purple-50 via-white to-indigo-50 flex items-center justify-between">
+          <div class="flex items-center space-x-3">
+            <div class="w-10 h-10 rounded-xl bg-purple-600 text-white flex items-center justify-center text-xl shadow-md shadow-purple-600/20 font-bold">
+              🔬
+            </div>
+            <div>
+              <div class="flex items-center space-x-2">
+                <h3 class="text-base font-bold text-slate-900">AI 销售战区经营全景动态诊断报告</h3>
+                <span class="px-2 py-0.5 text-xs font-semibold bg-purple-100 text-purple-800 rounded-full">战区参谋部战略推演</span>
+              </div>
+              <p class="text-xs text-slate-500">实时测算时间戳：{{ diagnosticsData?.generated_at || '正在测算...' }}</p>
+            </div>
+          </div>
+          <button @click="showDiagnosticsModal = false" class="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-100 transition">✕</button>
+        </div>
+
+        <!-- 弹窗内容 -->
+        <div class="p-6 overflow-y-auto flex-1 space-y-5 bg-slate-50/50">
+          
+          <!-- 四大宏观核心动态测算指标 (Grid 4) -->
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm text-center">
+              <div class="text-[11px] text-slate-500 font-medium">战区经营健康分</div>
+              <div class="text-3xl font-extrabold mt-1" :class="(diagnosticsData?.health_score || 0) >= 75 ? 'text-emerald-600' : 'text-amber-600'">
+                {{ diagnosticsData ? diagnosticsData.health_score : '--' }}
+              </div>
+              <div class="text-[10px] text-slate-400 mt-1">综合达成与断崖加权</div>
+            </div>
+
+            <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm text-center">
+              <div class="text-[11px] text-slate-500 font-medium">大盘业绩真实置信度</div>
+              <div class="text-3xl font-extrabold text-purple-600 mt-1">
+                {{ diagnosticsData ? diagnosticsData.confidence_rate : '--' }}%
+              </div>
+              <div class="text-[10px] text-slate-400 mt-1">智能体脱水后均值</div>
+            </div>
+
+            <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm text-center">
+              <div class="text-[11px] text-slate-500 font-medium">暴雷/卡单风险暴露率</div>
+              <div class="text-3xl font-extrabold mt-1" :class="(diagnosticsData?.risk_exposure || 0) > 30 ? 'text-rose-600' : 'text-slate-700'">
+                {{ diagnosticsData ? diagnosticsData.risk_exposure : '--' }}%
+              </div>
+              <div class="text-[10px] text-slate-400 mt-1">重大阻碍占比</div>
+            </div>
+
+            <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm text-center">
+              <div class="text-[11px] text-slate-500 font-medium">在池销售代表样本</div>
+              <div class="text-3xl font-extrabold text-slate-800 mt-1">
+                {{ diagnosticsData ? diagnosticsData.total_reps : '--' }} 人
+              </div>
+              <div class="text-[10px] text-slate-400 mt-1">高可信 {{ diagnosticsData ? diagnosticsData.high_confidence_count : 0 }} / 卡单 {{ diagnosticsData ? diagnosticsData.at_risk_count : 0 }}</div>
+            </div>
+          </div>
+
+          <!-- 四大战略管理决策建议 (4-Dimension Strategy Cards) -->
+          <div class="space-y-3">
+            <div class="flex items-center justify-between">
+              <h4 class="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center space-x-1.5">
+                <span>📋</span>
+                <span>战区管理与战略决策推演清单</span>
+              </h4>
+              <span class="text-[11px] text-slate-400">基于全员真实尽调事实提炼</span>
+            </div>
+
+            <div class="space-y-2.5">
+              <div v-for="(item, idx) in (diagnosticsData?.strategy_insights || [])" :key="idx" class="p-3.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 shadow-sm flex items-start space-x-3">
+                <span class="w-6 h-6 rounded-lg bg-purple-100 text-purple-700 font-bold flex items-center justify-center text-xs flex-shrink-0 mt-0.5">
+                  {{ idx + 1 }}
+                </span>
+                <div class="flex-1 leading-relaxed" v-html="formatMarkdownText(item)"></div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- 弹窗底部栏 -->
+        <div class="px-6 py-3.5 border-t border-slate-200 bg-white flex items-center justify-between text-xs">
+          <div class="text-slate-500">
+            提示：推演结果随各销售周报最新修订动态加权重算。
+          </div>
+          <div class="flex items-center space-x-2">
+            <button @click="triggerDiagnostics" :disabled="loadingDiagnostics" class="px-4 py-1.5 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-lg shadow-sm transition flex items-center space-x-1 disabled:opacity-50">
+              <span v-if="loadingDiagnostics">正在重新推演中...</span>
+              <span v-else>🔄 重新推演大盘诊断</span>
+            </button>
+            <button @click="showDiagnosticsModal = false" class="px-3 py-1.5 text-slate-600 hover:bg-slate-100 rounded-lg">关闭</button>
+          </div>
+        </div>
+
       </div>
     </div>
 
@@ -739,13 +1014,15 @@
           collection_rate: 81.2,
           total_visits: 31,
           total_leads: 19,
+          rep_count: 4,
           exceeded_count: 1,
           on_track_count: 1,
-          blocked_count: 2,
+          at_risk_count: 0,
+          blocked_count: 1,
           growing_count: 1,
           leaderboard: []
         });
-        const counts = ref({ all: 4, exceeded: 1, on_track: 1, blocked: 2 });
+        const counts = ref({ all: 4, exceeded: 1, on_track: 1, at_risk: 0, blocked: 1, growing: 1 });
         const summaryData = ref({});
         const modelStatus = ref({ local_status: 'checking', active_provider: 'local', local_latency_ms: -1 });
 
@@ -755,6 +1032,13 @@
 
         const showRawModal = ref(false);
         const activeRawReport = ref(null);
+        const rawDrawerTab = ref('audit'); // 'audit' | 'raw'
+        const showTraceDetails = ref(false);
+        const deepAuditing = ref(false);
+
+        const showDiagnosticsModal = ref(false);
+        const diagnosticsData = ref(null);
+        const loadingDiagnostics = ref(false);
 
         const showReviewModal = ref(false);
         const activeReviewReport = ref(null);
@@ -796,6 +1080,18 @@
 
         const exportDocxUrl = computed(() => '/api/export/docx');
 
+        // 销售梯队分布（与后端互斥统计保持一致，仅展示有人数的类别）
+        const teamBuckets = computed(() => {
+          const m = metrics.value;
+          return [
+            { key: 'exceeded', label: '超额冲顶', count: m.exceeded_count, cls: 'bg-emerald-50 border-emerald-200', text: 'text-emerald-700' },
+            { key: 'on_track', label: '稳步推进', count: m.on_track_count, cls: 'bg-blue-50 border-blue-200', text: 'text-blue-700' },
+            { key: 'at_risk', label: '存在差距', count: m.at_risk_count, cls: 'bg-amber-50 border-amber-200', text: 'text-amber-700' },
+            { key: 'blocked', label: '遇阻卡单', count: m.blocked_count, cls: 'bg-rose-50 border-rose-200', text: 'text-rose-700' },
+            { key: 'growing', label: '新人破局', count: m.growing_count, cls: 'bg-purple-50 border-purple-200', text: 'text-purple-700' },
+          ].filter(b => (b.count || 0) > 0);
+        });
+
         // 过滤后的销售周报列表
         const filteredReports = computed(() => {
           let list = reports.value.slice();
@@ -821,15 +1117,17 @@
           return list;
         });
 
-        // 格式化 markdown 为 html 供原件查看
+        // 格式化 markdown 为 html 供原件查看（经 DOMPurify 清洗，防止上传文件注入脚本）
         const renderedRawMarkdown = computed(() => {
           if (!activeRawReport.value || !activeRawReport.value.raw_content) {
             return '<p class="text-slate-400">暂无原始文本</p>';
           }
+          const raw = activeRawReport.value.raw_content;
           try {
-            return marked.parse(activeRawReport.value.raw_content);
+            const html = marked.parse(raw);
+            return window.DOMPurify ? DOMPurify.sanitize(html) : escapeHtml(raw);
           } catch (e) {
-            return `<pre>${activeRawReport.value.raw_content}</pre>`;
+            return `<pre>${escapeHtml(raw)}</pre>`;
           }
         });
 
@@ -837,15 +1135,22 @@
           switch (status) {
             case 'exceeded': return 'bg-emerald-100 text-emerald-800 border border-emerald-300';
             case 'on_track': return 'bg-blue-100 text-blue-800 border border-blue-300';
+            case 'at_risk': return 'bg-amber-100 text-amber-800 border border-amber-300';
             case 'blocked': return 'bg-rose-100 text-rose-800 border border-rose-300 animate-pulse';
             case 'growing': return 'bg-purple-100 text-purple-800 border border-purple-300';
             default: return 'bg-slate-100 text-slate-700';
           }
         }
 
+        function escapeHtml(text) {
+          return String(text == null ? '' : text).replace(/[&<>"']/g, c => (
+            { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+          ));
+        }
+
         function formatMarkdownText(txt) {
           if (!txt) return '';
-          return txt.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+          return escapeHtml(txt).replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
         }
 
         // 核心 API 调用
@@ -883,6 +1188,10 @@
             if (json.ok) {
               modelStatus.value = json.data;
               activeProvider.value = json.data.active_provider;
+              // 回填云端配置（API Key 不回填，留空即表示不修改已保存的值）
+              if (json.data.cloud_base_url) cloudForm.value.base_url = json.data.cloud_base_url;
+              if (json.data.cloud_model) cloudForm.value.model_name = json.data.cloud_model;
+              if (json.data.cloud_provider) selectedCloudPresetKey.value = json.data.cloud_provider;
             }
           } catch (e) {
             console.error(e);
@@ -895,7 +1204,6 @@
             const json = await res.json();
             if (json.ok) {
               cloudPresets.value = json.data;
-              applyCloudPreset();
             }
           } catch (e) {
             console.error(e);
@@ -911,9 +1219,54 @@
         }
 
         // 1. 查看原始周报抽屉
-        function openRawViewer(report) {
+        function openRawViewer(report, tab = 'audit') {
           activeRawReport.value = report;
+          rawDrawerTab.value = tab;
+          showTraceDetails.value = false;
           showRawModal.value = true;
+        }
+
+        async function triggerSingleDeepAudit(report) {
+          if (!report || !report.id) return;
+          deepAuditing.value = true;
+          try {
+            const res = await fetch(`/api/reports/${report.id}/deep-audit`, { method: 'POST' });
+            const json = await res.json();
+            if (json.ok) {
+              activeRawReport.value = json.data;
+              const idx = reports.value.findIndex(r => r.id === report.id);
+              if (idx !== -1) reports.value[idx] = json.data;
+              showToast('ReAct 参谋长尽调已更新！');
+            } else {
+              showToast('尽调失败：' + (json.detail || '未知错误'), 'error', '❌');
+            }
+          } catch (e) {
+            showToast('请求异常：' + e, 'error', '❌');
+          } finally {
+            deepAuditing.value = false;
+          }
+        }
+
+        async function openDiagnosticsModal() {
+          showDiagnosticsModal.value = true;
+          if (!diagnosticsData.value) {
+            await triggerDiagnostics();
+          }
+        }
+
+        async function triggerDiagnostics() {
+          loadingDiagnostics.value = true;
+          try {
+            const res = await fetch('/api/diagnostics');
+            const json = await res.json();
+            if (json.ok) {
+              diagnosticsData.value = json.data;
+            }
+          } catch (e) {
+            console.error(e);
+          } finally {
+            loadingDiagnostics.value = false;
+          }
         }
 
         // 2. 主管批阅
@@ -1000,7 +1353,11 @@
             if (json.ok) {
               summaryData.value = json.data.summary;
               metrics.value = json.data.metrics;
-              showToast('AI 销售管理决策内参已实时生成！');
+              if (json.data.summary && json.data.summary._generated_by === 'ai') {
+                showToast('AI 销售管理决策内参已实时生成！');
+              } else {
+                showToast('未连接大模型，已应用本地确定性兜底内参', 'warn', '⚠️');
+              }
             } else {
               showToast('生成异常，已应用容错内参', 'warn', '⚠️');
             }
@@ -1110,6 +1467,7 @@
           filterStatus,
           sortBy,
           filteredReports,
+          teamBuckets,
           renderedRawMarkdown,
           getStatusBadgeClass,
           formatMarkdownText,
@@ -1117,6 +1475,15 @@
           showRawModal,
           activeRawReport,
           openRawViewer,
+          rawDrawerTab,
+          showTraceDetails,
+          deepAuditing,
+          triggerSingleDeepAudit,
+          showDiagnosticsModal,
+          diagnosticsData,
+          loadingDiagnostics,
+          openDiagnosticsModal,
+          triggerDiagnostics,
 
           showReviewModal,
           activeReviewReport,

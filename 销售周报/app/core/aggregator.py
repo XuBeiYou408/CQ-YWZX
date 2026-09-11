@@ -5,15 +5,37 @@ import io
 import json
 import re
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 from docx import Document
 from docx.shared import Inches, Pt, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.enum.table import WD_TABLE_ALIGNMENT
-from docx.oxml import OxmlElement, parse_xml
-from docx.oxml.ns import qn, nsdecls
+from docx.oxml import parse_xml
+from docx.oxml.ns import nsdecls
 
 from app.core.llm_client import generate_chat
+
+
+# 销售梯队分类，五类互斥
+_STATUS_BUCKETS = ("exceeded", "on_track", "at_risk", "blocked", "growing")
+
+
+def _bucket_of(report: Dict[str, Any]) -> str:
+    """
+    将单份周报归入唯一梯队类别。
+    以 status 为权威判据，缺失时按达成率推导，确保同一人不会被重复计数。
+    """
+    status = report.get("status")
+    rate = report.get("completion_rate") or 0.0
+    if status == "growing":
+        return "growing"
+    if status == "exceeded" or rate >= 100:
+        return "exceeded"
+    if status == "on_track" or rate >= 80:
+        return "on_track"
+    if status == "at_risk" or rate >= 50:
+        return "at_risk"
+    return "blocked"
 
 
 def calculate_team_metrics(reports: List[Dict[str, Any]]) -> Dict[str, Any]:
@@ -32,6 +54,7 @@ def calculate_team_metrics(reports: List[Dict[str, Any]]) -> Dict[str, Any]:
             "rep_count": 0,
             "exceeded_count": 0,
             "on_track_count": 0,
+            "at_risk_count": 0,
             "blocked_count": 0,
             "growing_count": 0,
             "leaderboard": [],
@@ -46,10 +69,14 @@ def calculate_team_metrics(reports: List[Dict[str, Any]]) -> Dict[str, Any]:
     overall_rate = round((total_actual / total_target * 100), 1) if total_target > 0 else 0.0
     collection_rate = round((total_collection / total_actual * 100), 1) if total_actual > 0 else 0.0
 
-    exceeded = sum(1 for r in reports if r.get("status") == "exceeded" or r.get("completion_rate", 0) >= 100)
-    on_track = sum(1 for r in reports if r.get("status") == "on_track" or (80 <= r.get("completion_rate", 0) < 100))
-    blocked = sum(1 for r in reports if r.get("status") == "blocked" or r.get("completion_rate", 0) < 50)
-    growing = sum(1 for r in reports if r.get("status") == "growing")
+    buckets = {key: 0 for key in _STATUS_BUCKETS}
+    for report in reports:
+        buckets[_bucket_of(report)] += 1
+    exceeded = buckets["exceeded"]
+    on_track = buckets["on_track"]
+    at_risk = buckets["at_risk"]
+    blocked = buckets["blocked"]
+    growing = buckets["growing"]
 
     # 龙虎榜按签约额降序排
     sorted_reps = sorted(reports, key=lambda x: x.get("actual_amount", 0.0), reverse=True)
@@ -79,40 +106,105 @@ def calculate_team_metrics(reports: List[Dict[str, Any]]) -> Dict[str, Any]:
         "rep_count": len(reports),
         "exceeded_count": exceeded,
         "on_track_count": on_track,
+        "at_risk_count": at_risk,
         "blocked_count": blocked,
         "growing_count": growing,
         "leaderboard": leaderboard,
     }
 
 
-DEFAULT_FALLBACK_SUMMARY = {
-    "report_title": "销售部第36周运营汇总与管理决策内参",
-    "cycle_period": "2026年第36周 (08.31 - 09.04)",
-    "executive_overview": "本周销售团队整体表现强劲，全员目标达成率达到 80.0%，回款率达 82.5%。大客户一部凭借华星智造 150 万标杆项目一举拉高部门大盘；华东零售 SaaS 项目顶住竞品恶意降价成功落单；华北区重点央企项目遇换届阻滞，新人拜访活力饱满，商机蓄水充沛。",
-    "highlights": [
-        "**标杆项目重大突破**：大客户总监赵子龙成功落地华星智造 150 万 ERP 升级合同，创下单周签约新高，并实现 120 万元款项到账，达成率达 125%。",
-        "**竞品防守反击成功**：华东大区孙尚香面对竞品数引科技 6.5 折恶意砸盘，依托标杆案例演示与高可用架构说服客户，顺利收割连邦连锁 58 万签约。",
-        "**开拓活力显著提升**：新晋销售诸葛孔明单周扫街拜访 12 家客户，斩获智影科技 10 万首单试点，储备高意向商机 8 条，进入 POC 验证 3 家。"
-    ],
-    "risk_radar": [
-        "**华北央企大单卡滞风险 (高危)**：关云长推进的北方清洁能源 45 万物资采购项目，因客户集团高层换届、新部长要求工期压减至 20 天，面临流标与拖延高风险，需主管直接介入破局。",
-        "**区域市场恶意价格战 (中危)**：华东零售市场低价竞争加剧，竞品数引科技大幅低价搅乱客户预算预期，后续苏州新零售客户对价格极度敏感，亟需差异化商务组合拳应对。",
-        "**高端售前资源供给紧绷 (中危)**：赵子龙（华星答辩）、诸葛孔明（蔚蓝汽车技术选型）下周均需要核心解决方案专家入场，技术支撑资源存在排期冲突隐患。"
-    ],
-    "manager_action_items": [
-        "**行动 1（关云长-华北破局）**：销售主管周一与关云长做沙盘推演，周三亲自陪同前往北京拜访新任张部长，交付总监协同出具《20天核心功能试点上线与平滑演进承诺函》。",
-        "**行动 2（赵子龙-技术答辩）**：协调总部解决方案中心老周下周二上午全程参加中联重科技术路线答辩；法务部下周一上午出具华星智造补充协议终版盖章件。",
-        "**行动 3（孙尚香-商务授权）**：针对苏州百味果等对价格敏感的零售商机，特批‘三年赠半年维保+赠送2个高级报表模块’商务促销策略，保住软件主报价底线。",
-        "**行动 4（诸葛孔明-新业务赋能）**：安排售前工程师小陈与诸葛孔明结对，周二联合拜访蔚蓝汽车；统一输出《企业级私有化部署架构与安全审计白皮书》赋能团队。"
-    ]
-}
+FALLBACK_TITLE = "销售部每周运营汇总与管理决策内参"
+FALLBACK_PERIOD = "2026年第36周 (08.31 - 09.04)"
+
+
+def _trim_sentence(text: str, max_len: int) -> str:
+    """把多行要点压成单行短句，供兜底内参引用"""
+    cleaned = re.sub(r"^\d+[.、)）]\s*", "", (text or "").strip())
+    cleaned = cleaned.replace("**", "").replace("\n", " ").strip()
+    if len(cleaned) > max_len:
+        cleaned = cleaned[:max_len].rstrip() + "…"
+    return cleaned
+
+
+def build_fallback_summary(reports: List[Dict[str, Any]], metrics: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    无大模型时的高保真确定性兜底内参。
+    所有数字取自 metrics，定性内容取自各人周报，确保与页面大盘、导出文档永远一致。
+    """
+    rep_count = metrics.get("rep_count", 0)
+    total_target = metrics.get("total_target", 0.0) / 10000
+    total_actual = metrics.get("total_actual", 0.0) / 10000
+    total_collection = metrics.get("total_collection", 0.0) / 10000
+    rate = metrics.get("overall_completion_rate", 0.0)
+    col_rate = metrics.get("collection_rate", 0.0)
+    at_risk = metrics.get("at_risk_count", 0)
+    blocked = metrics.get("blocked_count", 0)
+
+    overview = (
+        f"本周共汇总 {rep_count} 位销售人员的周报，团队目标 {total_target:.1f} 万元，"
+        f"实际签约 {total_actual:.1f} 万元，整体达成率 {rate}%；"
+        f"实际回款 {total_collection:.1f} 万元，回款率 {col_rate}%。"
+        f"累计有效客拜 {metrics.get('total_visits', 0)} 家次，储备高意向线索 {metrics.get('total_leads', 0)} 条。"
+    )
+    if blocked or at_risk:
+        overview += f"其中 {blocked} 人遇阻卡单、{at_risk} 人存在差距，需重点督导破局。"
+    else:
+        overview += "全员节奏平稳，无重大卡点。"
+
+    highlights: List[str] = []
+    for item in metrics.get("leaderboard") or []:
+        if len(highlights) >= 3:
+            break
+        if item.get("status") not in ("exceeded", "on_track", "growing"):
+            continue
+        line = (
+            f"**{item.get('name', '未知')}（{item.get('department', '')}）**："
+            f"本周签约 {item.get('actual_amount', 0.0) / 10000:.1f} 万元，"
+            f"达成率 {item.get('completion_rate', 0.0)}%（{item.get('status_label', '')}）"
+        )
+        detail = _trim_sentence(item.get("highlight", ""), 60)
+        if detail:
+            line += f"。{detail}"
+        highlights.append(line)
+    if not highlights:
+        highlights.append("**本周暂无达标战报**：请先导入销售人员周报或等待业绩回填后再生成汇总。")
+
+    risks: List[str] = []
+    for report in reports:
+        if _bucket_of(report) in ("blocked", "at_risk"):
+            risks.append(
+                f"**{report.get('salesperson', '未知')}（{report.get('department', '')}）"
+                f"{report.get('status_label', '')}**：{_trim_sentence(report.get('blockers', ''), 80)}"
+            )
+    if not risks:
+        risks.append("**整体风险可控**：本周无销售出现重大卡点或明显差距。")
+
+    actions: List[str] = []
+    for index, report in enumerate(reports, start=1):
+        blockers = (report.get("blockers") or "").strip()
+        if blockers and blockers != "无明显卡点，按计划推进":
+            actions.append(
+                f"**行动 {index}（{report.get('salesperson', '未知')}）**：针对「"
+                f"{_trim_sentence(blockers, 50)}」，主管需协调资源并安排下周跟进督导。"
+            )
+    if not actions:
+        actions.append("**行动 1**：本周无明显卡点，保持现有节奏并关注高意向商机转化。")
+
+    return {
+        "report_title": FALLBACK_TITLE,
+        "cycle_period": FALLBACK_PERIOD,
+        "executive_overview": overview,
+        "highlights": highlights,
+        "risk_radar": risks,
+        "manager_action_items": actions,
+    }
 
 
 async def generate_ai_executive_summary(reports: List[Dict[str, Any]], metrics: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
     """
     认知层：基于确定性精确数据和原始定性事实，驱动 LLM 提炼高价值的主管决策内参
     """
-    # 构造清晰的提示词上下文
+    # 构造清晰的提示词上下文（卡点等长文本截断，控制输入规模）
     reps_summary = []
     for r in reports:
         reps_summary.append(
@@ -120,9 +212,9 @@ async def generate_ai_executive_summary(reports: List[Dict[str, Any]], metrics: 
             f"- 所属部门: {r.get('department')}\n"
             f"- 目标金额: {r.get('target_amount', 0)/10000:.1f}万元 | 实际签约: {r.get('actual_amount', 0)/10000:.1f}万元 (达成率: {r.get('completion_rate', 0)}%)\n"
             f"- 实际回款: {r.get('collection_amount', 0)/10000:.1f}万元 | 拜访客户数: {r.get('visit_count', 0)}家\n"
-            f"- 核心战报与成果: {r.get('highlight_summary', '正常推进')}\n"
-            f"- 遇到阻碍与卡点求助: {r.get('blockers', '无明显卡点')}\n"
-            f"- 下周工作规划: {r.get('next_week_plan', '继续跟进')}\n"
+            f"- 核心战报与成果: {_trim_sentence(r.get('highlight_summary', '正常推进'), 100)}\n"
+            f"- 遇到阻碍与卡点求助: {_trim_sentence(r.get('blockers', '无明显卡点'), 120)}\n"
+            f"- 下周工作规划: {_trim_sentence(r.get('next_week_plan', '继续跟进'), 100)}\n"
         )
     reps_text = "\n".join(reps_summary)
 
@@ -134,7 +226,8 @@ async def generate_ai_executive_summary(reports: List[Dict[str, Any]], metrics: 
         "2. 亮点要体现标杆价值，不仅说成了多少钱，更要总结打法突破；\n"
         "3. 风险要敢于亮出死穴（如换届卡单、竞品低价、交付工期、资源争夺），给出定性风险等级；\n"
         "4. 管理者行动清单必须点对点、可落地（说明主管何时介入、协调哪位资源、带什么方案去见客户）；\n"
-        "5. 必须严格以标准 JSON 格式返回，不要包含任何前缀或后缀说明。\n"
+        "5. 必须严格以标准 JSON 格式返回，不要包含任何前缀或后缀说明；\n"
+        "6. 语言务必精炼，每条亮点/风险/行动不超过 60 字，直接给出结论，不要输出推理过程。\n"
     )
 
     user_prompt = f"""
@@ -151,24 +244,17 @@ async def generate_ai_executive_summary(reports: List[Dict[str, Any]], metrics: 
 【各销售代表周报原始事实】：
 {reps_text}
 
-【要求输出的 JSON 结构】：
+【要求输出的 JSON 结构（每条不超过 60 字，2-3 条即可）】：
 {{
-  "report_title": "销售部第36周运营汇总与管理决策内参",
+  "report_title": "销售部本周运营汇总与管理决策内参",
   "cycle_period": "2026年第36周",
-  "executive_overview": "总体经营态势客观评述（150字左右，点评目标达成率、回款质量及整体节奏）",
-  "highlights": [
-    "**亮点标题**：详细描述销售攻坚标杆及复制价值",
-    "**亮点标题**：详细描述..."
-  ],
-  "risk_radar": [
-    "**风险标题 (高危/中危)**：深度剖析丢单卡点根因及影响",
-    "**风险标题 (高危/中危)**：..."
-  ],
-  "manager_action_items": [
-    "**行动 1（针对某销售/客户）**：主管具体督导赋能动作及资源协调指令",
-    "**行动 2（针对某销售/客户）**：..."
-  ]
+  "executive_overview": "120 字以内，点评目标达成率、回款质量及整体节奏",
+  "highlights": ["**亮点标题**：标杆价值与打法突破", "..."],
+  "risk_radar": ["**风险标题 (高危/中危)**：丢单卡点根因及影响", "..."],
+  "manager_action_items": ["**行动 1（对象）**：主管督导动作与资源协调指令", "..."]
 }}
+
+请直接输出上述 JSON，不要输出任何推理过程、前缀或后缀说明。
 """
 
     try:
@@ -177,14 +263,16 @@ async def generate_ai_executive_summary(reports: List[Dict[str, Any]], metrics: 
         cleaned = re.sub(r"^```(?:json)?", "", raw_resp.strip(), flags=re.MULTILINE)
         cleaned = re.sub(r"```$", "", cleaned.strip(), flags=re.MULTILINE).strip()
         data = json.loads(cleaned)
-        # 确保关键键存在
-        for key in ("report_title", "executive_overview", "highlights", "risk_radar", "manager_action_items"):
-            if key not in data:
-                return DEFAULT_FALLBACK_SUMMARY
+        required = ("report_title", "executive_overview", "highlights", "risk_radar", "manager_action_items")
+        if not all(key in data for key in required):
+            raise ValueError(f"大模型返回的 JSON 缺少必需字段: {required}")
+        data["_generated_by"] = "ai"
         return data
-    except Exception as e:
-        print(f"AI 决策内参生成异常或未开启大模型，已安全降级为高保真预设内参: {e}")
-        return DEFAULT_FALLBACK_SUMMARY
+    except Exception as exc:
+        print(f"[SalesAgent] AI 决策内参生成失败，已降级为确定性兜底内参: {exc}")
+        fallback = build_fallback_summary(reports, metrics)
+        fallback["_generated_by"] = "fallback"
+        return fallback
 
 
 def _set_cell_background(cell, fill_color: str):

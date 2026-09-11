@@ -2,6 +2,7 @@
 SalesAgent · 企业销售周报自动汇总智能体服务入口
 端口: 8040
 """
+import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -12,13 +13,24 @@ from fastapi.staticfiles import StaticFiles
 
 from app.api.routes import router
 from app.config import load_config
+from app.core.database import init_db
 from app.core.llm_client import get_model_status
+
+# Windows 控制台默认 GBK 编码，启动横幅含 emoji 会抛 UnicodeEncodeError；
+# run.py 已做同样处理，此处兜底保证直接 uvicorn 启动也不崩。
+if sys.platform == "win32":
+    for _stream in (sys.stdout, sys.stderr):
+        try:
+            _stream.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
 
 STATIC_DIR = Path(__file__).parent.parent / "static"
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    init_db()
     cfg = load_config()
     print("=" * 60)
     print(" 🚀 SalesAgent · 企业销售周报自动汇总智能体正在启动...")
@@ -46,7 +58,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,  # 与通配 origin 组合时凭据必须关闭，否则浏览器会拒绝该响应
     allow_methods=["*"],
     allow_headers=["*"],
 )

@@ -1,9 +1,8 @@
 """
 多模型统一适配器模块 - 本地 LM Studio 与云端大模型热切换
 """
-import asyncio
 import time
-from typing import Any, Dict, Optional, TypedDict
+from typing import Any, Dict, TypedDict
 import httpx
 
 
@@ -16,6 +15,8 @@ class ModelStatus(TypedDict):
     cloud_status: str  # "configured" | "unconfigured" | "error"
     cloud_provider: str
     cloud_model: str
+    cloud_base_url: str
+    cloud_api_key_set: bool
 
 
 async def probe_local_models() -> Dict[str, Any]:
@@ -83,6 +84,8 @@ async def get_model_status(cfg: dict) -> ModelStatus:
         "cloud_status": cloud_status,
         "cloud_provider": cloud_cfg.get("provider", "deepseek"),
         "cloud_model": cloud_cfg.get("model_name", "deepseek-chat"),
+        "cloud_base_url": cloud_cfg.get("base_url", "https://api.deepseek.com/v1"),
+        "cloud_api_key_set": bool(api_key),
     }
 
 

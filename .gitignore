@@ -78,3 +78,6 @@ data/models/
 # 简历筛查上传文件与运行时临时缓存
 简历筛查/uploads/*
 !简历筛查/uploads/.gitkeep
+*.tmp
+简历筛查/data/*.tmp
+
