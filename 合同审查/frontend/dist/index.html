@@ -185,17 +185,75 @@
 
       <!-- 右侧操作栏 -->
       <div class="flex items-center space-x-2.5">
-        <button 
-          v-if="workMode === 'review'"
-          @click="loadSampleContract" 
-          :disabled="isReviewing"
-          title="载入内置采购合同示范案例"
-          class="px-3 py-1.5 text-xs text-slate-700 hover:text-slate-900 bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 rounded-md transition-all active:scale-95 disabled:opacity-50 flex items-center space-x-1.5 shadow-xs font-medium cursor-pointer">
-          <svg class="w-3.5 h-3.5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-          </svg>
-          <span>载入演示示例</span>
-        </button>
+        <!-- 示例合同下拉选择 -->
+        <div v-if="workMode === 'review'" class="relative">
+          <button
+            @click="toggleSampleMenu"
+            :disabled="isReviewing"
+            title="选择内置示例合同"
+            class="px-3 py-1.5 text-xs text-slate-700 hover:text-slate-900 bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 rounded-md transition-all active:scale-95 disabled:opacity-50 flex items-center space-x-1.5 shadow-xs font-medium cursor-pointer">
+            <svg class="w-3.5 h-3.5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+            </svg>
+            <span>载入示例合同</span>
+            <svg class="w-3 h-3 text-slate-400 transition-transform" :class="sampleMenuOpen ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+
+          <!-- 遮罩：点击外部关闭 -->
+          <div v-if="sampleMenuOpen" @click="closeSampleMenu" class="fixed inset-0 z-40"></div>
+
+          <!-- 下拉面板 -->
+          <div
+            v-if="sampleMenuOpen"
+            class="absolute right-0 top-full mt-1.5 w-80 z-50 bg-white border border-slate-200 rounded-lg shadow-lg overflow-hidden">
+            <div class="px-3 py-2 bg-slate-50/80 border-b border-slate-200 flex items-center justify-between">
+              <span class="text-[11px] font-semibold text-slate-700">选择示例合同</span>
+              <span class="text-[10px] text-slate-400 font-mono">{{ sampleList.length }} 份可选</span>
+            </div>
+
+            <div v-if="!sampleListLoaded" class="px-3 py-6 text-center text-xs text-slate-400">
+              正在加载清单…
+            </div>
+
+            <div v-else class="max-h-72 overflow-y-auto custom-scroll py-1">
+              <button
+                v-for="item in sampleList"
+                :key="item.id"
+                @click="loadSampleContract(item)"
+                :disabled="sampleLoadingId === item.id"
+                class="w-full text-left px-3 py-2.5 hover:bg-slate-50 transition-all disabled:opacity-60 cursor-pointer border-b border-slate-100 last:border-b-0">
+                <div class="flex items-start justify-between space-x-2">
+                  <div class="min-w-0 flex-1">
+                    <div class="flex items-center space-x-1.5 mb-0.5">
+                      <span class="text-xs font-medium text-slate-800 truncate">{{ item.name }}</span>
+                      <span
+                        class="px-1.5 py-0 rounded text-[10px] font-semibold shrink-0 border"
+                        :class="item.badge === 'Agent'
+                          ? 'bg-blue-50 text-blue-700 border-blue-200'
+                          : 'bg-slate-100 text-slate-500 border-slate-200'">
+                        {{ item.badge }}
+                      </span>
+                    </div>
+                    <div class="text-[11px] text-slate-500">{{ item.desc }}</div>
+                    <div class="text-[10px] text-slate-400 font-mono mt-0.5">
+                      {{ item.char_count }} 字 · {{ item.clause_count }} 条
+                    </div>
+                  </div>
+                  <span v-if="sampleLoadingId === item.id" class="text-[10px] text-blue-600 shrink-0 mt-1">载入中…</span>
+                  <svg v-else class="w-3.5 h-3.5 text-slate-300 shrink-0 mt-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                  </svg>
+                </div>
+              </button>
+            </div>
+
+            <div class="px-3 py-1.5 bg-slate-50/60 border-t border-slate-200 text-[10px] text-slate-400 leading-4">
+              提示：标注「Agent」的合同满足条款级智能审查条件，可查看完整决策轨迹
+            </div>
+          </div>
+        </div>
 
         <button 
           @click="clearAll" 
@@ -513,17 +571,312 @@
                 <span class="font-semibold text-blue-600 font-mono">{{ stats.advice }} 项</span>
               </div>
             </div>
-            <div class="text-slate-500 text-xs truncate max-w-xs font-mono">
-              {{ statusMessage || '就绪' }}
+            <div class="flex items-center space-x-3">
+              <span
+                v-if="activeModel"
+                class="px-1.5 py-0.5 rounded text-[10px] font-mono border border-slate-200 bg-slate-50 text-slate-500"
+                title="当前本地推理模型（LM Studio）">
+                {{ activeModel }}
+              </span>
+              <button
+                v-if="agentPerceive || agentPlan.length || agentTraces.length || agentReflection"
+                @click="agentPanelOpen = !agentPanelOpen"
+                class="px-2 py-0.5 text-[11px] rounded-md border transition-all cursor-pointer flex items-center space-x-1 active:scale-95"
+                :class="agentPanelOpen ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'">
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+                <span>Agent 轨迹</span>
+                <span class="font-mono">{{ agentPanelOpen ? '▾' : '▸' }}</span>
+              </button>
+              <div class="text-slate-500 text-xs truncate max-w-xs font-mono">
+                {{ statusMessage || '就绪' }}
+              </div>
             </div>
           </div>
 
           <!-- 报告正文可滚动容器 -->
-          <div 
-            ref="reportContainer" 
+          <div
+            ref="reportContainer"
             @scroll="handleScroll"
             class="flex-1 p-5 overflow-y-auto custom-scroll">
-            
+
+            <!-- ================= Agent 四阶段决策轨迹面板 ================= -->
+            <div
+              v-if="agentPerceive || agentPlan.length || agentTraces.length || agentReflection || agentFallbacks.length || agentThinking.length || agentStream.length"
+              class="mb-5 rounded-xl bg-white border border-slate-200 shadow-xs overflow-hidden">
+              <!-- 面板标题行 -->
+              <div
+                @click="agentPanelOpen = !agentPanelOpen"
+                class="px-4 py-2.5 bg-slate-50/80 border-b border-slate-200/80 flex items-center justify-between cursor-pointer select-none">
+                <div class="flex items-center space-x-2">
+                  <span class="w-5 h-5 rounded-md bg-blue-600 flex items-center justify-center">
+                    <svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                    </svg>
+                  </span>
+                  <span class="text-xs font-semibold text-slate-800">Agent 思维链</span>
+                  <span class="text-[11px] text-slate-400 font-mono">感知 → 规划 → 行动 → 反思</span>
+                </div>
+                <div class="flex items-center space-x-2 text-[11px] text-slate-400 font-mono">
+                  <span v-if="agentStats && agentStats.tool_calls != null">工具 ×{{ agentStats.tool_calls }}</span>
+                  <span v-if="agentStats && agentStats.llm_calls != null">模型 ×{{ agentStats.llm_calls }}</span>
+                  <span v-if="agentStats && agentStats.elapsed_seconds != null">{{ Number(agentStats.elapsed_seconds).toFixed(1) }}s</span>
+                  <button
+                    v-if="agentPanelOpen"
+                    @click.stop="toggleAllCot"
+                    class="px-1.5 py-0.5 rounded border border-slate-200 hover:bg-slate-100 text-slate-500 hover:text-slate-700 transition-colors font-sans">
+                    {{ allCotOpen ? '折叠全部' : '展开全部' }}
+                  </button>
+                  <span class="text-slate-500">{{ agentPanelOpen ? '▾ 收起' : '▸ 展开' }}</span>
+                </div>
+              </div>
+
+              <div v-show="agentPanelOpen" class="p-4">
+                <!-- 降级/兜底通知（置顶） -->
+                <div v-if="agentFallbacks.length" class="space-y-1.5 mb-4">
+                  <div
+                    v-for="(fb, i) in agentFallbacks" :key="'fb' + i"
+                    class="px-3 py-1.5 rounded-lg bg-amber-50/80 border border-amber-200 text-[11px] text-amber-800 flex items-start space-x-1.5">
+                    <svg class="w-3 h-3 mt-0.5 shrink-0 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    <span>{{ fb }}</span>
+                  </div>
+                </div>
+
+                <!-- ===== 深度思考（推理与工具动作交错的连续流，对标 WorkBuddy）===== -->
+                <div v-if="agentStream.length" class="mb-4 rounded-lg border border-slate-200 bg-slate-50/60 overflow-hidden">
+                  <div
+                    @click="toggleCot('thinking')"
+                    class="px-3 py-2 flex items-center space-x-2 text-[11px] font-medium text-slate-500 cursor-pointer select-none hover:bg-slate-100/70 transition-colors">
+                    <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.674M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                    </svg>
+                    <span>深度思考</span>
+                    <span class="text-slate-400 font-mono">{{ agentThinking.length }} 段推理 · {{ agentStreamActionCount }} 次动作</span>
+                    <span class="ml-auto text-slate-300">{{ cotOpen.thinking ? '▾ 收起' : '▸ 展开' }}</span>
+                  </div>
+                  <div v-show="cotOpen.thinking" class="px-3.5 pb-3.5 space-y-2.5">
+                    <template v-for="(it, i) in agentStream" :key="'st' + i">
+                      <!-- 模型推理文本 -->
+                      <p v-if="it.kind === 'think'" class="text-[12px] text-slate-600 leading-6">{{ it.text }}</p>
+                      <!-- 工具动作行 -->
+                      <div v-else class="flex items-center space-x-2 text-[11px] min-w-0">
+                        <span class="px-1.5 py-0.5 rounded bg-white border border-slate-200 text-slate-500 font-mono shrink-0 inline-flex items-center space-x-1">
+                          <svg class="w-3 h-3 text-slate-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 11a6 6 0 11-12 0 6 6 0 0112 0z" />
+                          </svg>
+                          <span>{{ it.step }}</span>
+                        </span>
+                        <span class="text-slate-500 truncate">{{ it.summary }}</span>
+                      </div>
+                    </template>
+                    <!-- 进行中指示 -->
+                    <div v-if="isReviewing" class="flex items-center space-x-1.5 text-[11px] text-slate-400 pt-0.5">
+                      <span class="w-1.5 h-1.5 rounded-full bg-slate-400 animate-pulse"></span>
+                      <span>{{ statusMessage || '思考中…' }}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- ===== 思维链时间线（连续叙事流）===== -->
+                <div class="relative">
+                  <!-- 时间线竖轨 -->
+                  <div class="absolute left-[5px] top-1.5 bottom-1.5 w-px bg-gradient-to-b from-blue-300 via-violet-300 via-emerald-300 to-orange-300"></div>
+
+                  <!-- 审查策略（思维链开场白） -->
+                  <div v-if="agentPlanMeta && agentPlanMeta.overall_strategy" class="relative pl-6 pb-4">
+                    <span class="absolute left-0 top-1 w-3 h-3 rounded-full bg-violet-400 ring-4 ring-white"></span>
+                    <div
+                      @click="toggleCot('strategy')"
+                      class="flex items-center text-[10px] text-violet-600 font-semibold mb-0.5 cursor-pointer select-none">
+                      <span>审查策略</span>
+                      <span class="ml-auto text-violet-300 font-normal">{{ cotOpen.strategy ? '▾' : '▸' }}</span>
+                    </div>
+                    <div v-show="cotOpen.strategy" class="text-[12px] text-slate-700 leading-5">{{ agentPlanMeta.overall_strategy }}</div>
+                  </div>
+
+                  <!-- 感知 · 看到什么 -->
+                  <div v-if="agentPerceive" class="relative pl-6 pb-4">
+                    <span class="absolute left-0 top-1 w-3 h-3 rounded-full bg-blue-400 ring-4 ring-white"></span>
+                    <div
+                      @click="toggleCot('perceive')"
+                      class="flex items-center text-[11px] font-semibold text-slate-700 mb-1 cursor-pointer select-none">
+                      <span>感知<span class="font-normal text-slate-400 ml-1">看到什么</span></span>
+                      <span class="ml-2 text-[10px] text-slate-400 font-mono">结构化 {{ agentPerceive.clause_count }} 条 · {{ agentPerceive.split_mode === 'regex' ? '正则层级' : '模型兜底' }} · {{ agentPerceive.keyword_type }}</span>
+                      <span class="ml-auto text-slate-300 font-normal">{{ cotOpen.perceive ? '▾' : '▸' }}</span>
+                    </div>
+                    <div v-show="cotOpen.perceive">
+                      <div class="flex flex-wrap gap-1">
+                        <span
+                          v-for="c in (agentPerceive.clauses || [])" :key="c.clause_id"
+                          class="px-1.5 py-0.5 rounded text-[10px] font-mono border transition-colors duration-300"
+                          :class="agentClauseChipClass(c)"
+                          :title="agentClauseChipTitle(c)">
+                          {{ c.clause_id }} {{ (c.heading || '').substring(0, 8) }}
+                        </span>
+                      </div>
+                      <div class="flex flex-wrap items-center gap-1.5 mt-1.5 text-[10px] text-slate-400">
+                        <span><span class="inline-block w-1.5 h-1.5 rounded-full bg-rose-400 align-middle"></span> 深查</span>
+                        <span><span class="inline-block w-1.5 h-1.5 rounded-full bg-amber-400 align-middle"></span> 快筛</span>
+                        <span><span class="inline-block w-1.5 h-1.5 rounded-full bg-slate-300 align-middle"></span> 跳过</span>
+                        <span class="text-slate-300">｜悬停查看候选线索与判定</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- 规划 · 怎么判断 -->
+                  <div v-if="agentPlan.length" class="relative pl-6 pb-4">
+                    <span class="absolute left-0 top-1 w-3 h-3 rounded-full bg-violet-500 ring-4 ring-white"></span>
+                    <div
+                      @click="toggleCot('plan')"
+                      class="flex items-center text-[11px] font-semibold text-slate-700 mb-1.5 cursor-pointer select-none">
+                      <span>规划<span class="font-normal text-slate-400 ml-1">怎么判断</span></span>
+                      <span v-if="agentPlanMeta && agentPlanMeta.summary" class="ml-2 text-[10px] font-mono">
+                        <span class="text-rose-600">深查 {{ agentPlanMeta.summary.deep }}</span>
+                        <span class="text-slate-300"> / </span><span class="text-amber-600">快筛 {{ agentPlanMeta.summary.quick }}</span>
+                        <span class="text-slate-300"> / </span><span class="text-slate-400">跳过 {{ agentPlanMeta.summary.skip }}</span>
+                      </span>
+                      <span class="ml-auto text-slate-300 font-normal">{{ cotOpen.plan ? '▾' : '▸' }}</span>
+                    </div>
+                    <div v-show="cotOpen.plan">
+                      <!-- 深查条款叙事列表 -->
+                      <div class="space-y-1">
+                        <div v-for="p in agentDeepList" :key="p.clause_id" class="flex items-baseline space-x-2 text-[11px] leading-5">
+                          <span class="w-1 h-1 rounded-full bg-rose-400 shrink-0 translate-y-[3px]"></span>
+                          <span class="shrink-0">
+                            <span class="font-mono text-rose-600">{{ p.clause_id }}</span>
+                            <span class="text-slate-700 font-medium ml-1">{{ p.heading }}</span>
+                          </span>
+                          <span class="text-rose-500 font-mono text-[10px] shrink-0">{{ p.risk_score }}分</span>
+                          <span class="text-slate-500 min-w-0" :title="p.why">{{ p.why }}</span>
+                        </div>
+                      </div>
+                      <!-- 快筛/跳过明细（折叠） -->
+                      <details v-if="agentQuickSkipList.length" class="mt-1.5">
+                        <summary class="text-[10px] text-slate-400 cursor-pointer select-none hover:text-slate-600">
+                          快筛 {{ agentPlanMeta && agentPlanMeta.summary ? agentPlanMeta.summary.quick : '' }} 条 ｜ 跳过 {{ agentPlanMeta && agentPlanMeta.summary ? agentPlanMeta.summary.skip : '' }} 条 · 逐条明细
+                        </summary>
+                        <div class="mt-1 ml-1 space-y-0.5 pl-2.5 border-l border-slate-100">
+                          <div
+                            v-for="p in agentQuickSkipList" :key="p.clause_id"
+                            class="flex items-center space-x-2 text-[11px] leading-5">
+                            <span class="font-mono text-slate-400 w-8 shrink-0">{{ p.clause_id }}</span>
+                            <span class="px-1.5 py-0 rounded border font-semibold shrink-0" :class="agentActionClass(p.action)">{{ agentActionLabel(p.action) }}</span>
+                            <span class="font-mono text-slate-400 w-7 shrink-0">{{ p.risk_score }}分</span>
+                            <span class="text-slate-500 truncate" :title="p.why">{{ p.why }}</span>
+                          </div>
+                        </div>
+                      </details>
+                    </div>
+                  </div>
+
+                  <!-- 行动 · 怎么查的 -->
+                  <div v-if="agentTraces.length || agentRiskCards.length" class="relative pl-6 pb-4">
+                    <span class="absolute left-0 top-1 w-3 h-3 rounded-full bg-emerald-500 ring-4 ring-white"></span>
+                    <div
+                      @click="toggleCot('act')"
+                      class="flex items-center text-[11px] font-semibold text-slate-700 mb-1.5 cursor-pointer select-none">
+                      <span>行动<span class="font-normal text-slate-400 ml-1">怎么查的</span></span>
+                      <span class="ml-2 text-[10px] font-mono">
+                        <span :class="agentActSummary.deepDone >= agentPlanDeepCount && agentPlanDeepCount > 0 ? 'text-emerald-600' : 'text-amber-600'">深查执行 {{ agentActSummary.deepDone }}/{{ agentPlanDeepCount }}</span>
+                        <template v-if="agentActSummary.upgraded"><span class="text-slate-300"> · </span><span class="text-amber-600">快筛升级 {{ agentActSummary.upgraded }}</span></template>
+                        <span class="text-slate-300"> · </span><span class="text-slate-500">证据链 {{ agentActSummary.evidence }}</span>
+                        <template v-if="agentCoverage.total">
+                          <span class="text-slate-300"> · </span>
+                          <span :class="agentCoverage.covered >= agentCoverage.total ? 'text-emerald-600' : 'text-rose-500'">
+                            覆盖 {{ agentCoverage.covered }}/{{ agentCoverage.total }}
+                          </span>
+                        </template>
+                      </span>
+                      <span class="ml-auto text-slate-300 font-normal">{{ cotOpen.act ? '▾' : '▸' }}</span>
+                    </div>
+                    <div v-show="cotOpen.act">
+                      <!-- 每条深查：结论导向的折叠卡 -->
+                      <div class="space-y-1.5">
+                        <details
+                          v-for="g in agentTracesByClause" :key="'tg' + g.clause_id"
+                          class="group rounded-lg border border-slate-200/80 bg-slate-50/40 overflow-hidden">
+                          <summary class="px-2.5 py-1.5 cursor-pointer select-none flex items-center space-x-2 text-[11px] hover:bg-slate-100/60">
+                            <span class="font-mono text-slate-500">{{ g.clause_id }}</span>
+                            <span class="text-slate-700 font-medium truncate max-w-[9rem]">{{ g.heading }}</span>
+                            <span class="text-slate-300">→</span>
+                            <span
+                              v-if="g.severity"
+                              class="px-1.5 py-0 rounded text-[10px] font-semibold border shrink-0"
+                              :class="agentSeverityChipClass(g.severity)">
+                              {{ agentSeverityText(g.severity) }}
+                            </span>
+                            <span v-if="g.confidence != null" class="text-[10px] text-slate-400 font-mono shrink-0">置信度 {{ Math.round(g.confidence * 100) }}%</span>
+                            <span class="ml-auto text-slate-300 transition-transform duration-200 group-open:rotate-90">▸</span>
+                          </summary>
+                          <div class="px-2.5 py-1.5 space-y-1 border-t border-slate-200/70 bg-white">
+                            <!-- 取证步骤（略去流程节点，突出证据） -->
+                            <div
+                              v-for="(t, ti) in g.steps.filter(s => s.step !== '深查开始' && s.step !== '深查完成')" :key="'t' + ti"
+                              class="flex items-start space-x-1.5 text-[11px]">
+                              <span class="w-1 h-1 rounded-full bg-emerald-400 mt-1.5 shrink-0"></span>
+                              <span class="px-1 rounded bg-slate-100 text-slate-600 font-mono shrink-0">{{ t.step }}</span>
+                              <span class="text-slate-500 min-w-0">{{ t.result_summary }}</span>
+                            </div>
+                            <!-- 模型自检（思维链的自省） -->
+                            <div
+                              v-if="g.critique"
+                              class="mt-1.5 px-2 py-1.5 rounded bg-indigo-50/70 border border-indigo-100 text-[11px] text-indigo-900 leading-5">
+                              <span class="font-semibold">🧠 </span>{{ g.critique }}
+                            </div>
+                          </div>
+                        </details>
+                      </div>
+                      <!-- 逐条留痕：已审查未发现风险的条款 -->
+                      <div v-if="agentCleanCards.length" class="mt-2 pt-1.5 border-t border-slate-100 flex flex-wrap items-center gap-1 text-[10px]">
+                        <span class="text-slate-400">✅ 已审查未发现实质风险</span>
+                        <span
+                          v-for="c in agentCleanCards" :key="'cl' + c.clause_id"
+                          class="px-1.5 py-0.5 rounded bg-emerald-50/60 text-emerald-600 border border-emerald-100 font-mono"
+                          :title="c.heading + (c.source === 'quick_scan' ? '（快筛核验）' : (c.source === 'skip' ? '（低风险跳过）' : ''))">
+                          {{ c.clause_id }}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- 反思 · 整体怎么看 -->
+                  <div v-if="agentReflection || agentReopen" class="relative pl-6">
+                    <span class="absolute left-0 top-1 w-3 h-3 rounded-full bg-orange-400 ring-4 ring-white"></span>
+                    <div
+                      @click="toggleCot('reflect')"
+                      class="flex items-center text-[11px] font-semibold text-slate-700 mb-1 cursor-pointer select-none">
+                      <span>反思<span class="font-normal text-slate-400 ml-1">整体怎么看</span></span>
+                      <template v-if="agentReflection">
+                        <span v-if="agentReflection.final_rating" class="ml-2 text-[10px] font-mono text-slate-500">{{ agentReflection.final_rating }}</span>
+                        <span v-if="agentReflection.confidence != null" class="text-[10px] font-mono text-slate-400"> · 置信度 {{ Math.round(agentReflection.confidence * 100) }}%</span>
+                        <span v-if="agentReflection.missed_clause_ids && agentReflection.missed_clause_ids.length" class="text-[10px] font-mono text-orange-500"> · 漏检 {{ agentReflection.missed_clause_ids.length }}</span>
+                      </template>
+                      <span class="ml-auto text-slate-300 font-normal">{{ cotOpen.reflect ? '▾' : '▸' }}</span>
+                    </div>
+                    <div v-show="cotOpen.reflect">
+                      <div v-if="agentReflection && agentReflection.overall_comment" class="text-[12px] text-slate-700 leading-5">
+                        {{ agentReflection.overall_comment }}
+                      </div>
+                      <div v-if="agentReflection && agentReflection.levers && agentReflection.levers.length" class="flex flex-wrap items-center gap-1 mt-1.5">
+                        <span class="text-[10px] text-slate-400">谈判抓手</span>
+                        <span
+                          v-for="(lv, li) in agentReflection.levers" :key="'lv' + li"
+                          class="px-1.5 py-0.5 rounded bg-orange-50/70 text-orange-700 border border-orange-200 text-[10px]">
+                          {{ lv }}
+                        </span>
+                      </div>
+                      <div v-if="agentReopen" class="mt-1 text-[11px] text-orange-600 leading-5">
+                        ↻ 反思回环：推翻跳过判定，补充深查 {{ (agentReopen.clause_ids || []).join('、') }} — {{ agentReopen.finding }}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <!-- 状态 1：初始未开始状态 (现代 SaaS 空状态插画与文字) -->
             <div v-if="!hasResults && !isReviewing && !reviewContent" class="h-full flex flex-col items-center justify-center text-center p-8">
               <div class="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center text-slate-400 mb-3 border border-slate-200 shadow-xs">
@@ -705,6 +1058,55 @@
         const userScrolledUp = ref(false);
         const isGeneratingDraft = ref(false);
         const revisedContractText = ref('');
+
+        // ===== 示例合同下拉列表 =====
+        const sampleMenuOpen = ref(false);      // 下拉面板展开态
+        const sampleList = ref([]);             // [{id, name, desc, badge, char_count, clause_count, agent_triggered}]
+        const sampleLoadingId = ref('');        // 正在载入的合同 id（显示 loading）
+        const sampleListLoaded = ref(false);
+
+        // 当前推理模型（由后端 status 帧透传，便于用户判断性能与耗时）
+        const activeModel = ref('');
+
+        // ===== Agent 轨迹（感知→规划→行动→反思 四阶段可视化）=====
+        const agentPanelOpen = ref(true);          // 轨迹面板折叠开关
+        const agentPerceive = ref(null);           // {clause_count, split_mode, keyword_type, clauses:[...]}
+        const agentPlan = ref([]);                 // [{clause_id, risk_score, action, why, tools}]
+        const agentPlanMeta = ref(null);           // {contract_type, overall_strategy, summary}
+        const agentTraces = ref([]);               // [{clause_id, step, args, result_summary}] 按到达顺序
+        const agentRiskCards = ref([]);            // [{clause_id, heading, severity, source, confidence, supplement}]
+        const agentReflection = ref(null);         // {scope, missed_clause_ids, final_rating, confidence, overall_comment}
+        const agentReopen = ref(null);             // {scope:'reopen', clause_ids, finding}
+        const agentFallbacks = ref([]);            // [message, ...] 降级/兜底通知
+        const agentStats = ref(null);              // meta: {tool_calls, llm_calls, elapsed_seconds, plan_summary}
+        // 模型的思维链（thinking 推理流，按到达顺序，含规划思路与各深查分析）
+        const agentThinking = ref([]);             // [{label, text, phase, clause_id}]
+        // 深度思考流：thinking 推理与工具动作按到达顺序交错（对标 WorkBuddy 的思考呈现）
+        const agentStream = ref([]);               // [{kind:'think'|'action', ...}]
+        // 已审查但未发现实质风险的条款（逐条留痕展示，杜绝「漏审」观感）
+        const agentCleanCards = computed(
+          () => agentRiskCards.value.filter((c) => c.severity === 'clean')
+        );
+        // 覆盖度：已产生结论的条款数 / 感知到的条款总数
+        const agentCoverage = computed(() => {
+          const total = (agentPerceive.value && agentPerceive.value.clause_count)
+            || agentPlan.value.length || 0;
+          const ids = new Set(agentRiskCards.value.map((c) => c.clause_id));
+          return { covered: ids.size, total };
+        });
+        // 深度思考流中的动作次数（用于标题摘要）
+        const agentStreamActionCount = computed(
+          () => agentStream.value.filter((x) => x.kind === 'action').length
+        );
+        // 思维链各段折叠状态（用户可逐段收起/展开，避免长内容铺满屏幕）
+        const cotOpen = ref({ thinking: true, strategy: true, perceive: true, plan: true, act: true, reflect: true });
+        const toggleCot = (k) => { cotOpen.value[k] = !cotOpen.value[k]; };
+        // 是否全部展开（用于「折叠全部 / 展开全部」按钮）
+        const allCotOpen = computed(() => Object.values(cotOpen.value).every(Boolean));
+        const toggleAllCot = () => {
+          const next = !allCotOpen.value;
+          Object.keys(cotOpen.value).forEach((k) => { cotOpen.value[k] = next; });
+        };
         
         // 右侧 Tab 切换 ('review' | 'draft')
         const activeTab = ref('review');
@@ -785,20 +1187,58 @@
           if (file) uploadFileToServer(file);
         };
 
-        const loadSampleContract = async () => {
-          try {
-            const res = await fetch('/api/contract/sample');
-            const data = await res.json();
-            if (data.data) {
-              contractText.value = data.data.content;
-              uploadedFileName.value = data.data.title;
-              contractType.value = data.data.contract_type || '软件技术开发与外包采购合同';
-              clientRole.value = '乙方 (供应/受托/承揽/承租方)';
-              reviewStance.value = '对等平衡 (常规商业惯例)';
-              ElementPlus.ElMessage.success('已载入示范合同（立场已设为【乙方】）');
+        // ===== 示例合同：下拉列表 =====
+        const toggleSampleMenu = async () => {
+          if (isReviewing.value) return;
+          sampleMenuOpen.value = !sampleMenuOpen.value;
+          if (sampleMenuOpen.value && !sampleListLoaded.value) {
+            try {
+              const res = await fetch('/api/contract/sample/list');
+              const data = await res.json();
+              if (Array.isArray(data.data)) {
+                sampleList.value = data.data;
+                sampleListLoaded.value = true;
+              }
+            } catch (e) {
+              ElementPlus.ElMessage.error('示例合同清单加载失败: ' + e.message);
             }
+          }
+        };
+
+        const closeSampleMenu = () => { sampleMenuOpen.value = false; };
+
+        // 载入指定 id 的示例合同
+        const loadSampleContract = async (item) => {
+          const id = (item && item.id) ? item.id : '';
+          if (!id) return;
+          sampleLoadingId.value = id;
+          sampleMenuOpen.value = false;
+          try {
+            const res = await fetch('/api/contract/sample?id=' + encodeURIComponent(id));
+            const data = await res.json();
+            if (!data.data) throw new Error(data.message || '响应为空');
+            const d = data.data;
+            contractText.value = d.content;
+            uploadedFileName.value = d.title;
+            contractType.value = d.contract_type || contractType.value;
+            if (d.client_role) clientRole.value = d.client_role;
+            if (d.review_stance) reviewStance.value = d.review_stance;
+
+            // 清掉上一份合同残留的审查结果，避免新旧混淆
+            reviewContent.value = '';
+            precedents.value = [];
+            hasResults.value = false;
+            revisedContractText.value = '';
+            resetAgentTrace();
+
+            const willAgent = (d.char_count >= 2000);
+            ElementPlus.ElMessage.success(
+              `已载入【${d.title}】（${d.char_count} 字）` + (willAgent ? ' · 将走 Agent 智能审查' : ' · 将走快速审查')
+            );
           } catch (e) {
-            ElementPlus.ElMessage.error('载入失败: ' + e);
+            ElementPlus.ElMessage.error('载入失败: ' + e.message);
+          } finally {
+            sampleLoadingId.value = '';
           }
         };
 
@@ -812,6 +1252,151 @@
           userScrolledUp.value = false;
           revisedContractText.value = '';
           activeTab.value = 'review';
+          agentPerceive.value = null;
+          agentPlan.value = [];
+          agentPlanMeta.value = null;
+          agentTraces.value = [];
+          agentRiskCards.value = [];
+          agentReflection.value = null;
+          agentReopen.value = null;
+          agentFallbacks.value = [];
+          agentStats.value = null;
+          agentThinking.value = [];
+          agentStream.value = [];
+          cotOpen.value = { thinking: true, strategy: true, perceive: true, plan: true, act: true, reflect: true };
+          agentPanelOpen.value = true;
+        };
+
+        // Agent 新增帧统一重置（供 startReview 复用）
+        const resetAgentTrace = () => {
+          agentPerceive.value = null;
+          agentPlan.value = [];
+          agentPlanMeta.value = null;
+          agentTraces.value = [];
+          agentRiskCards.value = [];
+          agentReflection.value = null;
+          agentReopen.value = null;
+          agentFallbacks.value = [];
+          agentStats.value = null;
+          agentThinking.value = [];
+          agentStream.value = [];
+          cotOpen.value = { thinking: true, strategy: true, perceive: true, plan: true, act: true, reflect: true };
+          agentPanelOpen.value = true;
+        };
+
+        // 规划动作三色标签样式映射
+        const agentActionClass = (action) => {
+          if (action === 'deep_dive') return 'bg-rose-50 text-rose-700 border-rose-200';
+          if (action === 'quick_scan') return 'bg-amber-50 text-amber-700 border-amber-200';
+          return 'bg-slate-100 text-slate-500 border-slate-200';
+        };
+        const agentActionLabel = (action) => {
+          if (action === 'deep_dive') return '深查';
+          if (action === 'quick_scan') return '快筛';
+          return '跳过';
+        };
+
+        // 某条款的工具调用轨迹（按 clause_id 过滤）
+        const agentTracesByClause = computed(() => {
+          const groups = [];
+          const map = {};
+          for (const t of agentTraces.value) {
+            if (!map[t.clause_id]) {
+              map[t.clause_id] = { clause_id: t.clause_id, steps: [], critique: '', severity: '', confidence: null, why: '' };
+              groups.push(map[t.clause_id]);
+            }
+            map[t.clause_id].steps.push(t);
+            if (t.step === '深查完成') {
+              if (t.critique) map[t.clause_id].critique = t.critique;
+              if (t.severity) map[t.clause_id].severity = t.severity;
+              if (t.confidence != null) map[t.clause_id].confidence = t.confidence;
+            }
+            if (t.step === '深查开始' && !map[t.clause_id].why) {
+              map[t.clause_id].why = t.result_summary || '';
+            }
+          }
+          // 回填条款标题（用于行动段结论卡的标题行）
+          const hm = agentClauseHeadingMap.value;
+          for (const g of groups) g.heading = hm[g.clause_id] || g.clause_id;
+          return groups;
+        });
+
+        // 规划中标记「深查」的条款数（用于与行动段执行数对照）
+        const agentPlanDeepCount = computed(
+          () => agentPlan.value.filter(p => p.action === 'deep_dive').length
+        );
+
+        // 行动段执行汇总：深查执行数 / 快筛升级数 / 证据链条数
+        const agentActSummary = computed(() => {
+          const traces = agentTraces.value;
+          // 分子只统计「规划中标记为深查」的条款完成数，避免把快筛升级条款混入导致 4/3 这类越界显示
+          const planDeepIds = new Set(
+            agentPlan.value.filter(p => p.action === 'deep_dive').map(p => p.clause_id)
+          );
+          const finishedIds = traces.filter(t => t.step === '深查完成').map(t => t.clause_id);
+          const deepDone = finishedIds.filter(id => planDeepIds.has(id)).length;
+          const upgraded = traces.filter(t => t.step === 'quick_scan_upgrade').length;
+          const evidence = traces.filter(t => {
+            const s = t.step || '';
+            return s.includes('·预取') || s === 'statute_lookup' || s === 'precedent_search'
+              || s === 'gate_check' || s === 'clause_rewrite' || s === 'rule_scan'
+              || s === 'selfcheck_retry';
+          }).length;
+          return { deepDone, upgraded, evidence };
+        });
+
+        // ===== 思维链（时间线叙事流）辅助 =====
+        // 条款标题映射（perceive.clauses → plan/trace 只有 clause_id 需要回填 heading）
+        const agentClauseHeadingMap = computed(() => {
+          const m = {};
+          for (const c of (agentPerceive.value && agentPerceive.value.clauses) || []) {
+            m[c.clause_id] = c.heading || c.clause_id;
+          }
+          return m;
+        });
+        // 深查条款列表（规划），关联条款标题，用于「规划 · 怎么判断」叙事段
+        const agentDeepList = computed(() =>
+          agentPlan.value
+            .filter(p => p.action === 'deep_dive')
+            .map(p => ({ ...p, heading: agentClauseHeadingMap.value[p.clause_id] || p.clause_id }))
+        );
+        // 快筛/跳过明细（折叠在规划段末尾）
+        const agentQuickSkipList = computed(() =>
+          agentPlan.value.filter(p => p.action !== 'deep_dive')
+        );
+        // 严重度文案与样式
+        const agentSeverityText = (sev) =>
+          sev === 'high' ? '高危风险' : (sev === 'medium' ? '中危风险' : (sev === 'clean' ? '未见实质风险' : '已审查'));
+        const agentSeverityChipClass = (sev) =>
+          sev === 'high' ? 'bg-rose-50 text-rose-600 border-rose-200'
+            : (sev === 'medium' ? 'bg-amber-50 text-amber-600 border-amber-200'
+            : 'bg-emerald-50 text-emerald-600 border-emerald-200');
+
+
+        // ===== 感知段 chips 与规划判定联动 =====
+        // 初始按候选线索着色；规划帧到达后自动切换为判定色，消除「标红与深查不一致」
+        const agentPlanActionMap = computed(() => {
+          const m = {};
+          for (const p of agentPlan.value) m[p.clause_id] = p.action;
+          return m;
+        });
+        const agentClauseChipClass = (c) => {
+          const action = agentPlanActionMap.value[c.clause_id];
+          if (action === 'deep_dive') return 'bg-rose-50 text-rose-600 border-rose-200';
+          if (action === 'quick_scan') return 'bg-amber-50 text-amber-600 border-amber-200';
+          if (action === 'skip') return 'bg-slate-100 text-slate-500 border-slate-200';
+          return (c.candidate_labels && c.candidate_labels.length)
+            ? 'bg-rose-50/60 text-rose-500 border-rose-100'
+            : 'bg-slate-50 text-slate-500 border-slate-200';
+        };
+        const agentClauseChipTitle = (c) => {
+          const parts = [];
+          if (c.candidate_labels && c.candidate_labels.length) {
+            parts.push('候选线索：' + c.candidate_labels.join('、'));
+          }
+          const action = agentPlanActionMap.value[c.clause_id];
+          if (action) parts.push('规划判定：' + agentActionLabel(action));
+          return parts.join(' ｜ ') || '无候选标签（规划后按判定着色）';
         };
 
         const stats = computed(() => {
@@ -1216,7 +1801,13 @@
                   .replace(/^\[(高危|中危|低危|合规|优化|重大)?风险?\]\s*/g, '')
                   .trim();
                 const cMatch = cleanTitle.match(/^((?:第[一二三四五六七八九十\d]+条|\d+\.\d+)[^：:]*)[：:]\s*(.*)$/);
-                const shortName = cMatch ? cMatch[1] : cleanTitle.substring(0, 10);
+                let shortName = cMatch ? cMatch[1] : cleanTitle.substring(0, 10);
+                // 同一条款的多张风险卡（不同子条款）已在后端标题中补充定位词「（…）」，
+                // 这里把定位词并入按钮名，避免导航出现同名条目
+                const tagMatch = cleanTitle.match(/[（(]([^）)]{2,14})[）)]\s*$/);
+                if (tagMatch) {
+                  shortName = shortName + ' · ' + tagMatch[1].substring(0, 8);
+                }
                 const idx = curRiskIdx;
 
                 quickNavButtons.push(`
@@ -1350,6 +1941,7 @@
           reviewContent.value = '';
           revisedContractText.value = '';
           precedents.value = [];
+          resetAgentTrace();
           activeTab.value = 'review';
           statusMessage.value = '正在检索法律依据与合规审查规则...';
 
@@ -1393,6 +1985,9 @@
                       if (frame.detected_type) {
                         contractType.value = frame.detected_type;
                       }
+                      if (frame.model) {
+                        activeModel.value = frame.model;
+                      }
                     } else if (frame.type === 'precedents') {
                       precedents.value = frame.data || [];
                       statusMessage.value = frame.message;
@@ -1420,6 +2015,81 @@
                           reportContainer.value.scrollTo({ top: 0, behavior: 'smooth' });
                         }
                       });
+                    } else if (frame.type === 'perceive') {
+                      // Agent Phase 1 感知：条款结构化完成
+                      agentPerceive.value = frame.data || null;
+                      if (frame.message) statusMessage.value = frame.message;
+                    } else if (frame.type === 'thinking') {
+                      // 模型的思维链：规划思路 / 各深查分析（真正的推理文本流）
+                      if (frame.data && frame.data.text) {
+                        const d = frame.data;
+                        const label = d.phase === 'plan' ? '规划思路'
+                          : (d.clause_id ? `深查 [${d.clause_id}]` : '分析');
+                        const item = { label, text: d.text, phase: d.phase || '', clause_id: d.clause_id || '' };
+                        agentThinking.value.push(item);
+                        agentStream.value.push({ kind: 'think', label, text: item.text, clause_id: item.clause_id });
+                      }
+                    } else if (frame.type === 'plan') {
+                      // Agent Phase 2 规划：逐条分诊完成
+                      agentPlan.value = (frame.data && frame.data.clauses) || [];
+                      agentPlanMeta.value = frame.data ? {
+                        contract_type: frame.data.contract_type,
+                        overall_strategy: frame.data.overall_strategy,
+                        summary: frame.data.summary
+                      } : null;
+                      if (frame.message) statusMessage.value = frame.message;
+                    } else if (frame.type === 'trace') {
+                      // Agent Phase 3 行动：工具调用轨迹流
+                      if (frame.data) {
+                        agentTraces.value.push(frame.data);
+                        // 真实工具动作与自检重试并入「深度思考」流（过滤纯流程节点），
+                        // 与 thinking 推理段交错，呈现「边想边做」的连续过程
+                        const st = frame.data.step || '';
+                        if (st !== '深查开始' && st !== '深查完成') {
+                          agentStream.value.push({
+                            kind: 'action',
+                            step: st,
+                            summary: frame.data.result_summary || '',
+                            clause_id: frame.data.clause_id || '',
+                          });
+                        }
+                      }
+                    } else if (frame.type === 'risk_card') {
+                      // Agent 行动产物：风险卡片（card 为 null 表示该条款无实质风险）
+                      if (frame.data) {
+                        const d = frame.data;
+                        // 同一条款去重：兜底留痕会先给「未见风险」占位记录，
+                        // 反思补查若随后检出风险，应以有卡片的结果覆盖，避免同条款两条记录
+                        const i = agentRiskCards.value.findIndex(c => c.clause_id === d.clause_id && !c.supplement);
+                        if (i >= 0) {
+                          const old = agentRiskCards.value[i];
+                          if (d.card && !old.card) {
+                            agentRiskCards.value.splice(i, 1, d);
+                          } else if (!d.card && !old.card) {
+                            // 两条都是「未见风险」，忽略重复
+                          } else {
+                            agentRiskCards.value.push(d);
+                          }
+                        } else {
+                          agentRiskCards.value.push(d);
+                        }
+                      }
+                    } else if (frame.type === 'reflection') {
+                      // Agent Phase 4 反思：全局复核 / 回环补审
+                      if (frame.data && frame.data.scope === 'reopen') {
+                        agentReopen.value = frame.data;
+                      } else if (frame.data) {
+                        agentReflection.value = frame.data;
+                      }
+                    } else if (frame.type === 'agent_meta') {
+                      // Agent 统计元信息（工具/模型调用次数、耗时、规划汇总）
+                      agentStats.value = frame.data || null;
+                    } else if (frame.type === 'fallback_notice') {
+                      // 降级/兜底通知（含引擎级降级、规则补位、交叉验证补漏、预算收敛）
+                      if (frame.message) agentFallbacks.value.push(frame.message);
+                      if (frame.message && frame.data && frame.data.scope === 'engine') {
+                        statusMessage.value = frame.message;
+                      }
                     } else if (frame.type === 'error') {
                       ElementPlus.ElMessage.error(frame.message);
                       statusMessage.value = '审查异常中断';
@@ -1587,6 +2257,13 @@
           handleFileSelect,
           handleFileDrop,
           loadSampleContract,
+          sampleMenuOpen,
+          sampleList,
+          sampleLoadingId,
+          sampleListLoaded,
+          toggleSampleMenu,
+          closeSampleMenu,
+          activeModel,
           clearAll,
           startReview,
           copyReviewReport,
@@ -1599,7 +2276,39 @@
           draftForm,
           submitCreateDraft,
           downloadAnnotatedDocx,
-          isContractCompliant
+          isContractCompliant,
+          agentPanelOpen,
+          agentPerceive,
+          agentPlan,
+          agentPlanMeta,
+          agentTraces,
+          agentTracesByClause,
+          agentPlanDeepCount,
+          agentActSummary,
+          agentPlanActionMap,
+          agentClauseChipClass,
+          agentClauseChipTitle,
+          agentClauseHeadingMap,
+          agentDeepList,
+          agentQuickSkipList,
+          agentSeverityText,
+          agentSeverityChipClass,
+          agentThinking,
+          cotOpen,
+          toggleCot,
+          allCotOpen,
+          toggleAllCot,
+          agentStream,
+          agentStreamActionCount,
+          agentCleanCards,
+          agentCoverage,
+          agentRiskCards,
+          agentReflection,
+          agentReopen,
+          agentFallbacks,
+          agentStats,
+          agentActionClass,
+          agentActionLabel
         };
       }
     }).use(ElementPlus).mount('#app');

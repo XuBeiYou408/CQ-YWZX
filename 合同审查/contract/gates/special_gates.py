@@ -104,6 +104,29 @@ CLAUSE_GATES: Dict[str, Dict[str, Any]] = {
     }
 }
 
+def get_gate_by_name(gate_name: str) -> Dict[str, Any] | None:
+    """
+    按门禁名取用核查要点（Agent 行动层 gate_check 工具的按需取用入口）。
+    支持模糊匹配：传入「软件技术开发」「软件技术开发与外包采购」等子串均可命中。
+    同时检索类型门禁与条款级深水区门禁。
+    """
+    if not gate_name:
+        return None
+    name = gate_name.strip()
+    for gk, gv in SPECIAL_GATES.items():
+        if name == gk or name in gk or gk in name or name in gv.get("gate_title", ""):
+            return {"type": "type_gate", "name": gk, "title": gv["gate_title"], "checkpoints": gv["checkpoints"]}
+    for gk, gv in CLAUSE_GATES.items():
+        if name == gk or name in gk or gk in name:
+            return {"type": "clause_gate", "name": gk, "title": f"【条款级深挖门禁】{gk}", "checkpoints": gv["checkpoints"]}
+    return None
+
+
+def list_gate_names() -> List[str]:
+    """列出全部可按名取用的门禁清单（注入 Agent 工具说明）"""
+    return list(SPECIAL_GATES.keys()) + list(CLAUSE_GATES.keys())
+
+
 def route_special_gates(contract_text: str, contract_type: str = "") -> List[Dict[str, Any]]:
     """根据合同正文与类型，智能路由并提取专项门禁核查要点"""
     matched_gates = []

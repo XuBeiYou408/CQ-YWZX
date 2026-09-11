@@ -16,7 +16,12 @@ from app.schemas import (
     ContractExportRequest,
     ContractDraftRequest
 )
-from sample_contract import SAMPLE_CONTRACT_TEXT
+from sample_contract import (
+    SAMPLE_CONTRACT_TEXT,
+    AGENT_CONTRACT_TEXT,
+    SAMPLE_CONTRACTS,
+    get_sample_contract_by_id,
+)
 from contract.precedents import PRECEDENTS_DATABASE, search_precedents
 from contract.parser import parse_uploaded_file, detect_contract_type
 from contract.engine import engine
@@ -44,14 +49,55 @@ async def upload_contract_file(file: UploadFile = File(...)):
         logger.error(f"文件解析失败: {str(e)}", exc_info=True)
         raise HTTPException(status_code=400, detail=f"文件解析失败: {str(e)}")
 
+@router.get("/sample/list", response_model=APIResponse)
+async def list_sample_contracts():
+    """获取内置示例合同清单（供前端下拉列表选择）"""
+    from contract.clause_splitter import split_clauses
+    items = []
+    for c in SAMPLE_CONTRACTS:
+        text = c["text"].strip()
+        clause_count = len(split_clauses(text))
+        char_count = len(text)
+        items.append({
+            "id": c["id"],
+            "name": c["name"],
+            "desc": c["desc"],
+            "badge": c.get("badge", ""),
+            "contract_type": c["contract_type"],
+            "char_count": char_count,
+            "clause_count": clause_count,
+            # 与后端 Agent 路由判定保持一致，前端可据此提示用户
+            "agent_triggered": clause_count >= 8 and char_count >= 2000,
+        })
+    return APIResponse(data=items)
+
+
 @router.get("/sample", response_model=APIResponse)
-async def get_sample_contract():
-    """获取预设的示范合同剧本"""
+async def get_sample_contract(id: str = None, mode: str = None):
+    """
+    获取预设的示范合同
+    id   ：合同标识（不传则取清单第一项，即软件定制开发合同 Agent 演示版）
+    mode ：兼容旧参数，mode=small 等价于 id=dev_small
+    """
+    if id is None and mode == "small":
+        id = "dev_small"
+
+    entry = get_sample_contract_by_id(id) if id else None
+    if entry is None and id:
+        return APIResponse(code=404, message=f"未找到示例合同：{id}", data=None)
+    if entry is None:
+        entry = SAMPLE_CONTRACTS[0]
+
+    text = entry["text"].strip()
     return APIResponse(data={
-        "title": "企业级智能协同系统软件定制开发与采购合同 (示范版)",
-        "content": SAMPLE_CONTRACT_TEXT.strip(),
-        "char_count": len(SAMPLE_CONTRACT_TEXT.strip()),
-        "contract_type": "软件技术开发与外包采购合同"
+        "id": entry["id"],
+        "title": entry["name"],
+        "content": text,
+        "char_count": len(text),
+        "contract_type": entry["contract_type"],
+        "client_role": entry.get("client_role", ""),
+        "review_stance": entry.get("review_stance", ""),
+        "mode": entry["id"],
     })
 
 @router.get("/precedents", response_model=APIResponse)

@@ -88,10 +88,16 @@ flowchart TD
 │       └── contract.py            # 审查、流式推理、判例检索与 Word 批注导出路由
 │
 ├── contract/                      # 智能体核心算法与风控逻辑层
+│   ├── agent.py                   # [Agent 核心] 感知→规划→行动→反思四阶段自主闭环状态机
+│   ├── planner.py                 # [规划层] 条款级分诊决策器（deep_dive / quick_scan / skip）
+│   ├── clause_splitter.py         # [感知层] 合同结构化拆条与特征提取引擎
+│   ├── rule_cards.py              # [规则安全网] 离线高危霸王条款穿透与交叉验证兜底
+│   ├── statutes.py                # [法条核验] 法律引用真伪与案号一致性核查
+│   ├── tools.py                   # [行动层] Agent 工具箱与动态调用分发
 │   ├── engine.py                  # 审查流程调度中枢与多轮推理管线
 │   ├── parser.py                  # 混合文本与段落结构化解析器
 │   ├── prompts.py                 # 针对法务立场的防御性系统提示词工程
-│   ├── precedents.py              # 20 项最高院裁判指引与司法案例库
+│   ├── precedents.py              # 32 项最高院裁判指引与司法案例库
 │   ├── ooxml_lite.py              # 轻量级 OOXML 批注与修订语法底层引擎
 │   ├── document_annotator.py      # Word 批注封装与字节流导出器
 │   ├── data/                      # 预置标准条款与风控标签字典
@@ -104,11 +110,14 @@ flowchart TD
 │
 ├── frontend/                      # 现代 SaaS 交互工作台前端
 │   └── dist/
-│       ├── index.html             # 单页现代 SaaS 工作台 (Vue 3 + Tailwind + Element Plus)
+│       ├── index.html             # 单页现代 SaaS 工作台 (Vue 3 + Tailwind + Element Plus，支持 Agent 思考与分诊轨迹)
 │       └── marked.min.js          # 本地 Markdown 解析脚本
 │
 └── tests/                         # 自动化测试与质量检验套件
     ├── verify_all.py              # 全链路 5 大核心模块自动化集成测试脚本
+    ├── test_agent_plan.py         # Agent 规划层单测（评分矛盾裁决、预算裁剪、兜底）
+    ├── test_agent_loop_guard.py   # Agent 预算守卫与自愈循环单测
+    ├── test_agent_reflect.py      # Agent 反思层单测（法条核查、交叉比对）
     ├── test_contract_review.py    # 审查逻辑单元测试
     ├── test_annotator.py          # Word 批注导出功能验证
     ├── test_api_endpoints.py      # FastAPI 接口自动化用例

@@ -1,6 +1,10 @@
 """
 智审 (Doc-Agent) - 审查执行引擎与 LM Studio 统一调度层 (融合 contract-review-pro 方法论)
-支持立场声明、框架审阅四问、专项门禁自适应路由、初稿从零起草与 Word 原生批注导出
+v2.0 Agent 化改造（融合终版计划书）：
+  - stream_review 签名与全部旧 SSE 事件保持不变（向后兼容）
+  - 大合同（条款 ≥ 8 且字数 ≥ 2000）→ 走 Agent 主循环（感知→规划→行动→反思）
+  - 小合同 / Agent 失效 → 降级为旧管道全量单次审查（下限不降低）
+  - rule_based_contract_scan 保留为兜底工具 + 规则交叉验证安全网
 """
 import re
 import os
@@ -18,108 +22,20 @@ from contract.precedents import search_precedents
 from contract.parser import detect_contract_type
 from contract.gates.special_gates import route_special_gates
 from contract.document_annotator import annotator
+from contract.rule_cards import rule_engine_fallback_report
+from contract.agent import ContractReviewAgent, LLMClient
+
+logger = logging.getLogger(__name__)
 
 
 def rule_based_contract_scan(contract_text: str, contract_type: str, client_role: str, review_stance: str) -> Optional[str]:
     """
     当端侧大模型因显存溢出、网络中断或极端情况未生成报告时，
     由离线规则引擎进行高危霸王条款穿透熔断审查，确保 100% 拦截致命风险。
+    （v2.0：规则卡片数据已抽离至 rule_cards.py，本函数输出格式与旧版完全一致）
     """
-    cards = []
-    
-    # 1. 违约金畸高与惩罚性赔偿 (民法典第585条 & 最高法184号判例)
-    if any(k in contract_text for k in ["5%", "5％", "百分之五", "千分之五", "100% 的惩罚性", "100%惩罚性"]):
-        cards.append(
-            "#### 🔴 [高危风险] 违约责任：违约金畸高与单方百倍惩罚性赔偿\n"
-            "- **【条款原文引述】**：“每迟延交付一日，乙方应当按照本合同总金额的 5% 向甲方支付违约金……向甲方支付合同总金额 100% 的惩罚性赔偿金。”\n"
-            "- **【依据法律原文】**：\n"
-            "> 📜 **《中华人民共和国民法典》第五百八十五条第二款**：“约定的违约金低于造成的损失的，人民法院或者仲裁机构可以根据当事人的请求予以增加；约定的违约金过分高于造成的损失的，人民法院或者仲裁机构可以根据当事人的请求予以适当减少。”\n"
-            "> 🏛️ **最高人民法院裁判要旨 (2022)最高法民终184号**：“当事人约定的违约金超过造成损失的百分之三十的，一般可以认定为'过分高于造成的损失'。约定的每日千分之五乃至每日5%等脱离实际损失的惩罚性条款，法院依法应当根据当事人请求予以大幅酌减调整。”\n"
-            "- **【法理风险解构】**：约定日5%违约金折合年化高达1825%，且叠加100%惩罚性赔偿金，严重超出最高法关于违约金以实际损失30%为浮动上限的裁判红线，属于显失公平的无效约定。\n"
-            "- **【合规修改建议初稿】**：\n"
-            "```text\n"
-            "每迟延交付一日，违约方应当按照逾期未交付部分金额的日万分之五向守约方支付违约金。违约金总额累计不超过合同总金额的10%。\n"
-            "```"
-        )
+    return rule_engine_fallback_report(contract_text, contract_type, client_role, review_stance)
 
-    # 2. 单方付款免责特权 (民法典第497条 & 最高法441号判例)
-    if any(k in contract_text for k in ["不承担任何迟延履行违约金", "不承担迟延履行违约金", "甲方不承担任何", "免除迟延履行"]):
-        cards.append(
-            "#### 🔴 [高危风险] 违约责任：单方迟延付款绝对免责霸王条款\n"
-            "- **【条款原文引述】**：“因甲方内部审批流程或资金统筹导致逾期付款的，甲方不承担任何迟延履行违约金及利息责任。”\n"
-            "- **【依据法律原文】**：\n"
-            "> 📜 **《中华人民共和国民法典》第四百九十六条、第四百九十七条**：“提供格式条款一方不合理地免除或者减轻其责任、加重对方责任、限制对方主要权利的，该格式条款无效。”\n"
-            "> 🏛️ **最高人民法院裁判要旨 (2023)最高法民终441号**：“商事交易中排除对方主要权利的格式条款当然无效。单方免除己方延期付款违约与利息责任的免责约定，违反权利义务对等原则，法院确认自始不发生法律效力。”\n"
-            "- **【法理风险解构】**：条款单方免除采购方的延期付款违约与利息赔付责任，构成典型的权利义务严重失衡，依法属于加重对方责任、免除己方责任的无效格式条款。\n"
-            "- **【合规修改建议初稿】**：\n"
-            "```text\n"
-            "甲方逾期付款的，每逾期一日，应按照当期应付未付金额的日万分之五向乙方支付逾期违约金；逾期超过30日的，乙方有权暂停履行后续服务。\n"
-            "```"
-        )
-
-    # 3. 任意解除权滥用且零补偿 (民法典第563条 & 最高法115号判例)
-    if any(k in contract_text for k in ["随时单方面无条件解除", "随时无条件解除", "无需对乙方已产生的研发工时", "无需承担任何补偿"]):
-        cards.append(
-            "#### 🔴 [高危风险] 合同解除：单方随时解约且免除已发生成本补偿\n"
-            "- **【条款原文引述】**：“甲方享有随时单方面无条件解除本合同的权利……且甲方无需对乙方已产生的研发工时、人力成本及物料支出承担任何补偿或赔偿责任。”\n"
-            "- **【依据法律原文】**：\n"
-            "> 📜 **《中华人民共和国民法典》第五百六十三条、第五百六十六条**：“合同解除后，尚未履行的，终止履行；已经履行的，根据履行情况和合同性质，当事人可以请求恢复原状或者采取其他补救措施，并有权请求赔偿损失。”\n"
-            "> 🏛️ **最高人民法院裁判要旨 (2020)最高法民终115号**：“除法律特殊规定的任意解除权外，商事合同约定单方无条件随时解约且免除补偿实际直接投入的，违反诚实信用与公平原则。守约方有权就已完成工作量及合理直接损失主张据实全额赔偿。”\n"
-            "- **【法理风险解构】**：赋予采购方无条件单方解约特权且对服务方已实质支出的研发工时和直接成本概不补偿，严重违背等价有偿与诚实信用原则。\n"
-            "- **【合规修改建议初稿】**：\n"
-            "```text\n"
-            "除本合同约定的法定解除事由外，任何一方中途解除合同的，须提前30日书面通知对方，并按照乙方已实际完成的研发工时与阶段成果进行清算付款，据实补偿乙方合理直接损失。\n"
-            "```"
-        )
-
-    # 4. 底层专有技术资产无偿侵吞 (民法典第850条 & 最高法知产892号判例)
-    if any(k in contract_text for k in ["专有底层资产转移", "既有底层开发框架", "自研核心算法库", "永久且无偿转归甲方独家所有"]):
-        cards.append(
-            "#### 🔴 [高危风险] 知识产权：无偿侵吞服务方既有底层核心通用资产\n"
-            "- **【条款原文引述】**：“乙方在本次开发过程中所使用的任何乙方既有底层开发框架、自研核心算法库……其所有权全部永久且无偿转归甲方独家所有。乙方此后不得在任何其他第三方商业项目中再次使用该底层资产。”\n"
-            "- **【依据法律原文】**：\n"
-            "> 📜 **《中华人民共和国民法典》第八百五十条、第八百五十一条**：“受托人使用其在履行合同前已独立研发完成的既有技术基础的，该既有技术基础的知识产权仍归受托人所有。”\n"
-            "> 🏛️ **最高人民法院裁判要旨 (2021)最高法知民终892号**：“受托人在履行委托合同前已独立研发完成的底层架构、基础工具链及通用算法，其所有权与著作权归受托人所有。委托人仅取得定制开发成果业务层的知识产权或许可使用权，无权概括性侵吞受托人既有底层专有资产。”\n"
-            "- **【法理风险解构】**：甲方通过定制合同概括性侵吞乙方独立自研的底层公共组件及既有框架算法，并剥夺乙方向第三方商业复用权，构成致命法律剥夺与商业资产侵占。\n"
-            "- **【合规修改建议初稿】**：\n"
-            "```text\n"
-            "本项目为甲方专门定制开发的业务层应用代码、UI界面及交付文档之知识产权归甲方所有。乙方在履行合同过程中使用的既有底层开发框架、自研核心算法库及通用公共组件，其所有权与著作权仍归乙方独家所有，乙方授予甲方在本合同项目范围内的永久、非排他性免费使用许可。\n"
-            "```"
-        )
-
-    # 5. 超长验收期与无故障拖延结算 (民法典第511条 & 最高法732号判例)
-    if any(k in contract_text for k in ["180 个工作日内组织内部验收", "视为未通过验收", "满 6 个月后"]):
-        cards.append(
-            "#### 🔴 [高危风险] 验收与结算：180日超长验收期与满6个月苛刻付款节点\n"
-            "- **【条款原文引述】**：“甲方有权在 180 个工作日内组织内部验收。验收期间甲方若未出具验收合格意见，视为未通过验收……实际使用无任何故障满 6 个月后，甲方在 60 个工作日内向乙方支付全部合同价款的 90%”\n"
-            "- **【依据法律原文】**：\n"
-            "> 📜 **《中华人民共和国民法典》第五百一十一条、第六百二十八条**：“履行期限不明确的，债务人可以随时履行，债权人也可以随时要求履行，但应当给对方必要的准备时间。”\n"
-            "> 🏛️ **最高人民法院裁判要旨 (2019)最高法民终732号**：“买受人或委托人怠于组织验收，或者在合理异议期限内未提出书面异议的，依法推定交付成果合格，委托人不得以未出具书面合格单为由拒付到期款项。”\n"
-            "- **【法理风险解构】**：长达180个工作日（近9个月）验收期且反向推定“未出具意见视为未通过”，配合满6个月才付90%，导致服务方资金被无限期单方占用，严重违背商业诚信惯例。\n"
-            "- **【合规修改建议初稿】**：\n"
-            "```text\n"
-            "乙方提交全部交付成果后，甲方应当在15个工作日内完成系统验收并出具书面验收合格单；逾期未出具书面异议的，视为系统已通过验收。验收合格后10个工作日内支付合同价款的90%。\n"
-            "```"
-        )
-
-    if not cards:
-        return None
-
-    card_str = "\n\n".join(cards)
-    return (
-        f"### 📊 一、合同全景审计概览\n"
-        f"- **合同类型判定**：{contract_type}\n"
-        f"- **审查立场**：代表【{client_role}】（审查风格：{review_stance}）\n"
-        f"- **合同综合风控评级**：🔴 高危风险 (规则引擎高精穿透拦截)\n"
-        f"- **审查风险条目汇总**：高危风险 {len(cards)} 项，中危风险 0 项，优化建议 0 项\n"
-        f"- **资深法务综合评估意见**：本合同暗藏多项严重侵害我方核心权益的致命陷阱。条款约定了高达日5%的畸高违约金及100%惩罚性赔偿，同时单方免除甲方付款逾期违约金；赋予甲方无条件随时解约且零补偿特权，并无偿侵吞乙方既有底层专有技术框架。上述条款严重显失公平、违反《民法典》法定红线，坚决不予放行签署，必须按修改建议严格重构。\n\n"
-        f"### 🚨 二、逐条穿透风险清单\n"
-        f"{card_str}\n\n"
-        f"### ⚖️ 三、司法裁判指引与商务谈判抓手\n"
-        f"- **抓手一（违约金法定酌减）**：依据《民法典》第585条及最高法(2022)民终184号判例，日5%违约金远超实际损失30%红线，在司法裁判中依法必定被巨幅酌减。\n"
-        f"- **抓手二（格式免责无效）**：依据《民法典》第497条，甲方单方免除迟延履行利息属于法定无效格式条款，不得作为商业抗辩事由。\n"
-        f"- **抓手三（底层技术资产隔离）**：依据最高法知民终892号判例，受托人既有底层框架所有权依法受严格保护，商业采购仅能获得业务层授权。"
-    )
 
 class ContractReviewEngine:
     def __init__(self):
@@ -129,21 +45,85 @@ class ContractReviewEngine:
             timeout=180.0
         )
 
+    async def _list_loaded_models(self) -> List[str]:
+        """
+        查询 LM Studio 当前「已加载」的模型列表（/api/v0/models 为 LM Studio 专有接口）。
+        用于避免选中未加载模型而触发漫长的即时加载（27B 等大模型加载可能耗时数分钟）。
+        """
+        base = (config.LM_STUDIO_BASE_URL or "").rstrip("/")
+        if base.endswith("/v1"):
+            base = base[:-3]
+        try:
+            import httpx
+            async with httpx.AsyncClient(timeout=5.0) as c:
+                r = await c.get(f"{base}/api/v0/models")
+                if r.status_code == 200:
+                    return [m.get("id", "") for m in (r.json().get("data") or [])
+                            if m.get("state") == "loaded" and m.get("id")]
+        except Exception as e:
+            logger.debug(f"查询 LM Studio 已加载模型失败（忽略，回退通用列表）: {e}")
+        return []
+
     async def get_active_model_name(self, preferred_model: str = None) -> str:
-        """动态感知 LM Studio 当前已加载或可用的模型"""
+        """
+        动态感知 LM Studio 当前可用的模型。
+
+        优选顺序（融合终版计划书「端侧小模型失效时下限不降低」原则的工程延伸）：
+          1. 显式指定（入参 / AGENT_MODEL 环境变量）
+          2. 已加载 且 非 reasoning 的 qwen 模型（instruct 类，结构化输出稳定且快）
+          3. 已加载的其它 qwen 模型
+          4. 已加载的任意模型
+          5. 通用模型列表中的 qwen 模型 / 第一个模型 / 默认配置
+        """
         if preferred_model:
             return preferred_model
+        if config.AGENT_MODEL:
+            return config.AGENT_MODEL
+
+        def _pick(cands: List[str], strict_non_reasoning: bool = True) -> str:
+            """从候选里挑优：先排除 reasoning 类；再优先 instruct 类"""
+            reason_marks = ("reasoning", "distill", "think")
+            if strict_non_reasoning:
+                non_reason = [m for m in cands
+                              if not any(k in m.lower() for k in reason_marks)]
+                pool = non_reason or cands
+            else:
+                pool = cands
+            instruct = [m for m in pool if "instruct" in m.lower()]
+            return (instruct or pool)[0] if (instruct or pool) else ""
+
+        # 1) 已加载模型优先（避免触发即时加载）
+        loaded = await self._list_loaded_models()
+        if loaded:
+            qwen_loaded = [m for m in loaded if "qwen" in m.lower()]
+            if qwen_loaded:
+                picked = _pick(qwen_loaded)
+                if picked:
+                    logger.info(f"选用已加载模型: {picked}（已加载: {loaded}）")
+                    return picked
+            picked = _pick(loaded, strict_non_reasoning=False)
+            if picked:
+                logger.info(f"选用已加载模型: {picked}（已加载: {loaded}）")
+                return picked
+
+        # 2) 回退：通用模型列表
         try:
             models_resp = await self.client.models.list()
             if models_resp and models_resp.data:
-                for m in models_resp.data:
-                    if "qwen" in m.id.lower():
-                        return m.id
+                qwen_all = [m.id for m in models_resp.data if "qwen" in m.id.lower()]
+                if qwen_all:
+                    picked = _pick(qwen_all)
+                    if picked:
+                        logger.info(f"选用模型（未预加载）: {picked}")
+                        return picked
                 return models_resp.data[0].id
         except Exception as e:
             logger.warning(f"无法从 LM Studio 获取模型列表: {e}")
         return config.DEFAULT_MODEL
 
+    # ==================================================================
+    # 主入口：签名与旧版完全一致（向后兼容）
+    # ==================================================================
     async def stream_review(
         self,
         contract_text: str,
@@ -154,17 +134,17 @@ class ContractReviewEngine:
         model_name: str = None
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """
-        支持任意上传合同的实时通用流式审查 (集成立场机制与专项门禁)
+        v2.0：Agent 主循环（ReAct）+ 旧管道降级兜底
         """
         active_model = await self.get_active_model_name(model_name)
 
-        # 1. 动态感知合同类型
+        # 1. 动态感知合同类型（轨道 1：关键词预判）
         if not contract_type or contract_type == "auto" or contract_type == "通用商业民商事经济合同":
             contract_type = detect_contract_type(contract_text)
 
         char_count = len(contract_text)
 
-        # 2. 状态指示帧
+        # 2. 状态指示帧（保留旧行为）
         yield {
             "type": "status",
             "message": f"已识别合同类型为【{contract_type}】(共 {char_count} 字)，立足【{client_role}】视角 ({review_stance}) 进行深度穿透合规审查...",
@@ -175,7 +155,151 @@ class ContractReviewEngine:
             "review_stance": review_stance
         }
 
-        # 3. 动态扫描合同关键词并检索最高法判例
+        # 3. 路由决策：Agent 主循环 or 旧管道
+        #    小合同豁免（融合终版计划书 §3.2）：条款 < 8 或字数 < 2000 → 全量单次审查
+        use_agent = (
+            config.AGENT_ENABLED
+            and char_count >= config.AGENT_SMALL_CONTRACT_CHARS
+        )
+        if use_agent:
+            from contract.clause_splitter import split_clauses
+            n_clauses = len(split_clauses(contract_text))
+            use_agent = n_clauses >= config.AGENT_SMALL_CONTRACT_CLAUSES
+            if not use_agent:
+                logger.info(f"条款数 {n_clauses} < {config.AGENT_SMALL_CONTRACT_CLAUSES}，小合同豁免：走旧管道全量审查")
+
+        if use_agent:
+            agent_report = None
+            agent_meta: Dict[str, Any] = {}
+            agent_failed = False
+            try:
+                llm = LLMClient(self.client, active_model)
+                agent = ContractReviewAgent(llm)
+                async for frame in agent.run(
+                    contract_text=contract_text,
+                    contract_type_hint=contract_type,
+                    client_role=client_role,
+                    review_stance=review_stance,
+                    focus_dimensions=focus_dimensions,
+                ):
+                    ftype = frame.get("type")
+                    if ftype == "agent_report":
+                        agent_report = frame.get("data")
+                        agent_meta = frame.get("meta") or {}
+                        continue  # 内部事件不透传
+                    if ftype == "agent_fallback_mode":
+                        # 拆条彻底失败 → 全文模式（旧管道保命）
+                        yield {
+                            "type": "fallback_notice",
+                            "data": {"scope": "engine", "reason": frame.get("reason")},
+                            "message": frame.get("message", "Agent 拆条失败，已降级为全量单次审查模式"),
+                        }
+                        agent_failed = True
+                        break
+                    yield frame
+            except Exception as e:
+                logger.error(f"Agent 主循环异常，降级旧管道: {e}", exc_info=True)
+                agent_failed = True
+
+            if agent_failed or agent_report is None:
+                yield {
+                    "type": "fallback_notice",
+                    "data": {"scope": "engine", "reason": "agent_failed"},
+                    "message": "Agent 流程未产出报告，已自动降级为全量单次审查模式",
+                }
+                async for frame in self._legacy_single_shot_review(
+                    contract_text, contract_type, client_role, review_stance, focus_dimensions, active_model
+                ):
+                    yield frame
+                return
+
+            # Agent 统计元信息透传（前端轨迹面板展示工具/模型调用与耗时）
+            yield {"type": "agent_meta", "data": agent_meta}
+
+            # Agent 报告收尾：content / precedents / draft / done（与旧管道收尾一致）
+            async for frame in self._emit_report_tail(
+                agent_report, contract_text, contract_type, client_role, review_stance,
+                agent_meta.get("used_precedents") or [],
+            ):
+                yield frame
+            return
+
+        # 4. 旧管道（小合同 / Agent 关闭）
+        async for frame in self._legacy_single_shot_review(
+            contract_text, contract_type, client_role, review_stance, focus_dimensions, active_model
+        ):
+            yield frame
+
+    # ==================================================================
+    # Agent 报告收尾（content 分段流式 + precedents + draft + done）
+    # ==================================================================
+    async def _emit_report_tail(
+        self,
+        report: str,
+        contract_text: str,
+        contract_type: str,
+        client_role: str,
+        review_stance: str,
+        used_precedents: List[Dict[str, Any]],
+    ) -> AsyncGenerator[Dict[str, Any], None]:
+        # 1. 分段流式下发报告正文（保持前端打字机体验）
+        chunk_size = 700
+        for i in range(0, len(report), chunk_size):
+            yield {"type": "content", "delta": report[i:i + chunk_size]}
+
+        # 2. Agent 实际取证的判例透传（供前端司法参考面板）
+        if used_precedents:
+            yield {
+                "type": "precedents",
+                "data": used_precedents,
+                "message": f"Agent 深查过程中共调取 {len(used_precedents)} 项司法裁判指引与法条",
+            }
+
+        # 3. 兜底防护：报告过短或异常时规则引擎穿透拦截（绝不谎报合规）
+        if len(report) < 150:
+            rule_report = rule_based_contract_scan(contract_text, contract_type, client_role, review_stance)
+            if rule_report:
+                yield {"type": "content", "delta": "\n" + rule_report}
+            else:
+                yield {
+                    "type": "content",
+                    "delta": "\n### ⚠️ 审查中断提示\n端侧大模型服务未返回完整内容，请检查本地 LM Studio 运行状态后点击重试。",
+                }
+
+        # 4. 合规初稿重构 + 完成事件（与旧管道逻辑一致）
+        auto_draft = synthesize_revised_contract(contract_text, report)
+        is_perfect = (
+            ("合规良好" in report or "高危风险 0 项" in report or "高危 0" in report)
+            and ("未检出" in report or "无法律风险" in report or "准予签署" in report or "合规通过" in report)
+            and not any(x in report for x in ["#### 🔴", "#### 🟡", "高危风险 1", "高危风险 2", "高危风险 3", "高危风险 4", "高危风险 5", "高危风险 6", "高危风险 7"])
+        )
+
+        yield {
+            "type": "draft",
+            "data": auto_draft or contract_text,
+            "is_perfect": is_perfect,
+            "message": "原合同合规度极高，全文准予放行！" if is_perfect else "合规修改初稿已完成智能原位重构！"
+        }
+
+        yield {
+            "type": "done",
+            "message": "Agent 全链路合同风险穿透审查已完成！",
+        }
+
+    # ==================================================================
+    # 旧管道：全量单次审查（小合同豁免 / Agent 降级保命路径）
+    # ==================================================================
+    async def _legacy_single_shot_review(
+        self,
+        contract_text: str,
+        contract_type: str,
+        client_role: str,
+        review_stance: str,
+        focus_dimensions: List[str],
+        active_model: str,
+    ) -> AsyncGenerator[Dict[str, Any], None]:
+        """v1.0 固定管道原逻辑（关键词检索判例 → 门禁路由 → 单 Prompt 出报告 → 规则兜底）"""
+        # 1. 动态扫描合同关键词并检索最高法判例
         precedents = search_precedents(contract_text, top_k=3)
         yield {
             "type": "precedents",
@@ -183,7 +307,7 @@ class ContractReviewEngine:
             "message": f"已结合合同争议焦点，动态匹配 {len(precedents)} 项最高法司法裁判指引与法条"
         }
 
-        # 4. 提炼最高法裁判规则供模型下沉融入风险卡片
+        # 2. 提炼最高法裁判规则供模型下沉融入风险卡片
         precedent_text_blocks = []
         for p in precedents:
             case_no_str = f" ({p['case_no']})" if p.get("case_no") else ""
@@ -191,7 +315,7 @@ class ContractReviewEngine:
             precedent_text_blocks.append(f"- 🏛️ {p['title']}{case_no_str}{statute_str}：{p['key_holding']}")
         precedent_guidelines_str = "\n".join(precedent_text_blocks) if precedent_text_blocks else "严格遵循《民法典》商事合同一般法定红线与权利义务平衡原则"
 
-        # 5. 路由专项门禁
+        # 3. 路由专项门禁
         matched_gates = route_special_gates(contract_text, contract_type)
         gate_text_blocks = []
         for g in matched_gates:
@@ -200,7 +324,7 @@ class ContractReviewEngine:
 
         gate_checkpoints_str = "\n".join(gate_text_blocks) if gate_text_blocks else "通用商业合同常规门禁（核验主体资格、违约对等性、解除权、管辖明确性）"
 
-        # 6. 构造全维法务审查提示词 (注入立场、门禁与判例)
+        # 4. 构造全维法务审查提示词 (注入立场、门禁与判例)
         sys_prompt = AUDIT_SYSTEM_PROMPT.format(
             contract_type=contract_type,
             client_role=client_role,
@@ -236,7 +360,6 @@ class ContractReviewEngine:
                 "delta": prefill_header
             }
 
-            reasoning_chunks = []
             in_think_tag = False
             content_buffer = ""
 
@@ -249,7 +372,6 @@ class ContractReviewEngine:
                     # 1. 若有残余 reasoning_content 记录并忽略（绝不向用户展示思维链）
                     r_chunk = getattr(delta, "reasoning_content", None) or ""
                     if r_chunk:
-                        reasoning_chunks.append(r_chunk)
                         continue
 
                     # 2. 对 delta.content 进行实时 <think> 标签过滤清洗并流式吐字
@@ -278,7 +400,6 @@ class ContractReviewEngine:
                                         "delta": clean_part
                                     }
                             else:
-                                # 检查末尾是否有疑似未完整的 "<think" 前缀
                                 partial_match = False
                                 for i in range(1, 7):
                                     if content_buffer.endswith("<think"[:i]):
@@ -488,5 +609,6 @@ def synthesize_revised_contract(original_text: str, review_report: str) -> str:
                 break
 
     return revised
+
 
 engine = ContractReviewEngine()

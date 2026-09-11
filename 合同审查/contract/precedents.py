@@ -227,6 +227,26 @@ PRECEDENTS_DATABASE: List[Dict[str, Any]] = [
     }
 ]
 
+def search_by_risk_point(risk_point: str, top_k: int = 3) -> List[Dict[str, Any]]:
+    """
+    Agent 行动层入口：按「具体风险点」（而非整份合同）精准检索判例。
+    与 search_precedents 共用评分内核，语义上强调调用方传入的是
+    分诊/深查阶段识别出的具体风险描述（如「日5%违约金畸高」）。
+    """
+    return search_precedents(risk_point or "", top_k=top_k)
+
+
+def get_precedent_by_case_no(case_no: str) -> Dict[str, Any] | None:
+    """按案号（或其子串）精确取判例，供幻觉核验与引用追溯使用"""
+    if not case_no:
+        return None
+    for p in PRECEDENTS_DATABASE:
+        cn = p.get("case_no") or ""
+        if case_no in cn or cn in case_no:
+            return p
+    return None
+
+
 def search_precedents(contract_text: str, top_k: int = 3) -> List[Dict[str, Any]]:
     """
     根据合同正文与关键词，动态扫描并评分匹配最相关的最高法裁判指引与法条
