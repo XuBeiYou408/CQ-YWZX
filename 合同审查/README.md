@@ -19,19 +19,27 @@ flowchart TD
         WorkBench --> Right["右侧: 风险看板 / 审查意见 / 判例匹配 / Word导出"]
     end
 
-    subgraph Backend ["智能体审查核心引擎 (contract/engine.py)"]
-        Gateway --> Parser["合同结构化解析器 (contract/parser.py)"]
-        Parser --> Gates{"16 类业务专项门禁与深水区条款分类器 (contract/gates/special_gates.py)"}
+    subgraph AgentEngine ["自主智能体审查状态机 (contract/agent.py)"]
+        Gateway --> Parser["合同结构化拆条 (contract/clause_splitter.py)"]
+        Parser --> Sense["1. 感知层: 提取条款实体、违约金比例、权责关系"]
+        Sense --> Planner["2. 规划层: 条款级分诊决策器 (contract/planner.py)"]
         
-        Gates --> Precedents[("20 项最高人民法院司法判例库 (contract/precedents.py)")]
-        Precedents --> Prompts["立场化审查与严谨防幻觉提示词 (contract/prompts.py)"]
+        Planner -- "核心争议条款" --> DeepDive["deep_dive 深度多轮推理"]
+        Planner -- "标准履约条款" --> QuickScan["quick_scan 快速合规比对"]
+        Planner -- "中性常规条款" --> SafePass["skip 安全放行 (节约算力)"]
         
-        Prompts --> LLM{"本地端侧高隐私大模型 (LM Studio: 127.0.0.1:1234)"}
-        LLM -. "流式 SSE 审查思考与结果" .-> Gateway
+        DeepDive & QuickScan --> Action{"3. 行动层: 工具链分发 (contract/tools.py)"}
+        
+        Action --> ToolGates["special_gates (16类业务专项审查门禁)"]
+        Action --> ToolPrec["precedents (32项最高院司法裁判指引)"]
+        Action --> ToolStat["statutes (《民法典》法条真伪与案号比对)"]
+        Action --> ToolRules["rule_cards (霸王条款离线安全网兜底)"]
+        
+        ToolGates & ToolPrec & ToolStat & ToolRules --> Reflect["4. 反思层: 评级矛盾自愈与法条案号校准"]
     end
 
     subgraph DocumentWriter ["Word 原生修订批注生成器 (contract/document_annotator.py)"]
-        Backend --> OOXML["OOXML Lite 引擎 (contract/ooxml_lite.py)"]
+        Reflect --> OOXML["OOXML Lite 引擎 (contract/ooxml_lite.py)"]
         OOXML --> Docx["原生 .docx 文档 (Word 原生 Track Changes + Comments 批注框)"]
     end
 ```
@@ -40,7 +48,13 @@ flowchart TD
 
 ## 🔥 核心特性与技术亮点
 
-1. **企业级现代 SaaS 交互设计 (Modern SaaS Workbench)**：
+1. **四阶段自主 Agent 闭环状态机 (Perceive-Plan-Act-Reflect Loop)**：
+   - **感知 (Perception)**：由 `clause_splitter.py` 将合同结构化拆条，提取违约金、管辖权、知识产权归属等关键要素；
+   - **规划 (Planning)**：由 `planner.py` 实施条款级自主分诊（`deep_dive` 深度审查、`quick_scan` 快速扫描、`skip` 安全放行），兼顾深度与高吞吐；
+   - **行动 (Action)**：由 `tools.py` 动态调度 16 类专项门禁、32 项最高院判例库、民法典法条校验器与离线规则卡片；
+   - **反思 (Reflection)**：自动检视审查结论与证据链的一致性，智能自愈评级矛盾，坚决杜绝大模型法条幻觉与事实脱节。
+
+2. **企业级现代 SaaS 交互设计 (Modern SaaS Workbench)**：
    - 采用国际流行 SaaS 设计语言（Slate 调色板、圆角卡片、高对比度微渐变、清晰层次排版）。
    - 风险分级雷达标记：高危（红色）、中危（橙色）、低危（黄色）、放行（绿色），风险要点与原位条款智能关联。
    - 深度纯净清洗机制：彻底剔除前端多余的 Markdown、反引号、代码块残留，阅读体验丝滑清爽。
