@@ -31,6 +31,27 @@ mcp.json 注册、Skill 部署（`deploy/skills/contract-review`）、用户记�
 > （实测症状：`'xx' is not recognized as an internal or external command`）。
 > 中文提示由安装脚本输出（bat 内已 `chcp 65001`）。
 
+### 审查用哪个模型：默认「跟随当前会话」
+
+WorkBuddy 里有**两套互不相干的模型**：① 你在客户端选的**对话模型**（负责决定调用哪个工具）；
+② 本工具内部的**推理模型**（真正读合同、出结论）。本工具默认让第 ② 个**跟随第 ① 个**：
+
+| 会话用的模型 | 本工具行为 |
+|---|---|
+| 本地 LM Studio 模型（`custom-local:*`） | **就用同一个本地模型**做审查 |
+| 云端模型（`deepseek-v4.1-flash` / `hy3` / `kimi-*`…）**且**已在 `~/.workbuddy/models.json` 登记同名接入 | 走你登记的那个云端接入 |
+| 云端模型**但未登记** | 工具进程拿不到 WorkBuddy 的云端凭据 → **回退本机 LM Studio**，并在结果与 `ping` 里写明原因 |
+
+- 会话模型从 `~/.workbuddy/workbuddy.db` 的 `sessions` 表读取（取最近活动且未删除的会话，即当前对话）。
+  读取全程只读、失败静默降级，绝不影响审查主流程。
+- **想让云端模型也能用于审查**：在 `~/.workbuddy/models.json` 里加一条同名接入，例如
+  ```json
+  { "id": "deepseek-v4.1-flash", "url": "https://api.deepseek.com/v1", "apiKey": "sk-你的key" }
+  ```
+- 想固定/退回旧行为：设环境变量 `MODEL_POLICY`：
+  `session`（默认，跟随会话）/ `local`（只看本机 LM Studio）/ `pinned`（始终用 `AGENT_MODEL`）。
+- 随时用 `ping` 工具查看实际选中的模型与来源。
+
 ---
 
 ## 🛠️ 系统全景架构

@@ -20,6 +20,17 @@ class AppConfig(BaseModel):
     # Agent 化改造预算配置（融合终版计划书 §3.4 收敛控制）
     AGENT_ENABLED: bool = os.getenv("AGENT_ENABLED", "1") == "1"
     AGENT_MODEL: str = os.getenv("AGENT_MODEL", "")                                      # 指定 Agent 用模型（留空则自动优选）
+
+    # ---------- 审查用哪个模型（跟随会话） ----------
+    # "session"（默认）：跟随「当前 WorkBuddy 会话正在使用的模型」
+    #   · 会话用的是本地模型（custom-local:*）→ 就用那个本地模型
+    #   · 会话用的是云端模型且已在 ~/.workbuddy/models.json 登记同名接入 → 走该云端接入
+    #   · 会话用的是云端模型但未登记 → 工具无凭据，回退本机 LM Studio 并在结果中说明原因
+    # "local"  ：旧行为，只看本机 LM Studio 的已加载/可用模型
+    # "pinned" ：始终使用 AGENT_MODEL（为空则 DEFAULT_MODEL）
+    MODEL_POLICY: str = os.getenv("MODEL_POLICY", "session")
+    # 平台状态文件位置（用于读取当前会话模型；一般无需修改）
+    WORKBUDDY_DIR: str = os.getenv("WORKBUDDY_DIR", os.path.join(os.path.expanduser("~"), ".workbuddy"))
     AGENT_TIME_BUDGET_SECONDS: int = int(os.getenv("AGENT_TIME_BUDGET_SECONDS", "1500"))  # 全局时间预算
     AGENT_MAX_DEEP_DIVE: int = int(os.getenv("AGENT_MAX_DEEP_DIVE", "5"))               # 深查预算（含快筛升级）
     AGENT_MAX_TOOL_ROUNDS_PER_CLAUSE: int = 3   # 单条款工具调用轮次上限

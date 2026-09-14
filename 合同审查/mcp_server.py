@@ -363,6 +363,24 @@ def ping() -> str:
     if _cfg.AGENT_MODEL:
         lines.append(f"指定模型（AGENT_MODEL）：{_cfg.AGENT_MODEL}（优先生效）")
 
+    # 审查用哪个模型：默认跟随「当前 WorkBuddy 会话正在使用的模型」
+    lines.append(f"模型策略（MODEL_POLICY）：{getattr(_cfg, 'MODEL_POLICY', 'session')}")
+    try:
+        from contract.session_model import describe_resolution
+
+        info = describe_resolution()
+        if info.get("session_model"):
+            lines.append(f"当前会话模型：{info['session_model']}")
+        else:
+            lines.append("当前会话模型：未能读取（将回退本机 LM Studio）")
+        if info.get("reachable") is True:
+            lines.append(f"审查将使用：✅ {info.get('detail')}")
+        elif info.get("reachable") is False:
+            lines.append(f"审查将使用：⚠️ 会话模型本机不可直达 → 回退 LM Studio")
+            lines.append(f"  原因：{info.get('detail')}")
+    except Exception as e:
+        lines.append(f"会话模型解析异常（不影响审查）：{e}")
+
     try:
         req = urllib.request.Request(
             probe_url, headers={"Authorization": f"Bearer {_cfg.LM_STUDIO_API_KEY}"}
