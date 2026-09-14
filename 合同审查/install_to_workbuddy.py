@@ -39,6 +39,23 @@ MCP_ENTRY_NAME = "contract-reviewer"
 MEMORY_MARKER_BEGIN = "# >>> contract-reviewer routes (auto-managed, do not edit between markers)"
 MEMORY_MARKER_END = "# <<< contract-reviewer routes (auto-managed)"
 
+# 平台层规则块：两个 MCP 项目共用同一组标记 + 同一份内容，
+# 因此先后运行任一项目的安装脚本都不会产生重复段落（后一个只做等值替换）。
+MEMORY_MARKER_MCP_BEGIN = "# >>> mcp tool call format (auto-managed, shared by all local MCP projects)"
+MEMORY_MARKER_MCP_END = "# <<< mcp tool call format (auto-managed)"
+
+MEMORY_RULES_MCP = """# >>> mcp tool call format (auto-managed, shared by all local MCP projects)
+
+## MCP 工具调用格式（最高优先级·平台层，适用于所有 MCP 工具）
+
+- 本环境所有 MCP 工具（`enterprise-knowledge-base`、`contract-reviewer` 等）都必须通过 **`DeferExecuteTool`** 调用，参数是**两层平级结构**：`toolName`（工具全名，最外层）与 `params`（工具自己的参数，一个对象）。
+- ✅ 正确：`DeferExecuteTool({"toolName": "mcp__<服务名>__<工具名>", "params": { ...工具参数... }})`
+- ❌ 错误：把 `toolName` 写进 `params` 内部，或把 `params` 再套一层——会返回 `Error: "toolName" is required. Provide the exact tool name as returned by ToolSearch.`
+- 口诀：**toolName 和 params 是兄弟，不是父子**。调用失败时先检查 toolName 是否在最外层，不要反复重试同一错误形状。
+
+# <<< mcp tool call format (auto-managed)
+"""
+
 MEMORY_RULES = """# >>> contract-reviewer routes (auto-managed, do not edit between markers)
 
 ## 合同审查路由规则（最高优先级）
@@ -144,25 +161,29 @@ def deploy_skill():
     return True
 
 
+def upsert_block(text: str, begin: str, end: str, body: str):
+    """就地替换/追加一个带标记的托管块（幂等）。返回 (新文本, 动作)。"""
+    body = body.strip("\n")
+    if begin in text and end in text:
+        pre = text.split(begin, 1)[0].rstrip("\n")
+        post = text.split(end, 1)[1].lstrip("\n")
+        joined = "\n\n".join(p for p in (pre, body, post) if p)
+        return joined + "\n", "已更新"
+    cur = text.rstrip("\n")
+    return (cur + "\n\n" + body + "\n") if cur else body + "\n", "已追加"
+
+
 def append_memory_rules():
-    """向 MEMORY.md 追加路由规则（带标记，幂等）。"""
+    """向 MEMORY.md 写入平台层调用格式 + 合同审查路由规则（带标记，幂等）。"""
     WORKBUDDY_DIR.mkdir(parents=True, exist_ok=True)
     text = MEMORY_MD.read_text(encoding="utf-8") if MEMORY_MD.exists() else "# 用户长期记忆\n"
-    if MEMORY_MARKER_BEGIN in text:
-        # 标记块已存在 -> 用最新规则替换，保证随项目升级
-        pre = text.split(MEMORY_MARKER_BEGIN, 1)[0]
-        post = MEMORY_MARKER_END + text.split(MEMORY_MARKER_END, 1)[1]
-        text = pre + MEMORY_RULES.rstrip("\n") + "\n" + post
-        action = "已更新"
-    elif "## 合同审查路由规则" in text:
-        # 已存在等价的手写规则段 -> 不重复追加
-        out("[4/4] MEMORY.md 已存在合同审查路由规则，跳过（如需托管到自动块请手动删除旧段后重跑）。")
-        return True
-    else:
-        text = text.rstrip("\n") + "\n\n" + MEMORY_RULES
-        action = "已追加"
+    actions = []
+    text, act = upsert_block(text, MEMORY_MARKER_MCP_BEGIN, MEMORY_MARKER_MCP_END, MEMORY_RULES_MCP)
+    actions.append(f"平台层调用格式{act}")
+    text, act = upsert_block(text, MEMORY_MARKER_BEGIN, MEMORY_MARKER_END, MEMORY_RULES)
+    actions.append(f"合同审查路由{act}")
     MEMORY_MD.write_text(text, encoding="utf-8")
-    out(f"[4/4] MEMORY.md 路由规则{action}: {MEMORY_MD}")
+    out(f"[4/4] MEMORY.md 规则{'、'.join(actions)}: {MEMORY_MD}")
     return True
 
 

@@ -48,15 +48,20 @@ WorkBuddy 首问即可看到工具），重型检索栈全部放在 `rag_worker.
 1. 创建/修复 `.venv` 并安装依赖（含 torch/faiss，首次约 10~30 分钟，需联网）
 2. 将 `enterprise-knowledge-base` 合并注册进 `~/.workbuddy/mcp.json`（不动其他服务）
 3. 部署路由 Skill（`deploy/skills/enterprise-kb-query` → `~/.workbuddy/skills/`）
-4. 向 `~/.workbuddy/MEMORY.md` 追加查询路由规则（带标记块，可随项目升级自动更新）
+4. 向 `~/.workbuddy/MEMORY.md` 写入两个托管规则块（带标记，幂等）：
+   **平台层「MCP 工具调用格式」**（与合同审查项目共用同一块，内容完全一致）
+   + **企业知识库查询路由规则**
+   ——Skill 与记忆规则每次重跑都会用项目内最新副本覆盖，因此内容随项目更新自动下发
 5. **端到端体检**：真实启动本 MCP 服务 → 协议握手计时 → 列工具 → 实际检索
    "年假制度"一次；并检查 WorkBuddy 信任状态
 
 可选参数：`--mcp-only` 只更新 mcp.json；`--no-verify` 跳过体检。
 
-> `一键安装到WorkBuddy.bat` 的行为：`.venv` 已就绪时打开图形化向导
-> （`gui_installer.py`，日常注入/卸载管理）；`.venv` 缺失（首次部署/换电脑）时
-> 自动改走上面的全量安装脚本，无需手动区分。
+> `一键安装到WorkBuddy.bat` 的行为：**无论 `.venv` 是否已存在，都执行上面的全量安装脚本**
+> （venv 有则复用、无则创建），确保 Skill 与记忆规则随项目更新一起下发。
+> 旧版在 `.venv` 已就绪时会改走图形向导，导致 Skill 漏装；图形向导现已拆为独立入口
+> `图形化配置助手.bat`（用于卸载 / 修改路径 / 状态自检 / 端到端体检），
+> 且两者共用同一份部署实现，不会再出现能力漂移。
 
 安装完成后唯一的手动步骤：WorkBuddy 连接器管理页 → 自定义连接器 →
 对 `enterprise-knowledge-base` 点一次「信任」（或重启 WorkBuddy）。
@@ -84,9 +89,10 @@ kb-tool/
 ├── mcp_server.py                  # [MCP] stdio 协议父进程（FastMCP，握手先行 + 子进程看护）
 ├── rag_worker.py                  # [MCP] 检索子进程（torch/BGE 主线程加载，JSON 行协议）
 ├── install_to_workbuddy.py        # [MCP] WorkBuddy 一键安装脚本（venv/注册/Skill/记忆/体检）
-├── gui_installer.py               # [MCP] 图形化安装向导（bat 在 venv 就绪时调用）
+├── gui_installer.py               # [MCP] 图形化配置助手（卸载/改路径/体检；也同步部署 Skill 与记忆规则）
 ├── deploy/skills/enterprise-kb-query/SKILL.md   # [MCP] 随项目分发的对话路由路标
-├── 一键安装到WorkBuddy.bat        # [MCP] 双击入口（首次全量安装 / 日常 GUI 向导）
+├── 一键安装到WorkBuddy.bat        # [MCP] 主入口：全量安装 + 端到端体检（幂等，venv 有无均可）
+├── 图形化配置助手.bat             # [MCP] 辅助入口：打开 GUI（自动挑选带 tkinter 的解释器）
 ├── 优化过程报告.html              # MCP 调用链优化复盘（含流程图与踩坑记录）
 │
 ├── run.py                         # [Web] FastAPI 服务启动入口 (Uvicorn)

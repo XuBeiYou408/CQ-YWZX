@@ -5,10 +5,36 @@ description: 公司内部制度查询（年假/考勤/请假/报销/差旅/福�
 
 # 企业制度查询路由
 
+## ⚠️ 关键：MCP 工具必须用 DeferExecuteTool 调用，参数是「两层平级」结构
+
+`toolName`（工具全名）与 `params`（工具自己的参数）是**平级的两个顶层字段**：
+`toolName` 放**最外层**，工具参数放 `params` 里面。
+
+✅ **正确写法（照抄这个形状，不要自己改结构）**：
+
+```json
+{
+  "toolName": "mcp__enterprise-knowledge-base__search_knowledge_base",
+  "params": { "query": "年假制度 天数规定", "top_k": 3 }
+}
+```
+
+❌ **以下写法必然失败**（返回 `Error: "toolName" is required. Provide the exact tool name as returned by ToolSearch.`）：
+
+```json
+{ "params": { "query": "...", "toolName": "mcp__enterprise-knowledge-base__search_knowledge_base" } }   ← toolName 被塞进了 params 内部
+{ "params": { "params": { "query": "..." } } }                                                          ← params 套了两层
+```
+
+> 口诀：**toolName 和 params 是兄弟，不是父子**。不要把 toolName 放进 params 里面。
+> 失败时**不要**反复重试同一形状——先检查 toolName 是否写在了最外层。
+
+## 执行步骤
+
 用户询问公司内部信息时，严格按以下步骤执行：
 
 1. **调用 ToolSearch**，用 `tool_names: ["mcp__enterprise-knowledge-base__search_knowledge_base"]` 加载知识库检索工具。
-2. **调用 search_knowledge_base**，以自然语言查询（如"年假制度 天数规定"），top_k 建议 3。
+2. **按上面的结构调用 `DeferExecuteTool`**：`toolName` 填 `mcp__enterprise-knowledge-base__search_knowledge_base`，`params` 填 `{"query": "自然语言问题（如 年假制度 天数规定）", "top_k": 3}`。
 3. **基于返回的文档片段回答**，并注明来源文件名。
 4. 检索无结果时，如实告知"知识库中未找到"，可再调用 `mcp__enterprise-knowledge-base__list_knowledge_documents` 列出已收录文档供用户确认。
 

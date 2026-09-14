@@ -234,6 +234,9 @@ class InstallerApp:
                 self.log(f"❌ 写入失败 {target}: {e}")
 
         if success_count > 0:
+            # 同步部署路由 Skill 与用户记忆规则（复用 install_to_workbuddy 的同一份实现）
+            # 旧版 GUI 只写 mcp.json，会让 ~/.workbuddy/skills 下的 Skill 停留在旧版本。
+            self.sync_skill_and_memory()
             self.refresh_status()
             messagebox.showinfo(
                 "安装成功",
@@ -244,6 +247,28 @@ class InstallerApp:
                 "   『帮我查一下知识库里有哪些文件』\n"
                 "即可开始体验！"
             )
+
+    def sync_skill_and_memory(self):
+        """部署用户级 Skill 与 MEMORY 托管规则块。
+
+        直接复用 install_to_workbuddy.py 的实现（单一来源），避免 GUI 与 CLI 两条
+        安装路径出现能力漂移——两者必须部署完全相同的 Skill 与记忆规则。
+        """
+        try:
+            import install_to_workbuddy as inst
+        except Exception as e:
+            self.log(f"⚠️ 未能加载 install_to_workbuddy.py，跳过 Skill/记忆规则同步: {e}")
+            return
+        try:
+            if inst.deploy_skill():
+                self.log(f"✅ 路由 Skill 已同步: {os.path.join(inst.SKILL_DST, 'SKILL.md')}")
+        except Exception as e:
+            self.log(f"⚠️ Skill 部署失败（不影响 MCP 接入）: {e}")
+        try:
+            if inst.append_memory_rules():
+                self.log(f"✅ 用户记忆路由规则已同步: {inst.MEMORY_MD}")
+        except Exception as e:
+            self.log(f"⚠️ 记忆规则写入失败（不影响 MCP 接入）: {e}")
 
     def do_uninstall(self):
         if not messagebox.askyesno("确认卸载", "确定要从 WorkBuddy 中移除企业本地知识库工具吗？\n（这不会删除本地任何文档或代码）"):
@@ -266,33 +291,33 @@ class InstallerApp:
         messagebox.showinfo("已移除", "企业知识库 MCP 服务已从 WorkBuddy 移除。")
 
     def do_test(self):
-        self.log("\n🧪 正在测试 MCP Server 握手响应...")
-        cmd = [
-            PYTHON_EXE,
-            "-c",
-            f"""
-import subprocess, json, time
-server = subprocess.Popen([r'{PYTHON_EXE}', r'{SERVER_PY}'], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-msg = json.dumps({{'jsonrpc': '2.0', 'id': 1, 'method': 'initialize', 'params': {{'protocolVersion': '2024-11-05', 'capabilities': {{}}, 'clientInfo': {{'name': 'installer-test', 'version': '1.0'}}}}}}) + '\\n'
-server.stdin.write(msg.encode('utf-8'))
-server.stdin.flush()
-time.sleep(2)
-server.kill()
-out, _ = server.communicate()
-print(out.decode('utf-8', errors='replace'))
-"""
-        ]
+        """端到端体检：真实启动 MCP 服务 → 协议握手 → 列工具 → 实际检索一次。
+
+        直接调用 install_to_workbuddy.verify_install()（与 CLI 一键安装完全同一份体检），
+        旧版这里只是"发个 initialize 再 sleep 2 秒看回显"，命中了也只证明进程起来了。
+        """
+        self.log("\n🧪 正在执行端到端体检（真实启动 MCP 服务 + 检索一次，约 10~20 秒，请稍候）...")
+        self.root.update_idletasks()
         try:
-            res = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
-            if "enterprise-knowledge-base" in res.stdout:
-                self.log("🎉 MCP 握手测试 100% 成功！服务与本地 BGE 模型就绪。")
-                messagebox.showinfo("测试通过", "🎉 MCP 连通性测试通过！\n\n服务响应正常，已识别 3 个工具（search/list/add）。")
+            import io
+            import contextlib
+            import install_to_workbuddy as inst
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                ok = inst.verify_install()
+            for line in buf.getvalue().splitlines():
+                self.log(line)
+            if ok:
+                messagebox.showinfo(
+                    "测试通过",
+                    "🎉 MCP 端到端体检通过！\n\n"
+                    "服务可正常启动，知识库检索返回正常，Skill 与记忆规则均已就位。"
+                )
             else:
-                self.log(f"⚠️ 响应异常: {res.stdout}\n{res.stderr}")
-                messagebox.showwarning("测试警告", "服务拉起返回异常，请查看下方诊断日志。")
+                messagebox.showwarning("测试警告", "体检未完全通过，请查看下方诊断日志。")
         except Exception as e:
             self.log(f"❌ 测试失败: {e}")
-            messagebox.showerror("测试失败", f"无法启动 MCP 服务：{e}")
+            messagebox.showerror("测试失败", f"无法完成体检：{e}")
 
     def open_docs_folder(self):
         os.makedirs(DOCS_DIR, exist_ok=True)

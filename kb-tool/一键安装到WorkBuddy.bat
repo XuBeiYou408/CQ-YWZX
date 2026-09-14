@@ -1,17 +1,16 @@
-﻿@echo off
+@echo off
 chcp 65001 >nul
-title 企业本地知识库 · WorkBuddy 一键安装助手
+title 企业本地知识库 · WorkBuddy 一键安装
 cd /d "%~dp0"
 
-if exist ".venv\Scripts\python.exe" (
-    rem venv 已就绪：启动图形化安装向导（注入/卸载 MCP 配置）
-    start "" ".venv\Scripts\pythonw.exe" gui_installer.py
-    exit /b 0
-)
-
-rem venv 不存在（首次部署/换电脑）：用系统 Python 全量安装（venv/依赖/MCP/Skill/记忆规则 + 体检）
+rem 统一走完整幂等安装（venv/依赖 -> mcp.json -> 路由 Skill -> 记忆规则 -> 端到端体检）。
+rem 注意：无论 venv 是否已存在都执行同一条路径，这样 Skill 与记忆规则会随项目更新一起下发
+rem       （旧版在 venv 存在时改走图形向导，会漏装 Skill）。
 set "PY="
-where py >nul 2>nul && set "PY=py -3"
+if exist ".venv\Scripts\python.exe" set "PY=.venv\Scripts\python.exe"
+if not defined PY (
+    where py >nul 2>nul && set "PY=py -3"
+)
 if not defined PY (
     where python >nul 2>nul && set "PY=python"
 )
@@ -22,5 +21,7 @@ if not defined PY (
 )
 
 %PY% install_to_workbuddy.py
+
 echo.
+echo 如需卸载、修改路径或做状态自检，请双击本目录下的「图形化配置助手.bat」。
 pause
