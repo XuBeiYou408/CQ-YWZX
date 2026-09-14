@@ -44,10 +44,6 @@ class ContractReviewEngine:
             api_key=config.LM_STUDIO_API_KEY,
             timeout=180.0
         )
-        #: 按 (base_url, api_key) 缓存客户端 —— 跟随会话模型时端点可能不是 LM Studio
-        self._clients = {(config.LM_STUDIO_BASE_URL, config.LM_STUDIO_API_KEY): self.client}
-        #: 本次审查的模型来源说明（透传给结果/诊断，让用户知道实际用了谁）
-        self.model_source = ""
 
     async def _list_loaded_models(self) -> List[str]:
         """
@@ -126,60 +122,6 @@ class ContractReviewEngine:
         return config.DEFAULT_MODEL
 
     # ==================================================================
-    # 模型解析：默认「跟随当前 WorkBuddy 会话使用的模型」
-    # ==================================================================
-    def _client_for(self, base_url: str, api_key: str):
-        """按端点缓存 AsyncOpenAI 客户端（会话模型可能指向非 LM Studio 的接入）。"""
-        key = (base_url or config.LM_STUDIO_BASE_URL, api_key or "x")
-        client = self._clients.get(key)
-        if client is None:
-            client = AsyncOpenAI(base_url=key[0], api_key=key[1], timeout=180.0)
-            self._clients[key] = client
-        return client
-
-    def _apply_backend(self, backend) -> None:
-        """把引擎当前使用的客户端切到该后端（后续所有既有调用点自动生效）。"""
-        self.client = self._client_for(backend.base_url, backend.api_key)
-        self.model_source = backend.describe()
-        logger.info("审查模型：%s", self.model_source)
-
-    async def resolve_backend(self, preferred_model: str = None) -> str:
-        """决定本次审查用哪个模型，并切换 self.client。
-
-        策略见 config.MODEL_POLICY：
-          session（默认）→ 跟随当前会话模型；不可直达时回退本机 LM Studio（记录原因）
-          pinned         → 用入参 / AGENT_MODEL / DEFAULT_MODEL
-          local          → 旧行为：只看本机 LM Studio 已加载/可用模型
-        """
-        policy = getattr(config, "MODEL_POLICY", "session")
-        if policy in ("session", "pinned"):
-            try:
-                from contract.session_model import resolve
-
-                backend = resolve(preferred_model if policy == "pinned" else None)
-                if backend is not None:
-                    if backend.reachable:
-                        self._apply_backend(backend)
-                        return backend.model
-                    # 会话用的是云端模型但本工具无凭据 → 明确记录后回退本地
-                    self.model_source = backend.describe()
-                    logger.warning("审查模型回退：%s", self.model_source)
-                elif policy == "pinned":
-                    name = config.AGENT_MODEL or config.DEFAULT_MODEL
-                    self.model_source = f"{name} ← MODEL_POLICY=pinned（默认）"
-                    logger.info("审查模型：%s", self.model_source)
-                    return name
-            except Exception as e:
-                logger.warning("会话模型解析失败（回退本机 LM Studio）: %s", e)
-
-        # 回退/默认：本机 LM Studio（保持旧行为）
-        self.client = self._client_for(config.LM_STUDIO_BASE_URL, config.LM_STUDIO_API_KEY)
-        name = await self.get_active_model_name(preferred_model)
-        if not self.model_source:
-            self.model_source = f"{name} ← 本机 LM Studio（引擎自动优选）"
-        return name
-
-    # ==================================================================
     # 主入口：签名与旧版完全一致（向后兼容）
     # ==================================================================
     async def stream_review(
@@ -194,7 +136,7 @@ class ContractReviewEngine:
         """
         v2.0：Agent 主循环（ReAct）+ 旧管道降级兜底
         """
-        active_model = await self.resolve_backend(model_name)
+        active_model = await self.get_active_model_name(model_name)
 
         # 1. 动态感知合同类型（轨道 1：关键词预判）
         if not contract_type or contract_type == "auto" or contract_type == "通用商业民商事经济合同":
@@ -207,7 +149,6 @@ class ContractReviewEngine:
             "type": "status",
             "message": f"已识别合同类型为【{contract_type}】(共 {char_count} 字)，立足【{client_role}】视角 ({review_stance}) 进行深度穿透合规审查...",
             "model": active_model,
-            "model_source": self.model_source,
             "detected_type": contract_type,
             "char_count": char_count,
             "client_role": client_role,
@@ -549,7 +490,7 @@ class ContractReviewEngine:
 
         # 若规则未覆盖，则请求端侧模型辅助
         try:
-            active_model = await self.resolve_backend(model_name)
+            active_model = await self.get_active_model_name(model_name)
             prompt = (
                 f"原合同文本：\n{original_text}\n\n"
                 f"法务审查报告与修改意见：\n{review_report}\n\n"
@@ -587,7 +528,7 @@ class ContractReviewEngine:
         """
         从零智能起草一份严谨专业的合同初稿全文
         """
-        active_model = await self.resolve_backend(model_name)
+        active_model = await self.get_active_model_name(model_name)
         sys_prompt = CONTRACT_DRAFT_FROM_SCRATCH_PROMPT.format(client_role=client_role)
 
         user_prompt = (
