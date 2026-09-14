@@ -14,6 +14,7 @@ SSE 新事件：perceive / plan / trace / risk_card / reflection / fallback_noti
 内部事件：agent_report（最终报告，由 engine 拦截后走 content/draft/done 收尾）
 """
 
+import asyncio
 import logging
 import re
 import time
@@ -63,6 +64,25 @@ class LLMClient:
     #: 截断重试时 max_tokens 的扩容上限
     MAX_TOKENS_CEILING = 16000
 
+    #: 「模型暂时不可用」类错误的特征串。
+    #: LM Studio 会在内存紧张 / 自动卸载（TTL）时把正在服务的模型卸下，
+    #: 此时请求返回 400 Model unloaded；紧接着的即时重载又可能被
+    #: Operation canceled 打断。这类错误是**可重试**的：LM Studio 收到下一次
+    #: 请求会重新 JIT 加载模型（实测 14B 约 20~30 秒）。
+    _LOAD_ERR_MARKERS = (
+        "model unloaded",
+        "failed to load model",
+        "operation canceled",
+        "terminated",
+        "connection error",
+        "connection reset",
+    )
+
+    @classmethod
+    def _is_model_unavailable(cls, err: str) -> bool:
+        low = (err or "").lower()
+        return any(k in low for k in cls._LOAD_ERR_MARKERS)
+
     def __init__(self, openai_client, model: str):
         self.client = openai_client
         self.model = model
@@ -88,9 +108,17 @@ class LLMClient:
                     stream=False,
                 )
             except Exception as e:
+                err = f"{type(e).__name__}: {str(e)[:200]}"
+                self.last_error = err
+                # 模型被卸载 / 重载被取消 属于可重试错误：直接放弃会让本条结论降级为
+                # 规则补位（报告质量下降，还会出现"摘要说高危 4 处、报告只列 1 项"这类不一致）。
+                # 这里等一小会儿再试一次，LM Studio 会随之重新加载模型。
+                if attempt == 0 and self._is_model_unavailable(err):
+                    logger.warning("模型 %s 暂时不可用，5 秒后重试一次：%s", self.model, err)
+                    await asyncio.sleep(5)
+                    continue
                 # 端侧服务异常（LM Studio 400 terminated / 上下文超限 / 连接中断等）
                 # 统一降级为空输出，交由上层走规则补位，避免异常穿透打断整条审查链路
-                self.last_error = f"{type(e).__name__}: {str(e)[:200]}"
                 logger.error("模型调用失败（%s）: %s", self.model, self.last_error)
                 return ""
             try:
