@@ -19,11 +19,17 @@
 | 诊断 | `ping` | 环境体检验测（LM Studio 在线状态 / 可用模型 / 处理指引） |
 
 **一键接入**：进入本项目文件夹双击 `一键安装到WorkBuddy.bat`（等效
-`python install_to_workbuddy.py`），幂等完成 venv/依赖安装、mcp.json 注册、
-Skill 部署（`deploy/skills/contract-review`）、用户记忆路由规则写入，以及
+`python install_to_workbuddy.py`），幂等完成 venv/依赖安装（含 **mcp 版本兼容性体检**：
+MCP SDK 2.x 移除了 `mcp.server.fastmcp`，会让服务 import 即崩 —— 检测到不兼容会自动降级修复）、
+mcp.json 注册、Skill 部署（`deploy/skills/contract-review`）、用户记忆路由规则写入，以及
 **端到端体检**（真实启动 MCP → 握手计时 → 列工具 → 调 `ping` 环境检测）。
 可选参数 `--mcp-only`、`--no-verify`。安装后唯一手动步骤：WorkBuddy 连接器页对
 `contract-reviewer` 点一次「信任」。
+
+> ⚠️ `一键安装到WorkBuddy.bat` 必须保持**纯 ASCII + CRLF**（注释/`title` 也不要写中文）：
+> cmd.exe 读取含多字节字符的批处理会读偏移错位、把行片段当命令执行
+> （实测症状：`'xx' is not recognized as an internal or external command`）。
+> 中文提示由安装脚本输出（bat 内已 `chcp 65001`）。
 
 ---
 

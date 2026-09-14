@@ -1,4 +1,8 @@
 langchain>=0.3.0
+# 必须锁 <2：MCP Python SDK 2.0（2026-07-27）把 FastMCP 改名为 MCPServer、
+# 导入路径迁到 mcp.server.mcpserver 且无兼容别名，本项目 mcp_server.py 的
+# `from mcp.server.fastmcp import FastMCP` 在 2.x 下会 ModuleNotFoundError，
+# 服务在 import 阶段即崩溃（客户端只表现为「连接失败」）。
 mcp>=1.0.0,<2
 langchain-community>=0.3.0
 langchain-core>=0.3.0

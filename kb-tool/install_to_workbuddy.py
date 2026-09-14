@@ -3,22 +3,27 @@
 企业知识库 MCP 一键安装脚本（随项目分发，换电脑直接运行本脚本即可）。
 
 功能（全部幂等，可重复运行）：
-  1. 检查/创建项目 venv 并安装依赖（requirements.txt，含 torch/faiss 等，首次较久）
-  2. 把 enterprise-knowledge-base 注册进 WorkBuddy 的 mcp.json（合并，不动其他服务）
-  3. 把 deploy/skills/enterprise-kb-query 部署为用户级 Skill（~/.workbuddy/skills/）
-  4. 向 ~/.workbuddy/MEMORY.md 追加企业知识库路由规则（带标记，不重复追加）
-  5. 检查 WorkBuddy 信任状态 + 端到端体检（真实启动本项目的 MCP 服务，
+  1. 检查/创建项目 venv 并安装依赖（requirements.txt，含 torch/faiss 等，首次较久），
+     并做 mcp 版本兼容性体检（2.x 移除了 mcp.server.fastmcp，会致服务 import 即崩，
+     检测到不兼容会自动降级修复）
+  2. 检查/预取 BGE 嵌入模型（约 400MB，不在 git 中；缺失则从 hf-mirror 提前下载）
+  3. 把 enterprise-knowledge-base 注册进 WorkBuddy 的 mcp.json（合并，不动其他服务）
+  4. 把 deploy/skills/enterprise-kb-query 部署为用户级 Skill（~/.workbuddy/skills/）
+  5. 向 ~/.workbuddy/MEMORY.md 写入企业知识库路由规则（带标记，幂等 upsert）
+  6. 检查 WorkBuddy 信任状态 + 端到端体检（真实启动本项目的 MCP 服务，
      协议握手计时、列出工具、实际检索"年假制度"一次）——不依赖 WorkBuddy 即可
      确认服务本身完全可用
 
 用法：
   python install_to_workbuddy.py            # 全部安装 + 体检
   python install_to_workbuddy.py --mcp-only # 只更新 mcp.json（依赖与 Skill 已就绪时用）
-  python install_to_workbuddy.py --no-verify # 跳过第 5 步端到端体检
+  python install_to_workbuddy.py --no-verify # 跳过第 6 步端到端体检
 
-注意：本工具依赖 BGE 嵌入模型与本地索引（data/models 等目录），随项目一起拷贝；
-      运行需要本机 Python 3.10+ 与联网（首次装依赖）。
+注意：知识库索引会在缺失/损坏时自动重建（源文档在 data/documents，随 git 一起分发）；
+      BGE 模型体积大、不随 git 分发，安装时会尝试预取，失败也不阻断（首次检索会自愈）。
+      运行需要本机 Python 3.10+ 与联网（首次装依赖与模型）。
 """
+import ast
 import json
 import os
 import queue
@@ -39,6 +44,16 @@ SKILL_DST = WORKBUDDY_DIR / "skills" / "enterprise-kb-query"
 MEMORY_MD = WORKBUDDY_DIR / "MEMORY.md"
 
 MCP_ENTRY_NAME = "enterprise-knowledge-base"
+
+# mcp 版本约束：MCP Python SDK 2.x 移除了 mcp.server.fastmcp（改名为 MCPServer，
+# 路径迁到 mcp.server.mcpserver 且无兼容别名）。若 venv 中装到 2.x，本项目
+# mcp_server.py 会在 import 阶段直接崩溃，客户端只表现为「连接失败」。
+# 该约束与 requirements.txt 保持一致，用于安装后的自动体检与自愈。
+MCP_SPEC = "mcp>=1.0.0,<2"
+
+# BGE 嵌入模型相对目录（缺失时首次检索会自动从 hf-mirror 下载，此处在安装阶段提前拉取）
+EMBED_MODEL_REL = Path("data") / "models" / "bge-base-zh-v1.5"
+EMBED_MODEL_REPO = "BAAI/bge-base-zh-v1.5"
 MEMORY_MARKER_BEGIN = "# >>> enterprise-kb routes (auto-managed, do not edit between markers)"
 MEMORY_MARKER_END = "# <<< enterprise-kb routes (auto-managed)"
 
@@ -77,16 +92,96 @@ def out(msg):
 
 
 def find_base_python():
-    """找一个可用的系统 Python 用来创建 venv（优先 py 启动器）。"""
-    for cmd in (["py", "-3"], ["python"]):
+    """找一个可用的系统 Python（要求 >=3.10）用来创建 venv（优先 py 启动器）。
+
+    要求 3.10+：MCP Python SDK 1.x（FastMCP）与本项目全部依赖均以 3.10 为下限。
+    """
+    for cmd in (["py", "-3"], ["python"], ["python3"]):
         try:
-            r = subprocess.run(cmd + ["-c", "import sys;print(sys.version_info[0])"],
+            r = subprocess.run(cmd + ["-c", "import sys;print(sys.version_info[:2])"],
                                capture_output=True, text=True, timeout=30)
-            if r.returncode == 0 and r.stdout.strip().startswith("3"):
+            if r.returncode != 0:
+                continue
+            try:
+                major, minor = ast.literal_eval(r.stdout.strip())
+            except Exception:
+                continue
+            if (major, minor) >= (3, 10):
                 return cmd
         except Exception:
             continue
     return None
+
+
+def ensure_mcp_compat() -> bool:
+    """确保 venv 里的 mcp 是 1.x（能 import mcp.server.fastmcp）。
+
+    这是「换电脑部署」最容易静默失败的一环：requirements 若未锁 `<2`，
+    新机 pip 会装到 2.x，服务在 import 阶段就死。此处做安装后体检 + 自动自愈，
+    即使 venv 是别人拷贝/被 `pip install -U mcp` 污染过的也能修回来。
+    """
+    probe = "from mcp.server.fastmcp import FastMCP"
+
+    def _import_ok() -> bool:
+        try:
+            r = subprocess.run([str(VENV_PY), "-c", probe],
+                               capture_output=True, text=True, timeout=180)
+            return r.returncode == 0
+        except Exception:
+            return False
+
+    if _import_ok():
+        out("[1/4] mcp 兼容性体检通过（1.x，包含 mcp.server.fastmcp）")
+        return True
+
+    out("[1/4] !! 检测到 mcp 版本不兼容（2.x 已移除 mcp.server.fastmcp），正在自动修复...")
+    try:
+        r = subprocess.run([str(VENV_PY), "-m", "pip", "install", "--quiet", "--upgrade", MCP_SPEC],
+                           timeout=1800)
+    except Exception as e:
+        out(f"     !! 修复命令执行异常: {e}")
+        return False
+    if r.returncode == 0 and _import_ok():
+        out("     ✅ 已修复：mcp 已回到 1.x，服务可正常启动。")
+        return True
+    out("     !! 自动修复失败，请手动执行：")
+    out(f'        "{VENV_PY}" -m pip install "{MCP_SPEC}"')
+    return False
+
+
+def ensure_kb_assets() -> bool:
+    """检查 BGE 嵌入模型是否随项目带过来（非致命）。
+
+    模型体积约 400MB 且在 .gitignore 中——`git clone` 得到的新机不会带模型。
+    缺失时检索内核会自动从 hf-mirror 下载（首次检索会明显变慢），此处提前拉取，
+    让「首次提问」不必等下载。离线或失败只警告，不影响安装结果。
+    """
+    target = PROJECT_ROOT / EMBED_MODEL_REL
+    if (target / "config.json").exists():
+        out(f"[1/4] BGE 嵌入模型已就位: {target}")
+        return True
+
+    out(f"[1/4] 未发现 BGE 模型（{EMBED_MODEL_REL}），正在提前下载约 400MB（走 hf-mirror）...")
+    code = (
+        "import os;"
+        "os.environ.setdefault('HF_ENDPOINT','https://hf-mirror.com');"
+        "from sentence_transformers import SentenceTransformer;"
+        f"m=SentenceTransformer({EMBED_MODEL_REPO!r});"
+        f"m.save({str(target)!r});"
+        "print('MODEL_SAVED')"
+    )
+    try:
+        r = subprocess.run([str(VENV_PY), "-c", code], cwd=str(PROJECT_ROOT),
+                           capture_output=True, text=True, timeout=3600)
+        if r.returncode == 0 and "MODEL_SAVED" in r.stdout:
+            out("     ✅ BGE 模型下载完成。")
+            return True
+        out("     ⚠️ 模型下载未完成（可能离线）。不影响安装：首次检索会自动重试下载。")
+        if r.stderr:
+            out("        详情: " + r.stderr.strip().splitlines()[-1][:160])
+    except Exception as e:
+        out(f"     ⚠️ 模型下载异常（{e}）。不影响安装：首次检索会自动重试下载。")
+    return True
 
 
 def ensure_venv():
@@ -97,7 +192,7 @@ def ensure_venv():
                                  capture_output=True, text=True, timeout=60)
             if chk.returncode == 0 and chk.stdout.strip().startswith("3"):
                 out(f"[1/4] venv 已存在且可用: {VENV_PY}")
-                return True
+                return ensure_mcp_compat()
         except Exception:
             pass
         import shutil
@@ -106,7 +201,9 @@ def ensure_venv():
     out("[1/4] 未发现 venv，正在新建...")
     base = find_base_python()
     if not base:
-        out("    !! 未找到系统 Python 3。请先安装 Python 3.10+ 后重试。")
+        out("    !! 未找到可用的系统 Python 3.10+。")
+        out("       请先安装 Python 3.10（推荐 3.12 / 3.13）并勾选 Add to PATH：")
+        out("       https://www.python.org/downloads/windows/")
         return False
     r = subprocess.run(base + ["-m", "venv", str(VENV_DIR)], timeout=300)
     if r.returncode != 0:
@@ -120,7 +217,7 @@ def ensure_venv():
         out(f'       "{VENV_PY}" -m pip install -r requirements.txt')
         return False
     out("    依赖安装完成。")
-    return True
+    return ensure_mcp_compat()
 
 
 def update_mcp_json():
@@ -279,7 +376,7 @@ def verify_install() -> bool:
     """端到端体检：真实 spawn 本项目 MCP 服务 → 握手计时 → 列工具 → 实际检索一次。"""
     out("")
     out("=" * 62)
-    out("[5/5] 端到端体检（真实启动 MCP 服务 + 检索一次）")
+    out("[6/6] 端到端体检（真实启动 MCP 服务 + 检索一次）")
     out("=" * 62)
     script = PROJECT_ROOT / "mcp_server.py"
     if not (VENV_PY.exists() and script.exists()):
@@ -348,7 +445,8 @@ def main():
         out("[3/4] 跳过 Skill（--mcp-only）")
         out("[4/4] 跳过 MEMORY 规则（--mcp-only）")
     else:
-        ok = ensure_venv() and update_mcp_json() and deploy_skill() and append_memory_rules()
+        ok = (ensure_venv() and ensure_kb_assets() and update_mcp_json()
+              and deploy_skill() and append_memory_rules())
 
     if ok and not no_verify:
         ok = verify_install()
@@ -361,8 +459,8 @@ def main():
             out("安装完成！最后一步（手动）：")
             out("  打开 WorkBuddy 连接器管理页 -> 自定义连接器 -> 对 enterprise-knowledge-base 点击「信任」")
             out("  （或重启 WorkBuddy）。之后新开会话询问公司制度即可自动检索知识库。")
-        out("提示：BGE 模型与知识库索引随项目 data/ 目录一起拷贝；若检索报错请确认")
-        out("      data/models 中的模型文件完整。")
+        out("提示：制度文档在 data/documents（随 git 分发），向量索引缺失/损坏会自动重建；")
+        out("      BGE 模型约 400MB 不随 git 分发，缺失时会自动从 hf-mirror 下载（首次检索会慢一次）。")
         out("      如需卸载、修改路径或状态自检，可双击本目录下的「图形化配置助手.bat」。")
     else:
         out("安装未完全成功，请按上方提示处理后重跑本脚本。")

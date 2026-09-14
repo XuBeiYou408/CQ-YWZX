@@ -45,14 +45,17 @@ WorkBuddy 首问即可看到工具），重型检索栈全部放在 `rag_worker.
 进入本项目文件夹，**双击 `一键安装到WorkBuddy.bat`**（等效命令
 `python install_to_workbuddy.py`），脚本幂等可重复运行，自动完成：
 
-1. 创建/修复 `.venv` 并安装依赖（含 torch/faiss，首次约 10~30 分钟，需联网）
-2. 将 `enterprise-knowledge-base` 合并注册进 `~/.workbuddy/mcp.json`（不动其他服务）
-3. 部署路由 Skill（`deploy/skills/enterprise-kb-query` → `~/.workbuddy/skills/`）
-4. 向 `~/.workbuddy/MEMORY.md` 写入两个托管规则块（带标记，幂等）：
+1. 创建/修复 `.venv` 并安装依赖（含 torch/faiss，首次约 10~30 分钟，需联网），
+   并做 **mcp 版本兼容性体检**：MCP SDK 2.x 移除了 `mcp.server.fastmcp`，会让服务
+   在 import 阶段直接崩溃 —— 检测到不兼容会**自动降级修复**（含被 `pip install -U mcp` 污染过的 venv）
+2. 检查/预取 **BGE 嵌入模型**（约 400MB，缺失才下载，失败不阻断——首次检索会自愈）
+3. 将 `enterprise-knowledge-base` 合并注册进 `~/.workbuddy/mcp.json`（不动其他服务）
+4. 部署路由 Skill（`deploy/skills/enterprise-kb-query` → `~/.workbuddy/skills/`）
+5. 向 `~/.workbuddy/MEMORY.md` 写入两个托管规则块（带标记，幂等）：
    **平台层「MCP 工具调用格式」**（与合同审查项目共用同一块，内容完全一致）
    + **企业知识库查询路由规则**
    ——Skill 与记忆规则每次重跑都会用项目内最新副本覆盖，因此内容随项目更新自动下发
-5. **端到端体检**：真实启动本 MCP 服务 → 协议握手计时 → 列工具 → 实际检索
+6. **端到端体检**：真实启动本 MCP 服务 → 协议握手计时 → 列工具 → 实际检索
    "年假制度"一次；并检查 WorkBuddy 信任状态
 
 可选参数：`--mcp-only` 只更新 mcp.json；`--no-verify` 跳过体检。
@@ -62,6 +65,11 @@ WorkBuddy 首问即可看到工具），重型检索栈全部放在 `rag_worker.
 > 旧版在 `.venv` 已就绪时会改走图形向导，导致 Skill 漏装；图形向导现已拆为独立入口
 > `图形化配置助手.bat`（用于卸载 / 修改路径 / 状态自检 / 端到端体检），
 > 且两者共用同一份部署实现，不会再出现能力漂移。
+
+> ⚠️ **维护约定**：两个 `.bat` 必须保持**纯 ASCII + CRLF**（连注释和 `title` 都不要写中文）。
+> cmd.exe 读取含多字节字符的批处理时会发生读取偏移错位，把行片段当命令执行
+> （实测症状：`'xx' is not recognized as an internal or external command`）。
+> 面向用户的中文提示一律由 Python 脚本输出（bat 里已 `chcp 65001`，中文显示正常）。
 
 安装完成后唯一的手动步骤：WorkBuddy 连接器管理页 → 自定义连接器 →
 对 `enterprise-knowledge-base` 点一次「信任」（或重启 WorkBuddy）。

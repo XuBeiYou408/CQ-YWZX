@@ -1,35 +1,37 @@
 @echo off
 chcp 65001 >nul
-title 企业本地知识库 · 图形化配置助手
+title Enterprise KB - GUI config helper
 cd /d "%~dp0"
 
-rem 图形化助手：卸载 / 修改路径 / 状态自检 / 端到端体检
-rem 日常安装请用「一键安装到WorkBuddy.bat」（全自动、无需点击、含体检）。
-rem 说明：.venv 的基础解释器可能未自带 tkinter（图形界面必需），所以这里优先挑
-rem       一个「能 import tkinter」的解释器来显示界面；MCP 服务本身仍由 .venv 承载，
-rem       与界面用哪个解释器无关。
+rem GUI helper: uninstall / change install path / status self-check / self-test.
+rem For daily install just use the one-click install bat (fully automatic).
+rem The .venv base interpreter may not ship tkinter (required by the GUI), so we
+rem   pick the first interpreter that can "import tkinter" to show the window.
+rem   The MCP service itself is still served by .venv, independent of the GUI.
+rem KEEP THIS FILE ASCII-ONLY. Non-ASCII bytes in a .bat make cmd.exe desync its
+rem   read offset and execute fragments as commands (reproduced on this machine).
 
 set "GUIC="
 
-if exist ".venv\Scripts\pythonw.exe" call :probe ".venv\Scripts\pythonw.exe" ".venv\Scripts\python.exe"
-if defined GUIC goto run
-call :probe "pyw -3" "py -3"
-if defined GUIC goto run
-call :probe "python" "python"
-if defined GUIC goto run
+if exist ".venv\Scripts\pythonw.exe" (
+    ".venv\Scripts\pythonw.exe" -c "import tkinter" >nul 2>nul && set "GUIC=.venv\Scripts\pythonw.exe"
+)
+if not defined GUIC (
+    pyw -3 -c "import tkinter" >nul 2>nul && set "GUIC=pyw -3"
+)
+if not defined GUIC (
+    py -3 -c "import tkinter" >nul 2>nul && set "GUIC=py -3"
+)
+if not defined GUIC (
+    python -c "import tkinter" >nul 2>nul && set "GUIC=python"
+)
+if not defined GUIC (
+    echo [ERROR] No Python with tkinter found, cannot open the GUI.
+    echo         This does not block you: just double-click the one-click install
+    echo         bat in this folder to finish setup ^(automatic, with self-check^).
+    pause
+    exit /b 1
+)
 
-echo [提示] 未找到自带 tkinter 的 Python，无法打开图形界面。
-echo        这不影响使用：直接双击「一键安装到WorkBuddy.bat」即可完成全部安装与体检。
-pause
-exit /b 1
-
-:run
-echo 正在打开图形化配置助手...
 start "" %GUIC% gui_installer.py
-exit /b 0
-
-:probe
-rem %1 = 用于启动界面的解释器；%2 = 用于探测 tkinter 的控制台解释器
-%2 -c "import tkinter" >nul 2>nul
-if not errorlevel 1 set "GUIC=%~1"
 exit /b 0
