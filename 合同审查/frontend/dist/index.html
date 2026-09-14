@@ -1796,15 +1796,36 @@
                 const isHigh = rawTitle.includes('🔴') || rawTitle.includes('[高') || rawTitle.includes('高危') || rawTitle.includes('重大');
                 if (isHigh) highRiskCount++; else medRiskCount++;
 
-                let cleanTitle = rawTitle
-                  .replace(/^[🔴🟡🟢⚠️\s]*/g, '')
-                  .replace(/^\[(高危|中危|低危|合规|优化|重大)?风险?\]\s*/g, '')
-                  .trim();
-                const cMatch = cleanTitle.match(/^((?:第[一二三四五六七八九十\d]+条|\d+\.\d+)[^：:]*)[：:]\s*(.*)$/);
-                let shortName = cMatch ? cMatch[1] : cleanTitle.substring(0, 10);
-                // 同一条款的多张风险卡（不同子条款）已在后端标题中补充定位词「（…）」，
-                // 这里把定位词并入按钮名，避免导航出现同名条目
+                // 标题清洗：模型可能把 prompt 模板整行抄进标题
+                // （如「或 #### 🟡 [中危风险] 第三条 租金及支付方式」），统一剥掉噪声。
+                // 用收敛循环：每轮剥一层（先剥「或」/井号/级别标签/emoji），直到不再变化
+                let cleanTitle = rawTitle;
+                for (let round = 0; round < 6; round++) {
+                  const before = cleanTitle;
+                  cleanTitle = cleanTitle
+                    .replace(/^(?:或|or)\s*/i, '')
+                    .replace(/#{1,6}\s*/g, '')
+                    .replace(/\[(高危|中危|低危|合规|优化|重大)?风险?\]/g, '')
+                    .replace(/[🔴🟡🟢🟠⚠️]/g, '')
+                    .replace(/\s+/g, ' ')
+                    .trim();
+                  if (cleanTitle === before) break;
+                }
+                // 快捷导航标签：取「第X条 标题」主体（有无冒号都可以，支持 第4.2条 这类编号），
+                // 不再无脑截前 10 个字符（会把「第三条 租金及支付方式」截成「第三条 租金及支付方」）
+                // 尾部「（子条款定位）」先剥离，稍后作为后缀并入，避免标签里重复出现
                 const tagMatch = cleanTitle.match(/[（(]([^）)]{2,14})[）)]\s*$/);
+                const baseTitle = tagMatch
+                  ? cleanTitle.replace(/[（(][^）)]{2,14}[）)]\s*$/, '').trim()
+                  : cleanTitle;
+                let shortName = '';
+                const cMatch = baseTitle.match(/^(第\s*[一二三四五六七八九十百零〇\d.]+\s*条|\d+\.\d+)\s*([^：:]{0,24})/);
+                if (cMatch) {
+                  shortName = (cMatch[1] + ' ' + (cMatch[2] || '')).trim();
+                } else if (baseTitle) {
+                  shortName = baseTitle.slice(0, 16) + (baseTitle.length > 16 ? '…' : '');
+                }
+                if (!shortName) shortName = '未命名条款';
                 if (tagMatch) {
                   shortName = shortName + ' · ' + tagMatch[1].substring(0, 8);
                 }

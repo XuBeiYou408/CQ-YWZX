@@ -1148,6 +1148,46 @@ class ContractReviewAgent:
             return ""
         return tag[:12]
 
+    #: 风险卡片首行：####/### <级别 emoji> [级别标签] 条款标题
+    _CARD_HEADER_RE = re.compile(r"^(#{2,4})\s*([🔴🟡🟢🟠])\s*(.*)$")
+    #: 标题里的模板噪声：模型照抄 prompt 说明留下的「或」、井号、级别标签、emoji
+    _HEADER_NOISE_RE = re.compile(r"^(?:或|or)\s*|^#{1,6}\s*|[🔴🟡🟢🟠⚠️]|\[[^\]]{0,12}\]")
+
+    @classmethod
+    def _clean_card_title(cls, body: str) -> str:
+        """清掉「模型把 prompt 模板原样抄进标题」造成的噪声，只留真实条款标题。
+
+        实测坏例（prompt 里 `#### 🔴 [高危风险] 或 #### 🟡 [中危风险] <标题>` 被整行抄走）：
+            "或 #### 🟡 [中危风险] 第三条 租金及支付方式" → "第三条 租金及支付方式"
+            "第三条 租金及支付方式"                       → 原样保留
+        """
+        s = (body or "").strip()
+        prev = None
+        while s and s != prev:                       # 逐段剥离，直到不再变化
+            prev = s
+            s = cls._HEADER_NOISE_RE.sub("", s, count=1).strip()
+        s = re.sub(r"\s+", " ", s).strip(" -—·:：")
+        return s or "未命名条款"
+
+    def _sanitize_card_titles(self, cards):
+        """统一规范化每张卡片的标题行，避免模板噪声/截断标题流到报告与前端导航。"""
+        for c in cards:
+            card = c.get("card") or ""
+            if not card:
+                continue
+            fixed = []
+            for line in card.split("\n"):
+                m = self._CARD_HEADER_RE.match(line.strip())
+                if not m:
+                    fixed.append(line)
+                    continue
+                marks, emoji, body = m.group(1), m.group(2), m.group(3)
+                level = {"🔴": "高危风险", "🟡": "中危风险",
+                         "🟠": "中危风险", "🟢": "合规"}.get(emoji, "风险")
+                fixed.append(f"{marks} {emoji} [{level}] {self._clean_card_title(body)}")
+            c["card"] = "\n".join(fixed)
+        return cards
+
     def _disambiguate_card_titles(self, cards):
         """
         风险卡片标题消歧，避免报告与快捷导航出现同名条目造成「重复」观感。
@@ -1191,6 +1231,8 @@ class ContractReviewAgent:
         self, clauses, plan, cards, clean_notes, reflection, citation_check,
         llm_type, context, budget_hit,
     ) -> str:
+        # 先清掉「模型照抄 prompt 模板」造成的标题噪声，再做同名消歧
+        cards = self._sanitize_card_titles(cards)
         # 同条款多卡消歧：标题补充子条款定位，避免报告/导航出现同名条目
         cards = self._disambiguate_card_titles(cards)
 
