@@ -148,6 +148,43 @@ async def test_cloud_connection(
         return {"success": False, "latency_ms": latency_ms, "error": str(e)}
 
 
+async def _resolve_local_model(base_url: str, configured: str) -> str:
+    """确认本地推理服务是否真的提供配置的模型名。
+
+    LM Studio / Ollama 在模型名不存在时会直接返回 400 错误（例如配置写着
+    `qwen3.8-27b`，而本地实际只加载了 `qwen3.6-27b`），这会让整条 AI 评估链路
+    静默降级为兜底结果。此处做一次轻量探测：配置名不存在时回退到本地第一个
+    可用的对话模型（排除 embedding 模型），保证本地模式始终可评估。
+    """
+    try:
+        async with httpx.AsyncClient(timeout=3.0) as client:
+            resp = await client.get(f"{base_url.rstrip('/')}/models")
+            if resp.status_code != 200:
+                return configured
+            ids = [
+                m.get("id", "")
+                for m in resp.json().get("data", [])
+                if isinstance(m, dict) and m.get("id")
+            ]
+    except Exception:
+        return configured
+
+    if not ids or configured in ids:
+        return configured
+
+    # 优先回退到「同族」模型（如配置 qwen3.8-27b -> 回退 qwen 系列），其次第一个非 embedding 模型
+    chat_models = [str(m) for m in ids if "embed" not in str(m).lower()]
+    stem = "".join(ch for ch in configured if ch.isalpha()).lower()[:4]
+    for mid in chat_models:
+        if stem and stem in mid.lower():
+            print(f"[RecruitAI LLM] 本地服务未提供模型 '{configured}'，已自动回退为同族模型 '{mid}'")
+            return mid
+    if chat_models:
+        print(f"[RecruitAI LLM] 本地服务未提供模型 '{configured}'，已自动回退为 '{chat_models[0]}'")
+        return chat_models[0]
+    return configured
+
+
 async def generate_chat(
     prompt: str, system_prompt: str, cfg: Dict[str, Any], json_mode: bool = True
 ) -> str:
@@ -174,6 +211,7 @@ async def generate_chat(
             base_url = lm_url
 
         model = local_cfg.get("model_name", "qwen3.8-27b")
+        model = await _resolve_local_model(base_url, model)
         timeout = float(local_cfg.get("timeout", 45))
         headers = {"Content-Type": "application/json"}
     else:

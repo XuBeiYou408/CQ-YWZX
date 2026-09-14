@@ -42,7 +42,12 @@ if STATIC_DIR.exists():
 async def index():
     index_file = STATIC_DIR / "index.html"
     if index_file.exists():
-        return FileResponse(index_file)
+        # 开发期前端会被反复修改：显式禁用缓存，避免浏览器沿用旧页面
+        # （否则改了 index.html 却"看起来没生效"，需要手动 Ctrl+F5 强刷）
+        return FileResponse(
+            index_file,
+            headers={"Cache-Control": "no-cache, no-store, must-revalidate", "Pragma": "no-cache"},
+        )
     return {"message": "RecruitAI API running"}
 
 

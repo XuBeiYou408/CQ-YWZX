@@ -17,6 +17,8 @@ from app.core.presets import PRESET_CANDIDATES, PRESET_JOBS
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 DATA_DIR = BASE_DIR / "data"
 STORE_FILE = DATA_DIR / "store.json"
+# 开发自测基线快照：一键恢复数据的还原源（由 data/store.json 在“干净状态”下复制而来）
+BASELINE_FILE = DATA_DIR / "store.baseline.json"
 
 
 def _get_default_interviews() -> List[Dict[str, Any]]:
@@ -140,12 +142,7 @@ class StorageManager:
                 try:
                     with open(STORE_FILE, "r", encoding="utf-8") as f:
                         data = json.load(f)
-                    self.jobs = data.get("jobs", [])
-                    self.candidates = data.get("candidates", [])
-                    self.interviews = data.get("interviews", [])
-                    self.talent_pool = data.get("talent_pool", [])
-                    self.chat_history = data.get("chat_history", {})
-                    self.rejections = data.get("rejections", [])
+                    self._load_payload_into_memory(data)
                     # 执行开机自愈校验
                     self._self_healing_audit()
                     self._initialized = True
@@ -157,6 +154,15 @@ class StorageManager:
             self._seed_default_data()
             self._initialized = True
             self.save()
+
+    def _load_payload_into_memory(self, data: Dict[str, Any]) -> None:
+        """将持久化载荷（或基线快照载荷）载入内存实体"""
+        self.jobs = data.get("jobs", [])
+        self.candidates = data.get("candidates", [])
+        self.interviews = data.get("interviews", [])
+        self.talent_pool = data.get("talent_pool", [])
+        self.chat_history = data.get("chat_history", {})
+        self.rejections = data.get("rejections", [])
 
     def _seed_default_data(self) -> None:
         """填充预设初始演示数据"""
@@ -253,11 +259,37 @@ class StorageManager:
                     except Exception:
                         pass
 
-    def reset(self) -> None:
-        """重置为出厂预设演示数据并即时写盘"""
+    def restore_from_baseline(self) -> str:
+        """
+        开发自测一键数据恢复：将全量运行时数据还原为基线快照（data/store.baseline.json）。
+        基线快照缺失或损坏时，自动回退为 app/core/presets.py 的出厂预设种子数据。
+        返回实际生效的恢复来源："baseline" 或 "preset"。
+        """
         with self._lock:
-            self._seed_default_data()
+            source = "preset"
+            if BASELINE_FILE.exists():
+                try:
+                    with open(BASELINE_FILE, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                    self._load_payload_into_memory(data)
+                    source = "baseline"
+                except Exception as e:
+                    print(f"[RecruitAI Storage] 基线快照读取异常 ({e})，回退为出厂预设数据。")
+            if source == "preset":
+                self._seed_default_data()
+            # 恢复后仍执行一次一致性自愈校验，保证各实体关联强一致
+            self._self_healing_audit()
+            self._initialized = True
             self.save()
+            return source
+
+    def reset(self) -> str:
+        """
+        重置为初始演示数据并即时写盘。
+        优先以基线快照 (data/store.baseline.json) 为还原源，保证“恢复到开发者约定的干净状态”；
+        基线缺失时退化为出厂预设种子数据。
+        """
+        return self.restore_from_baseline()
 
 
 # 全局单例

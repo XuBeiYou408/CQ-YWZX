@@ -75,9 +75,35 @@ data/models/
 !data/documents/
 !data/documents/**
 
-# 简历筛查上传文件与运行时临时缓存
+# ============================================
+# 各项目「运行时数据」— 一律不入库（含用户隐私）
+# 这些内容由应用启动时自动创建/以代码内预置数据重建，或由使用者在界面中填写：
+#   · 简历筛查 data/store.json  → 候选人库、上传的简历原文、微聊记录
+#   · 简历筛查 config.json      → 界面里填的云端 api_key 会写入此文件
+#   · 销售周报 data/*.db        → 销售台账（真实客户/金额）
+#   · 销售周报 uploads/exports  → 上传明细与 Word/Markdown 导出产物
+#   · 销售周报 config.json      → 同上，含 api_key
+# ============================================
+
+# 简历筛查（该项目无独立 .gitignore，由本文件兜底）
+# data/ 下只保留「开发自测基线快照」（纯预置演示数据，供 一键恢复数据.bat 使用）；
+# store.json 含上传简历原文与候选人数据，一律不入库。
+简历筛查/data/*
+!简历筛查/data/store.baseline.json
 简历筛查/uploads/*
 !简历筛查/uploads/.gitkeep
+简历筛查/config.json
+
+# 销售周报（项目内 .gitignore 已有同名规则，此处作跨目录兜底）
+销售周报/data/
+销售周报/uploads/
+销售周报/exports/
+销售周报/config.json
+
+# 企业本地知识库 / kb-tool：真实 .env（含云端密钥），范本 .env.example 保留
+企业本地知识库/.env
+kb-tool/.env
+
+# 通用临时文件
 *.tmp
-简历筛查/data/*.tmp
 

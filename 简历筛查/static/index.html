@@ -180,7 +180,7 @@
           </div>
 
           <!-- Upload Resume Button -->
-          <button @click="showUploadModal = true"
+          <button @click="openUploadModal()"
             class="h-9 px-3.5 bg-[#00B395] hover:bg-[#008770] text-white rounded-lg inline-flex items-center gap-1.5 text-xs font-semibold transition-all shadow-sm">
             <svg class="icon w-4 h-4 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
             <span>上传简历</span>
@@ -304,7 +304,7 @@
               </button>
               
               <!-- Upload Resume Button -->
-              <button @click="showUploadModal = true" class="h-9 px-3 bg-[#edeaff] hover:bg-[#dfd8ff] text-[#5039f6] text-xs font-semibold rounded-lg inline-flex items-center gap-1.5 transition-all border border-[#5039f6]/20">
+              <button @click="openUploadModal()" class="h-9 px-3 bg-[#edeaff] hover:bg-[#dfd8ff] text-[#5039f6] text-xs font-semibold rounded-lg inline-flex items-center gap-1.5 transition-all border border-[#5039f6]/20">
                 <svg class="icon w-4 h-4 text-[#5039f6]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
                 <span>上传简历</span>
               </button>
@@ -487,7 +487,7 @@
             <svg class="w-12 h-12 text-slate-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
             <div class="text-sm font-semibold text-slate-800">未找到符合条件的候选人</div>
             <div class="text-xs text-slate-400">您可以尝试切换 Tab、清除筛选条件，或直接上传新的简历文档</div>
-            <button @click="showUploadModal = true" class="mt-2 h-9 px-4 bg-[#00B395] hover:bg-[#008770] text-white rounded-lg text-xs font-semibold inline-flex items-center gap-1.5">
+            <button @click="openUploadModal()" class="mt-2 h-9 px-4 bg-[#00B395] hover:bg-[#008770] text-white rounded-lg text-xs font-semibold inline-flex items-center gap-1.5">
               <svg class="icon w-4 h-4 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
               上传新简历
             </button>
@@ -699,6 +699,12 @@
             </div>
 
             <div class="flex flex-wrap items-center gap-2 pr-1">
+              <button v-if="selectedIds.size > 0" @click="selectedIds = new Set()"
+                class="h-8 px-2.5 text-[11px] font-semibold text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-all cursor-pointer"
+                title="已选中的候选人会跨页保留，点此一键清空">
+                清空选择 ({{ selectedIds.size }})
+              </button>
+
               <button @click="batchExport" :disabled="selectedIds.size === 0"
                 class="h-8 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg inline-flex items-center gap-1 transition-all disabled:opacity-40 cursor-pointer">
                 <svg class="icon w-3.5 h-3.5 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -714,7 +720,7 @@
               <button @click="batchGreet" :disabled="selectedIds.size === 0"
                 class="h-8 px-3 bg-[#e6faf6] hover:bg-[#d0f5ee] text-[#008770] text-xs font-semibold rounded-lg inline-flex items-center gap-1 transition-all disabled:opacity-40 border border-[#00B395]/20 cursor-pointer">
                 <svg class="icon w-3.5 h-3.5 text-[#008770]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-                批量打招呼
+                批量打招呼 ({{ selectedIds.size }}人)
               </button>
 
               <button @click="batchSchedule" :disabled="selectedIds.size === 0"
@@ -863,13 +869,13 @@
                         </span>
                       </div>
                       <div class="text-xs text-slate-600 font-medium flex flex-wrap items-center gap-x-3 gap-y-1 pt-1">
-                        <span>{{ currentDetail.age }}岁</span>
+                        <span>{{ currentDetail.age > 0 ? currentDetail.age + '岁' : '年龄未提供' }}</span>
                         <span>•</span>
                         <span>{{ currentDetail.experience_years }}年工作经验</span>
                         <span>•</span>
-                        <span>{{ formatEdu(currentDetail.education) }} ({{ currentDetail.school }})</span>
+                        <span>{{ formatEdu(currentDetail.education) }}<template v-if="currentDetail.school"> ({{ currentDetail.school }})</template></span>
                         <span>•</span>
-                        <span>现居 {{ currentDetail.full_resume?.basic_info?.city || '深圳' }}</span>
+                        <span>现居 {{ currentDetail.full_resume?.basic_info?.city || '—' }}</span>
                       </div>
                     </div>
 
@@ -914,7 +920,7 @@
                       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
                         <div class="flex items-center gap-2">
                           <span class="text-sm font-bold text-slate-900">{{ work.company }}</span>
-                          <span class="text-xs text-slate-500">| {{ work.department }}</span>
+                          <span class="text-xs text-slate-500" v-if="work.department">| {{ work.department }}</span>
                         </div>
                         <span class="text-xs text-slate-400 font-mono font-medium">{{ work.period }}</span>
                       </div>
@@ -922,8 +928,8 @@
                       <div class="text-xs font-bold text-[#008770]">{{ work.title }}</div>
                       
                       <div class="text-xs text-slate-600 leading-relaxed space-y-1">
-                        <div><strong class="text-slate-700">工作职责：</strong>{{ work.responsibilities }}</div>
-                        <div><strong class="text-slate-700">核心业绩：</strong><span class="text-slate-800">{{ work.achievements }}</span></div>
+                        <div v-if="work.responsibilities"><strong class="text-slate-700">工作职责：</strong>{{ work.responsibilities }}</div>
+                        <div v-if="work.achievements"><strong class="text-slate-700">核心业绩：</strong><span class="text-slate-800">{{ work.achievements }}</span></div>
                       </div>
                     </div>
                   </div>
@@ -933,10 +939,6 @@
                     </div>
                     <div class="text-slate-500">
                       工作资历：{{ currentDetail.experience_years ?? currentDetail.detected_exp_years ?? '未知' }} 年
-                    </div>
-                    <div class="text-[11px] text-amber-600 pt-1">
-                      该简历未做「结构化解析」（初筛即被硬性门槛拦截，为省算力未调用模型），
-                      此处仅展示规则可提取到的字段；完整原文见下方。
                     </div>
                   </div>
                 </div>
@@ -968,19 +970,17 @@
                       </div>
 
                       <div class="text-xs text-slate-600 space-y-1.5 leading-relaxed pt-1">
-                        <div><strong class="text-slate-800">项目背景与难点：</strong>{{ proj.background }}</div>
-                        <div><strong class="text-slate-800">关键架构方案：</strong>{{ proj.solutions }}</div>
-                        <div class="p-2 bg-emerald-50/80 rounded-lg text-[#00705e] border border-emerald-100">
+                        <div v-if="proj.background"><strong class="text-slate-800">项目背景与难点：</strong>{{ proj.background }}</div>
+                        <div v-if="proj.solutions"><strong class="text-slate-800">关键架构方案：</strong>{{ proj.solutions }}</div>
+                        <div v-if="proj.metrics" class="p-2 bg-emerald-50/80 rounded-lg text-[#00705e] border border-emerald-100">
                           <strong>量化产出效益：</strong>{{ proj.metrics }}
                         </div>
                       </div>
                     </div>
                   </div>
                   <div v-else class="text-xs text-slate-600 bg-slate-50 p-4 rounded-xl space-y-1">
-                    <div>未做结构化解析 —— 该简历在硬性门槛阶段即被拦截（未消耗模型算力），因此没有逐项项目档案。</div>
                     <div class="text-slate-500">
-                      原始项目经历请查看下方「简历原文解析文本」。
-                      <span v-if="currentDetail.ai_score">技术栈匹配度 {{ currentDetail.ai_score }}%。</span>
+                      技术栈匹配度 <span class="font-bold text-slate-700">{{ currentDetail.ai_score }}%</span>
                     </div>
                   </div>
                 </div>
@@ -1017,7 +1017,6 @@
                         · {{ formatEdu(currentDetail.education || currentDetail.detected_edu) }}
                       </span>
                     </div>
-                    <div class="text-[11px] text-amber-600 pt-1">该简历未做结构化解析，以上为规则提取结果。</div>
                   </div>
                 </div>
 
@@ -1300,8 +1299,12 @@
 
           <!-- Candidates Scrollable List -->
           <div class="flex-1 overflow-y-auto divide-y divide-slate-100">
-            <div v-if="filteredChatCandidates.length === 0" class="p-8 text-center text-xs text-slate-400">
-              未找到符合条件的候选人
+            <div v-if="filteredChatCandidates.length === 0" class="p-8 text-center text-xs text-slate-400 leading-relaxed">
+              <template v-if="contactedCount === 0">
+                还没有沟通过的候选人<br/>
+                <span class="text-[11px]">在候选人列表勾选后点「批量打招呼」，<br/>或从候选人卡片进入沟通</span>
+              </template>
+              <template v-else>当前筛选条件下没有已沟通的候选人</template>
             </div>
             <div v-for="cand in filteredChatCandidates" :key="cand.id"
               @click="selectChatCandidate(cand)"
@@ -1439,6 +1442,11 @@
             <div v-show="chatPaneTab === 'chat'" class="flex-1 flex flex-col min-h-0">
               <!-- Messages Stream Area -->
               <div class="flex-1 p-4 overflow-y-auto space-y-3.5 bg-[#F8FAFC]" ref="chatBox">
+              <div v-if="chatMessages.length === 0" class="h-full flex flex-col items-center justify-center gap-2 text-center text-xs text-slate-400 py-10">
+                <svg class="w-8 h-8 text-slate-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                <div class="font-semibold text-slate-500">尚未与这位候选人开始沟通</div>
+                <div>由公司先发起更合规：可直接在下方输入问候语，<br/>或在候选人列表勾选后点「批量打招呼」</div>
+              </div>
               <div v-for="(msg, i) in chatMessages" :key="i">
                 
                 <!-- SPECIAL CARD: System Rejection Notice (委婉回绝通知专用卡片) -->
@@ -1986,29 +1994,83 @@
           </select>
         </div>
 
-        <div class="border-2 border-dashed border-[#00B395]/40 hover:border-[#00B395] rounded-xl p-8 text-center space-y-2 cursor-pointer transition-colors bg-[#00B395]/5"
-          @click="$refs.fileInput.click()">
-          <input type="file" ref="fileInput" multiple accept=".pdf,.docx,.doc,.txt,.md" class="hidden" @change="handleFileSelect"/>
+        <div class="border-2 border-dashed rounded-xl p-6 text-center space-y-3 cursor-pointer transition-colors"
+          data-resume-dropzone="1"
+          :class="uploadDragOver ? 'border-[#00B395] bg-[#00B395]/15 ring-2 ring-[#00B395]/30 scale-[1.01]' : 'border-[#00B395]/40 hover:border-[#00B395] bg-[#00B395]/5'"
+          @click="$refs.fileInput.click()"
+          @dragenter.prevent="uploadDragOver = true"
+          @dragover.prevent="uploadDragOver = true"
+          @dragleave.prevent="onUploadDragLeave($event)"
+          @drop.prevent.stop="handleResumeDrop($event)">
+          <input type="file" ref="fileInput" multiple accept=".pdf,.docx,.doc,.txt,.md,.zip" class="hidden" @change="handleFileSelect"/>
+          <input type="file" ref="folderInput" webkitdirectory directory multiple class="hidden" @change="handleFolderSelect"/>
           <svg class="w-10 h-10 text-[#008770] mx-auto animate-bounce" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M16 16l-4-4-4 4"/><path d="M12 12v9"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg>
-          <div class="text-sm font-bold text-slate-900">点击或将简历拖拽至此处</div>
-          <div class="text-xs text-slate-400">支持 PDF、Word (.docx)、TXT、Markdown 等通用格式</div>
+          <div class="text-sm font-bold text-slate-900">{{ uploadDragOver ? '松手即可载入简历' : '点击选择文件 / 文件夹，或直接拖拽到此处' }}</div>
+          <div class="text-xs text-slate-400 leading-relaxed">
+            支持 <span class="font-semibold text-slate-500">PDF、Word(.docx/.doc)、TXT、Markdown</span>，也支持 <span class="font-semibold text-slate-500">zip 压缩包</span>（自动解包，含子目录）<br/>
+            可拖入<b>整个文件夹</b>，自动递归收集其中的简历
+          </div>
+          <div class="flex items-center justify-center gap-2 pt-0.5" @click.stop>
+            <button @click="$refs.fileInput.click()"
+              class="h-7 px-3 rounded-lg bg-white text-slate-700 text-[11px] font-semibold border border-slate-200 hover:border-[#00B395] hover:text-[#008770] transition-colors cursor-pointer">
+              选择文件
+            </button>
+            <button @click="$refs.folderInput.click()"
+              class="h-7 px-3 rounded-lg bg-white text-slate-700 text-[11px] font-semibold border border-slate-200 hover:border-[#00B395] hover:text-[#008770] transition-colors cursor-pointer">
+              选择文件夹
+            </button>
+          </div>
         </div>
 
-        <div v-if="uploadFileList.length > 0" class="space-y-1 max-h-32 overflow-y-auto">
-          <div v-for="(f, i) in uploadFileList" :key="i" class="p-2 rounded bg-slate-50 text-xs flex items-center justify-between border border-slate-100">
-            <span class="truncate max-w-[280px] font-medium text-slate-800">{{ f.name }}</span>
-            <span class="text-slate-400 text-[10px]">{{ (f.size / 1024).toFixed(1) }} KB</span>
+        <div v-if="uploadSkipMsg" class="p-3 rounded-lg bg-amber-50 border border-amber-200 space-y-1">
+          <div class="text-xs font-bold text-amber-700">以下简历判定为「重复投递」，已自动跳过（未重复入库）：</div>
+          <div class="text-[11px] text-amber-600 leading-relaxed whitespace-pre-line">{{ uploadSkipMsg }}</div>
+        </div>
+
+        <div v-if="uploadFailMsg" class="p-3 rounded-lg bg-red-50 border border-red-200 space-y-1">
+          <div class="text-xs font-bold text-red-600">以下简历未能载入，请处理后重试：</div>
+          <div class="text-[11px] text-red-500 leading-relaxed whitespace-pre-line">{{ uploadFailMsg }}</div>
+        </div>
+
+        <div v-if="uploadFileList.length > 0" class="space-y-1.5">
+          <div class="flex items-center justify-between text-[11px] text-slate-500">
+            <span>已收集 <b class="text-slate-800">{{ uploadFileList.length }}</b> 份简历<span v-if="folderSummary">（含文件夹：{{ folderSummary }}）</span></span>
+            <button @click="uploadFileList = []; uploadFailMsg = ''; uploadSkipMsg = ''" class="text-slate-400 hover:text-slate-700 cursor-pointer">清空</button>
+          </div>
+          <div class="space-y-1 max-h-36 overflow-y-auto">
+            <div v-for="(f, i) in uploadFileList.slice(0, 60)" :key="i" class="p-2 rounded bg-slate-50 text-xs flex items-center justify-between border border-slate-100">
+              <span class="truncate max-w-[300px] font-medium text-slate-800" :title="f.path">{{ f.path }}</span>
+              <span class="text-slate-400 text-[10px] shrink-0 pl-2">{{ (f.size / 1024).toFixed(1) }} KB</span>
+            </div>
+            <div v-if="uploadFileList.length > 60" class="text-[11px] text-slate-400 text-center py-1">
+              …… 另有 {{ uploadFileList.length - 60 }} 份未在此列出
+            </div>
+          </div>
+        </div>
+
+        <div v-if="uploading && uploadProgress.total > 0" class="space-y-1.5">
+          <div class="flex items-center justify-between text-[11px] text-slate-500">
+            <span>正在初筛：{{ uploadProgress.done }} / {{ uploadProgress.total }}</span>
+            <span>
+              <span class="text-[#008770] font-semibold">成功 {{ uploadProgress.ok }}</span>
+              <span v-if="uploadProgress.dup" class="text-amber-600 font-semibold"> · 跳过重复 {{ uploadProgress.dup }}</span>
+              <span v-if="uploadProgress.fail" class="text-red-500 font-semibold"> · 失败 {{ uploadProgress.fail }}</span>
+            </span>
+          </div>
+          <div class="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+            <div class="h-full bg-[#00B395] transition-all duration-300"
+              :style="{ width: Math.round(uploadProgress.done / Math.max(1, uploadProgress.total) * 100) + '%' }"></div>
           </div>
         </div>
 
         <div class="flex items-center justify-end gap-2 pt-2">
-          <button @click="showUploadModal = false; uploadFileList = []" class="h-8 px-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold cursor-pointer">
+          <button @click="showUploadModal = false; uploadFileList = []; uploadFailMsg = ''; uploadSkipMsg = ''" class="h-8 px-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold cursor-pointer">
             取消
           </button>
           <button @click="executeUpload" :disabled="uploadFileList.length === 0 || uploading"
             class="h-8 px-4 bg-[#00B395] hover:bg-[#008770] text-white rounded-lg text-xs font-bold inline-flex items-center gap-1.5 shadow-sm disabled:opacity-40 cursor-pointer">
             <svg v-if="uploading" class="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
-            <span>{{ uploading ? 'AI 正在极速初筛中...' : '开始初筛 (' + uploadFileList.length + '份)' }}</span>
+            <span>{{ uploading ? '正在初筛中...' : '开始初筛 (' + uploadFileList.length + '份)' }}</span>
           </button>
         </div>
       </div>
@@ -2358,6 +2420,10 @@
         const uploadJobId = ref('fe-fullstack');
         const uploadFileList = ref([]);
         const uploading = ref(false);
+        const uploadDragOver = ref(false);   // 是否正有文件拖拽悬停在拖放区
+        const uploadFailMsg = ref('');       // 未能载入的简历及原因（如实展示，不再静默吞错）
+        const uploadSkipMsg = ref('');       // 因重复投递被自动跳过的简历
+        const uploadProgress = ref({ done: 0, total: 0, ok: 0, dup: 0, fail: 0 });  // 批量导入进度
 
         // Chat / Communication Center state
         const showChatModal = ref(false);
@@ -2372,7 +2438,9 @@
         const chatPaneTab = ref('chat'); // 'chat' (微聊消息流) | 'resume' (沟通窗内原版完整简历)
 
         const filteredChatCandidates = computed(() => {
-          let list = candidates.value || [];
+          // 沟通中心只展示「真正沟通过」的候选人（有微聊记录的：被招呼 / 互发消息 / 系统回绝）。
+          // 未沟通过的人不在此列表，避免"一键发起招呼后看起来没生效/被后来者覆盖"。
+          let list = (chatList.value || []).map(x => x.candidate).filter(Boolean);
           if (chatTabFilter.value === 'recommended') {
             list = list.filter(c => c.state === 'recommended');
           } else if (chatTabFilter.value === 'scheduled') {
@@ -2395,6 +2463,8 @@
           }
           return list;
         });
+
+        const contactedCount = computed(() => (chatList.value || []).length);
 
         // Interview Schedule state
         const showInterviewModal = ref(false);
@@ -2463,7 +2533,9 @@
         });
 
         const isAllSelected = computed(() => {
-          return candidates.value.length > 0 && selectedIds.value.size === candidates.value.length;
+          // 以「当前列表里可见的候选人」为准，而不是拿选中总数去比（跨 Tab 选择时会更准）
+          const visible = (candidates.value || []).map(c => c.id);
+          return visible.length > 0 && visible.every(id => selectedIds.value.has(id));
         });
 
         const showToast = (msg) => {
@@ -2537,8 +2609,14 @@
         };
 
         const toggleSelectAll = () => {
-          if (isAllSelected.value) selectedIds.value.clear();
-          else selectedIds.value = new Set(candidates.value.map(c => c.id));
+          // 跨 Tab 累计选择：在某页全选不会丢掉其它页已勾选的人，
+          // 因此"分页全选 + 一键发起招呼"不会互相覆盖。
+          const visible = (candidates.value || []).map(c => c.id);
+          const allVisibleSelected = visible.length > 0 && visible.every(id => selectedIds.value.has(id));
+          const next = new Set(selectedIds.value);
+          if (allVisibleSelected) visible.forEach(id => next.delete(id));
+          else visible.forEach(id => next.add(id));
+          selectedIds.value = next;
         };
 
         const openDetail = (c) => {
@@ -2664,9 +2742,7 @@
         const getChatLastMessage = (cid) => {
           const item = (chatList.value || []).find(x => x.candidate_id === cid);
           if (item && item.last_message) return item.last_message;
-          const c = (candidates.value || []).find(x => x.id === cid);
-          if (c && c.state === 'rejected') return '[系统回绝通知] 感谢您关注并投递...';
-          return '您好，我对贵司的岗位很感兴趣，期待深入交流！';
+          return '（暂无消息，点击进入会话）';
         };
 
         const selectChatCandidate = async (c) => {
@@ -2688,9 +2764,24 @@
           showChatModal.value = true;
           await loadChatList();
           if (targetCandidate) {
+            // 从候选人卡片直接发起沟通时，这位候选人可能还没进沟通列表（尚无消息记录），
+            // 先把他补进列表，避免右侧有会话、左侧列表却找不到人。
+            if (!(chatList.value || []).some(x => x.candidate_id === targetCandidate.id)) {
+              chatList.value = [{
+                candidate_id: targetCandidate.id,
+                candidate: targetCandidate,
+                message_count: 0,
+                last_message: '',
+                last_sender: '',
+                last_time: '',
+                is_rejected: targetCandidate.state === 'rejected'
+              }, ...chatList.value];
+            }
             selectChatCandidate(targetCandidate);
           } else {
-            const initial = chatCandidate.value || filteredChatCandidates.value[0] || candidates.value[0];
+            const initial = chatCandidate.value
+              || filteredChatCandidates.value[0]
+              || (candidates.value || []).find(c => c.id === (chatList.value[0] || {}).candidate_id);
             if (initial) selectChatCandidate(initial);
           }
         };
@@ -3008,10 +3099,13 @@
             });
             const json = await res.json();
             if (json.ok) {
-              showToast(json.message || `已向选中的 ${selectedIds.value.size} 位候选人批量发送初筛微聊问候！`);
+              showToast(json.message || `已向 ${selectedIds.value.size} 位候选人发起沟通！`);
+              // 招呼已写入沟通记录：刷新沟通中心列表，让本次招呼的人立刻出现在沟通页
+              await loadChatList();
+              fetchCandidates();
             }
           } catch (e) {
-            showToast('批量问候失败: ' + e);
+            showToast('发起沟通失败: ' + e);
           }
         };
 
@@ -3039,32 +3133,180 @@
           }
         };
 
-        // File upload handling
+        // File upload handling（支持「点击选择文件」「选择整个文件夹」「拖拽文件/文件夹」三条路径）
+        const SUPPORTED_UPLOAD_EXT = ['.pdf', '.docx', '.doc', '.txt', '.md', '.zip'];
+        const MAX_UPLOAD_FILES = 200;    // 单批上限（与服务端保持一致）
+        const UPLOAD_CHUNK_SIZE = 5;     // 每批请求处理的份数：避免一次几百份把请求拖超时
+
+        const openUploadModal = () => {
+          uploadFileList.value = [];
+          uploadFailMsg.value = '';
+          uploadSkipMsg.value = '';
+          uploadDragOver.value = false;
+          uploadProgress.value = { done: 0, total: 0, ok: 0, dup: 0, fail: 0 };
+          showUploadModal.value = true;
+        };
+
+        const _fileExt = (n) => ('.' + ((n || '').split('.').pop() || '')).toLowerCase();
+        const _isSkippableName = (p) => {
+          const base = (p || '').split('/').pop();
+          return !base || base.startsWith('.') || base.startsWith('~$') || base === 'Thumbs.db' || p.includes('__MACOSX/');
+        };
+
+        // 把浏览器给的文件（可能来自文件夹递归）统一成 { file, path, size } 列表
+        const collectResumeItems = (files) => {
+          const items = [];
+          const rejected = [];
+          Array.from(files || []).forEach(f => {
+            const path = f.webkitRelativePath || f.relativePath || f.name;
+            if (_isSkippableName(path)) return;                       // 隐藏文件/系统文件
+            if (!SUPPORTED_UPLOAD_EXT.includes(_fileExt(path))) { rejected.push(path); return; }
+            items.push({ file: f, path, size: f.size });
+          });
+          return { items, rejected };
+        };
+
+        const applyUploadFiles = (files) => {
+          const { items, rejected } = collectResumeItems(files);
+          if (rejected.length > 0) {
+            showToast('已忽略 ' + rejected.length + ' 个不支持的格式（仅支持 PDF / Word / TXT / MD / zip）');
+          }
+          if (items.length === 0) return;
+          uploadFailMsg.value = '';
+          uploadSkipMsg.value = '';
+          const exist = new Set(uploadFileList.value.map(f => f.path + '|' + f.size));
+          const merged = uploadFileList.value.slice();
+          let capped = 0;
+          items.forEach(f => {
+            if (exist.has(f.path + '|' + f.size)) return;              // 同一路径同一大小视为重复选择
+            if (merged.length >= MAX_UPLOAD_FILES) { capped += 1; return; }
+            merged.push(f);
+            exist.add(f.path + '|' + f.size);
+          });
+          uploadFileList.value = merged;
+          if (capped > 0) showToast(`单次最多 ${MAX_UPLOAD_FILES} 份，已忽略超出的 ${capped} 份`);
+        };
+
+        const folderSummary = computed(() => {
+          const folders = new Set();
+          (uploadFileList.value || []).forEach(f => {
+            const seg = (f.path || '').split('/');
+            if (seg.length > 1) folders.add(seg.slice(0, -1).join('/'));
+          });
+          if (folders.size === 0) return '';
+          const list = Array.from(folders);
+          return list.slice(0, 3).join('、') + (list.length > 3 ? ` 等 ${list.length} 个目录` : '');
+        });
+
         const handleFileSelect = (e) => {
-          uploadFileList.value = Array.from(e.target.files);
+          applyUploadFiles(e.target.files);
+          e.target.value = '';   // 置空以便再次选择同一个文件
+        };
+
+        const handleFolderSelect = (e) => {
+          applyUploadFiles(e.target.files);
+          e.target.value = '';
+        };
+
+        const onUploadDragLeave = (e) => {
+          if (!e.currentTarget.contains(e.relatedTarget)) uploadDragOver.value = false;
+        };
+
+        // 递归读取拖入的目录（浏览器只在 dragover/drop 时提供 webkitGetAsEntry）
+        const _readEntries = (reader) => new Promise(resolve => reader.readEntries(resolve, () => resolve([])));
+        const _walkEntry = async (entry, prefix, out, depth = 0) => {
+          if (!entry || out.length >= MAX_UPLOAD_FILES * 3 || depth > 8) return;
+          if (entry.isFile) {
+            const file = await new Promise((res, rej) => entry.file(res, rej));
+            file.relativePath = prefix + entry.name;
+            out.push(file);
+            return;
+          }
+          if (entry.isDirectory) {
+            const reader = entry.createReader();
+            let batch = await _readEntries(reader);
+            while (batch.length > 0) {
+              for (const child of batch) await _walkEntry(child, prefix + entry.name + '/', out, depth + 1);
+              batch = await _readEntries(reader);
+            }
+          }
+        };
+
+        const handleResumeDrop = async (e) => {
+          uploadDragOver.value = false;
+          const dt = e.dataTransfer;
+          if (!dt) return;
+          const entries = dt.items
+            ? Array.from(dt.items).map(it => (it.webkitGetAsEntry ? it.webkitGetAsEntry() : null)).filter(Boolean)
+            : [];
+          if (entries.length > 0) {
+            const collected = [];
+            for (const entry of entries) await _walkEntry(entry, '', collected);
+            if (collected.length > 0) {
+              applyUploadFiles(collected);
+              return;
+            }
+          }
+          if (dt.files && dt.files.length > 0) {
+            applyUploadFiles(dt.files);
+          } else {
+            showToast('未识别到拖入的文件，请从文件夹拖拽简历文件或整个文件夹到此处');
+          }
         };
 
         const executeUpload = async () => {
           if (uploadFileList.value.length === 0) return;
           uploading.value = true;
+          uploadFailMsg.value = '';
+          uploadSkipMsg.value = '';
+          const items = uploadFileList.value.slice();
+          const agg = { ok: 0, dup: 0, fail: 0 };
+          const failMsgs = [];
+          const dupMsgs = [];
+          uploadProgress.value = { done: 0, total: items.length, ok: 0, dup: 0, fail: 0 };
           try {
-            const formData = new FormData();
-            uploadFileList.value.forEach(f => formData.append('files', f));
-            formData.append('job_id', uploadJobId.value);
+            // 分批上传：一份通过硬门槛的简历可能要跑 L2 尽调，几百份一起提交会超时
+            for (let i = 0; i < items.length; i += UPLOAD_CHUNK_SIZE) {
+              const chunk = items.slice(i, i + UPLOAD_CHUNK_SIZE);
+              const formData = new FormData();
+              chunk.forEach(it => formData.append('files', it.file, it.path));
+              formData.append('job_id', uploadJobId.value);
 
-            const res = await fetch('/api/upload', {
-              method: 'POST',
-              body: formData
-            });
-            const json = await res.json();
-            if (json.ok) {
-              showToast(`成功解析并完成初筛 ${json.data.length} 份简历！`);
-              showUploadModal.value = false;
+              const res = await fetch('/api/upload', { method: 'POST', body: formData });
+              if (!res.ok) throw new Error('服务返回 HTTP ' + res.status);
+              const json = await res.json();
+              const results = Array.isArray(json.data) ? json.data : [];
+              results.forEach(r => {
+                if (r.ok) agg.ok += 1;
+                else if (r.duplicated) { agg.dup += 1; dupMsgs.push('· ' + (r.filename || '未知文件') + '：' + r.error); }
+                else { agg.fail += 1; failMsgs.push('· ' + (r.filename || '未知文件') + '：' + (r.error || '解析失败')); }
+              });
+              uploadProgress.value = { done: Math.min(i + chunk.length, items.length), total: items.length, ...agg };
+              if (agg.ok > 0) await fetchCandidates();
+            }
+
+            uploadSkipMsg.value = dupMsgs.slice(0, 20).join('\n') + (dupMsgs.length > 20 ? `\n…… 另有 ${dupMsgs.length - 20} 项` : '');
+            uploadFailMsg.value = failMsgs.slice(0, 20).join('\n') + (failMsgs.length > 20 ? `\n…… 另有 ${failMsgs.length - 20} 项` : '');
+
+            const parts = [];
+            if (agg.ok > 0) parts.push(`成功载入并完成初筛 ${agg.ok} 份`);
+            if (agg.dup > 0) parts.push(`重复跳过 ${agg.dup} 份`);
+            if (agg.fail > 0) parts.push(`失败 ${agg.fail} 份`);
+            showToast(parts.length ? '批量导入完成：' + parts.join('，') : '没有可上传的简历，请重新选择文件');
+
+            if (agg.fail === 0 && agg.dup === 0) {
               uploadFileList.value = [];
-              fetchCandidates();
+              showUploadModal.value = false;
+            } else if (agg.fail === 0) {
+              uploadFileList.value = [];    // 只剩重复项：不必再重试
+              showUploadModal.value = true;
+            } else {
+              const failedPaths = new Set(failMsgs.map(m => m.slice(2).split('：')[0]));
+              uploadFileList.value = items.filter(it => failedPaths.has(it.path));
             }
           } catch (e) {
             showToast('上传初筛发生异常: ' + e);
+            uploadFailMsg.value = (uploadFailMsg.value ? uploadFailMsg.value + '\n' : '') + '请求中断：' + e;
           } finally {
             uploading.value = false;
           }
@@ -3206,6 +3448,20 @@
               showJobDropdown.value = false;
             }
           });
+
+          // 全局拖放兜底：避免把简历拖到页面空白处时，浏览器直接打开/下载该文件（表现为“撑不住、载不进去”）
+          window.addEventListener('dragover', (e) => e.preventDefault());
+          window.addEventListener('drop', (e) => {
+            e.preventDefault();
+            const t = e.target;
+            const inZone = t && t.closest && t.closest('[data-resume-dropzone]');
+            if (inZone) return;                    // 拖放区自身已处理
+            if (showUploadModal.value) {
+              handleResumeDrop(e);                 // 导入弹窗已打开：拖到页面任意位置都按载入简历处理
+            } else {
+              showToast('请先点击「上传简历」打开导入弹窗，再把简历文件拖入虚线框');
+            }
+          });
         });
 
         return {
@@ -3248,6 +3504,7 @@
           chatSearchQuery,
           chatTabFilter,
           chatList,
+          contactedCount,
           chatPaneTab,
           filteredChatCandidates,
           loadChatList,
@@ -3308,7 +3565,16 @@
           batchGreet,
           batchExport,
           handleFileSelect,
+          handleFolderSelect,
           executeUpload,
+          openUploadModal,
+          uploadDragOver,
+          uploadFailMsg,
+          uploadSkipMsg,
+          uploadProgress,
+          folderSummary,
+          handleResumeDrop,
+          onUploadDragLeave,
           refreshModelStatus,
           selectCloudPreset,
           testCloudConnection,

@@ -1,7 +1,11 @@
 import copy
+import hashlib
+import io
 import json
+import os
 import re
 import uuid
+import zipfile
 from datetime import datetime
 from typing import List, Dict, Any
 
@@ -374,14 +378,8 @@ def update_candidate_state(candidate_id: str, body: dict):
             if new_state == "rejected":
                 cid = c["id"]
                 cname = c.get("name", "候选人")
-                history = storage.chat_history.setdefault(cid, [
-                    {
-                        "sender": "candidate",
-                        "name": cname,
-                        "text": f"您好！我是{cname}，我对贵司的这个岗位非常感兴趣。我的核心履历已经通过系统初筛，期待与您深入交流！",
-                        "time": "今天 09:30"
-                    }
-                ])
+                history = storage.chat_history.setdefault(cid, [])
+                _drop_seeded(history)
                 if not any(m.get("is_reject") for m in history):
                     history.append({
                         "sender": "system",
@@ -435,14 +433,8 @@ def reject_notify(candidate_id: str):
     
     # 核心闭环：同步注入到该候选人的微聊沟通记录中
     _ensure_init()
-    history = storage.chat_history.setdefault(candidate_id, [
-        {
-            "sender": "candidate",
-            "name": c.get("name", "候选人"),
-            "text": f"您好！我是{c.get('name')}，我对贵司的这个岗位非常感兴趣。我的核心履历已经通过系统初筛，期待与您深入交流！",
-            "time": "今天 09:30"
-        }
-    ])
+    history = storage.chat_history.setdefault(candidate_id, [])
+    _drop_seeded(history)
     if not any(m.get("is_reject") for m in history):
         history.append({
             "sender": "system",
@@ -460,9 +452,64 @@ def reject_notify(candidate_id: str):
 
 # ─────────────────────────── 真实候选人对话沟通接口 ───────────────────────────
 
+def _chat_recency_key(item: dict) -> int:
+    """按最新消息时间倒序排序（无时间戳的排最后）"""
+    m = re.search(r"(\d{1,2}):(\d{2})", item.get("last_time") or "")
+    return int(m.group(1)) * 60 + int(m.group(2)) if m else -1
+
+
+def _greeting_text(cname: str, job_title: str) -> str:
+    """公司侧（HR）发起沟通的标准招呼语"""
+    return (
+        f"您好，{cname}！我是【{job_title}】岗位的招聘负责人，"
+        f"已查阅您投递的简历，履历与我们岗位的匹配度不错，想和您进一步沟通了解。"
+        f"方便的话请告知您近期方便沟通的时间，我们也可以直接安排线上技术面。"
+    )
+
+
+#: 系统早期自动补的「候选人开场白」特征（并非真实沟通），历史数据也据此识别
+_SEED_TAIL = "我的核心履历已经通过系统初筛，期待与您深入交流！"
+
+
+def _is_seeded_message(msg: dict) -> bool:
+    """该消息是否为系统自动补的候选人开场白（不是真实沟通内容）"""
+    if msg.get("seeded"):
+        return True
+    return msg.get("sender") == "candidate" and _SEED_TAIL in str(msg.get("text", ""))
+
+
+def _drop_seeded(history: list) -> list:
+    """剔除历史里系统自动补的开场白（就地修改并返回）"""
+    history[:] = [m for m in history if not _is_seeded_message(m)]
+    return history
+
+
+
+def _append_greeting(candidate: dict) -> bool:
+    """写入一条「公司先发起」的招呼消息；已招呼过则返回 False（幂等）"""
+    cid = candidate["id"]
+    cname = candidate.get("name", "候选人")
+    job = next((j for j in _get_all_jobs() if j["id"] == candidate.get("job_id")), None)
+    job_title = (job or {}).get("title", "当前岗位")
+    history = _drop_seeded(storage.chat_history.setdefault(cid, []))
+    if any(m.get("is_greeting") for m in history):
+        return False
+    history.append({
+        "sender": "hr",
+        "name": "HR 主管",
+        "text": _greeting_text(cname, job_title),
+        "time": datetime.now().strftime("%H:%M"),
+        "is_greeting": True,
+    })
+    candidate["contacted"] = True
+    candidate["contacted_at"] = datetime.now().strftime("%Y-%m-%d %H:%M")
+    return True
+
+
+
 @router.get("/api/chats")
 def list_chats(job_id: str = ""):
-    """获取沟通中心的候选人沟通列表及最新消息摘要"""
+    """沟通中心候选人列表：仅返回真正产生过沟通记录（招呼/互发/回绝）的候选人"""
     _ensure_init()
     candidates = _get_all_candidates()
     if job_id:
@@ -470,86 +517,53 @@ def list_chats(job_id: str = ""):
     result = []
     for c in candidates:
         cid = c["id"]
-        cname = c.get("name", "候选人")
-        hist = storage.chat_history.get(cid)
-        if hist is None:
-            hist = [
-                {
-                    "sender": "candidate",
-                    "name": cname,
-                    "text": f"您好！我是{cname}，我对贵司的这个岗位非常感兴趣。我的核心履历已经通过系统初筛，期待与您深入交流！",
-                    "time": "今天 09:30"
-                }
-            ]
-            if c.get("state") == "rejected":
-                hist.append({
-                    "sender": "system",
-                    "name": "企业招聘系统 · 委婉回绝通知",
-                    "text": f"尊敬的{cname}先生/女士：感谢您关注并投递我司职位。经过系统综合评估与审阅，暂未能安排本期面试。您的简历已纳入战略人才储备库。祝求职顺利！",
-                    "time": "今天 10:15",
-                    "is_reject": True
-                })
-            storage.chat_history[cid] = hist
-        
-        last_msg = hist[-1] if hist else {}
+        hist = _drop_seeded(storage.chat_history.get(cid) or [])
+        if not hist:
+            # 未产生过任何沟通记录（未被招呼 / 未互发消息 / 未回绝）的候选人不进沟通中心，
+            # 否则「一键发起招呼」看起来像没生效。
+            continue
+        last_msg = hist[-1]
         result.append({
             "candidate_id": cid,
             "candidate": c,
+            "message_count": len(hist),
             "last_message": last_msg.get("text", ""),
             "last_sender": last_msg.get("sender", ""),
             "last_time": last_msg.get("time", ""),
             "is_rejected": c.get("state") == "rejected"
         })
+    result.sort(key=_chat_recency_key, reverse=True)
     return {"ok": True, "data": result}
 
 
 @router.get("/api/candidates/{candidate_id}/chat")
 def get_chat_history(candidate_id: str):
+    """候选人会话记录：只返回真实沟通内容（系统早期自动补的开场白已剔除）"""
     _ensure_init()
     c = next((x for x in _get_all_candidates() if x["id"] == candidate_id), None)
     cname = c["name"] if c else "候选人"
-    history = storage.chat_history.get(candidate_id)
+    history = _drop_seeded(storage.chat_history.setdefault(candidate_id, []))
     history_modified = False
-    if history is None:
-        history = [
-            {
-                "sender": "candidate",
-                "name": cname,
-                "text": f"您好！我是{cname}，我对贵司的这个岗位非常感兴趣。我的核心履历已经通过系统初筛，期待与您深入交流！",
-                "time": "今天 09:30"
-            }
-        ]
-        # 若候选人已经是 rejected 状态，自动带上回绝信
-        if c and c.get("state") == "rejected":
-            history.append({
-                "sender": "system",
-                "name": "企业招聘系统 · 委婉回绝通知",
-                "text": f"尊敬的{cname}先生/女士：感谢您关注并投递我司职位。经过系统综合评估与招聘委员会审阅，您的经历非常值得赞赏，但鉴于本次HC名额有限及当下技术栈契合度考量，暂未能安排本期面试。您的简历已纳入我司企业人才储备库。祝您求职顺利！",
-                "time": "今天 10:15",
-                "is_reject": True
-            })
-        storage.chat_history[candidate_id] = history
+
+    # 淘汰候选人自动补齐回绝通知；复核激活后自动补激活说明
+    if c and c.get("state") == "rejected" and not any(m.get("is_reject") for m in history):
+        history.append({
+            "sender": "system",
+            "name": "企业招聘系统 · 委婉回绝通知",
+            "text": f"尊敬的{cname}先生/女士：感谢您关注并投递我司职位。经过系统综合评估与招聘委员会审阅，您的经历非常值得赞赏，但鉴于本次HC名额有限及当下技术栈契合度考量，暂未能安排本期面试。您的简历已纳入我司企业人才储备库。祝您求职顺利！",
+            "time": datetime.now().strftime("%H:%M"),
+            "is_reject": True
+        })
         history_modified = True
-    else:
-        # 如果已经存在 history 但候选人是 rejected 状态且还没有回绝消息，自动补齐
-        if c and c.get("state") == "rejected" and not any(m.get("is_reject") for m in history):
-            history.append({
-                "sender": "system",
-                "name": "企业招聘系统 · 委婉回绝通知",
-                "text": f"尊敬的{cname}先生/女士：感谢您关注并投递我司职位。经过系统综合评估与招聘委员会审阅，您的经历非常值得赞赏，但鉴于本次HC名额有限及当下技术栈契合度考量，暂未能安排本期面试。您的简历已纳入我司企业人才储备库。祝您求职顺利！",
-                "time": datetime.now().strftime("%H:%M"),
-                "is_reject": True
-            })
-            history_modified = True
-        elif c and c.get("state") != "rejected" and any(m.get("is_reject") for m in history) and not any(m.get("is_reactivated") for m in history):
-            history.append({
-                "sender": "system",
-                "name": "企业招聘系统 · 重新激活通知",
-                "text": f"尊敬的{cname}先生/女士：经招聘委员会重新复核评估，您的简历已重新激活进入复核/约面流程！",
-                "time": datetime.now().strftime("%H:%M"),
-                "is_reactivated": True
-            })
-            history_modified = True
+    elif c and c.get("state") != "rejected" and any(m.get("is_reject") for m in history) and not any(m.get("is_reactivated") for m in history):
+        history.append({
+            "sender": "system",
+            "name": "企业招聘系统 · 重新激活通知",
+            "text": f"尊敬的{cname}先生/女士：经招聘委员会重新复核评估，您的简历已重新激活进入复核/约面流程！",
+            "time": datetime.now().strftime("%H:%M"),
+            "is_reactivated": True
+        })
+        history_modified = True
 
     if history_modified:
         storage.save()
@@ -846,30 +860,186 @@ async def run_diagnostics(job_id: str = "fe-fullstack"):
 
 # ─────────────────────────── 简历上传与批量操作 ───────────────────────────
 
+#: 可解析的简历格式（与 app/core/parser.py 保持一致）
+SUPPORTED_RESUME_EXT = (".pdf", ".docx", ".doc", ".txt", ".md")
+#: 支持的压缩包格式
+ARCHIVE_EXT = (".zip",)
+#: 压缩包内需要跳过的系统/隐藏文件
+_ZIP_SKIP_RE = re.compile(r"(^|/)(__MACOSX|\.DS_Store)(/|$)|(^|/)\._|(^|/)~\$|(^|/)Thumbs\.db$")
+#: 单次请求最多处理的简历份数（防止一次拖入上千个文件把服务打满）
+MAX_RESUMES_PER_REQUEST = 200
+#: 单个压缩包解包后的总大小上限（防 zip 炸弹）
+MAX_ARCHIVE_TOTAL_BYTES = 200 * 1024 * 1024
+
+
+def _resume_fingerprint(resume_text: str) -> str:
+    """简历内容指纹：去掉空白与标点后的字符流做 SHA1，用于「同岗位重复投递」判重。
+
+    - 只按内容判重，不掺入文件名/姓名，避免同一人换文件名后重复入库；
+    - 文本过短（<50 字）时不返回指纹，避免把两篇内容都极少的简历误判为同一人。
+    """
+    raw = (resume_text or "").strip()
+    if len(raw) < 50:
+        return ""
+    norm = re.sub(r"\s+", "", raw)
+    norm = re.sub(r"[^\w\u4e00-\u9fa5]", "", norm).lower()
+    return hashlib.sha1(norm.encode("utf-8")).hexdigest()[:16]
+
+
+def _extract_zip_resumes(raw: bytes) -> tuple:
+    """解包 zip，返回 (简历成员列表[(包内路径, 字节)], 读取失败列表[(包内路径, 原因)], 致命错误)。
+
+    - 递归收集任意层级的子目录里的简历文件（压缩一个文件夹是很常见的用法）；
+    - 跳过 __MACOSX / .DS_Store / 隐藏文件与非简历格式；
+    - 单包成员数与解包总大小都有上限，避免 zip 炸弹把服务打满；
+    - 保留包内相对路径，便于 HR 定位是哪个文件出的问题。
+    """
+    try:
+        zf = zipfile.ZipFile(io.BytesIO(raw))
+    except Exception as e:
+        return [], [], f"压缩包无法打开（{e}），请确认文件未损坏或未加密"
+    try:
+        infos = zf.infolist()
+    except Exception as e:
+        return [], [], f"压缩包目录读取失败（{e}）"
+
+    members: List[tuple] = []
+    unreadable: List[tuple] = []
+    total = 0
+    for info in infos:
+        if info.is_dir():
+            continue
+        name = info.filename.replace("\\", "/")
+        if _ZIP_SKIP_RE.search(name):
+            continue
+        base = os.path.basename(name)
+        if not base or base.startswith("."):
+            continue
+        if os.path.splitext(base)[1].lower() not in SUPPORTED_RESUME_EXT:
+            continue
+        if len(members) + len(unreadable) >= MAX_RESUMES_PER_REQUEST:
+            break
+        try:
+            data = zf.read(info)
+        except Exception as e:                      # 加密成员 / 损坏成员
+            unreadable.append((name, str(e)))
+            continue
+        total += len(data)
+        if total > MAX_ARCHIVE_TOTAL_BYTES:
+            zf.close()
+            return members, unreadable, "压缩包解包后总体积过大（超过 200MB），已中止，请拆分后再上传"
+        members.append((name, data))
+    zf.close()
+    return members, unreadable, ""
+
+
+def _job_fingerprint_index(job_id: str) -> Dict[str, Dict[str, Any]]:
+    """该岗位下已有候选人的「指纹 → 候选人」索引（历史数据无指纹时即时补算）"""
+    index: Dict[str, Dict[str, Any]] = {}
+    for c in _get_all_candidates():
+        if c.get("job_id") != job_id:
+            continue
+        fp = c.get("resume_hash") or _resume_fingerprint(c.get("resume_text") or c.get("raw_resume") or "")
+        if fp and fp not in index:
+            index[fp] = c
+    return index
+
+
 @router.post("/api/upload")
 async def upload_resumes(
     files: list[UploadFile] = File(...),
     job_id: str = Form("fe-fullstack"),
 ):
+    """批量导入简历并执行初筛。
+
+    支持三种投递方式：单/多选文件、**整个文件夹**（前端展开后逐个上传）、**zip 压缩包**（后端解包）。
+    压缩包内任意层级的支持格式（PDF / Word / TXT / MD）都会被识别；同岗位重复简历自动跳过。
+    """
     cfg = load_config()
     jobs = _get_all_jobs()
     job = next((j for j in jobs if j["id"] == job_id), None)
     if not job:
         raise HTTPException(status_code=404, detail=f"岗位 {job_id} 不存在")
+
+    existing_index = _job_fingerprint_index(job_id)     # 与库内已有简历判重
+    batch_index: Dict[str, Dict[str, Any]] = {}         # 与本次同批文件判重
     results = []
+
+    # ── 第一步：展开上传内容（zip 解包 → 一份份简历）──
+    queue: List[Dict[str, Any]] = []                    # {"filename": 展示名, "data": bytes, "from_archive": bool}
     for f in files:
+        name = f.filename or "resume"
         try:
-            file_bytes = await f.read()
-            text = extract_text_from_bytes(f.filename or "resume.txt", file_bytes)
-            candidate = await screen_resume_full(
-                resume_text=text, job=job, cfg=cfg, filename=f.filename or ""
-            )
-            _get_all_candidates().insert(0, candidate)
-            results.append({"filename": f.filename, "ok": True, "candidate": candidate})
-        except ValueError as e:
-            results.append({"filename": f.filename, "ok": False, "error": str(e)})
+            raw = await f.read()
         except Exception as e:
-            results.append({"filename": f.filename, "ok": False, "error": f"处理失败: {e}"})
+            results.append({"filename": name, "ok": False, "error": f"读取失败: {e}"})
+            continue
+
+        if name.lower().endswith(ARCHIVE_EXT):
+            members, unreadable, err = _extract_zip_resumes(raw)
+            if err and not members:
+                results.append({"filename": name, "ok": False, "error": err})
+                continue
+            for mname, why in unreadable:
+                results.append({"filename": f"{name}/{mname}", "ok": False,
+                                "error": f"压缩包内该文件无法读取（{why}），可能已加密或损坏"})
+            if not members and not unreadable:
+                results.append({"filename": name, "ok": False,
+                                "error": "压缩包内没有找到可解析的简历（支持 PDF / Word / TXT / MD）"})
+                continue
+            for mname, data in members:
+                queue.append({"filename": f"{name}/{mname}", "data": data, "from_archive": True})
+        else:
+            queue.append({"filename": name, "data": raw, "from_archive": False})
+
+    if len(queue) > MAX_RESUMES_PER_REQUEST:
+        results.append({
+            "filename": "（批量导入）", "ok": False,
+            "error": f"本次共收集到 {len(queue)} 份简历，超过单次上限 {MAX_RESUMES_PER_REQUEST} 份，"
+                     f"仅处理前 {MAX_RESUMES_PER_REQUEST} 份，请分批上传",
+        })
+        queue = queue[:MAX_RESUMES_PER_REQUEST]
+
+    # ── 第二步：逐份解析 + 判重 + 初筛 ──
+    for item in queue:
+        display_name = item["filename"]
+        try:
+            text = extract_text_from_bytes(os.path.basename(display_name), item["data"])
+            fingerprint = _resume_fingerprint(text)
+
+            if fingerprint:
+                dup = existing_index.get(fingerprint)
+                if dup:
+                    results.append({
+                        "filename": display_name, "ok": False, "duplicated": True,
+                        "error": f"重复投递：该简历已在【{job.get('title', job_id)}】候选人库中"
+                                 f"（{dup.get('name', '已存在候选人')}"
+                                 f"{('，投递于 ' + dup['apply_time']) if dup.get('apply_time') else ''}），本次已自动跳过",
+                    })
+                    continue
+                dup = batch_index.get(fingerprint)
+                if dup:
+                    results.append({
+                        "filename": display_name, "ok": False, "duplicated": True,
+                        "error": f"重复投递：与本批次中的「{dup.get('name', '文件')}」内容完全一致，本次已自动跳过",
+                    })
+                    continue
+
+            candidate = await screen_resume_full(
+                resume_text=text, job=job, cfg=cfg, filename=os.path.basename(display_name)
+            )
+            candidate["resume_hash"] = fingerprint
+            if item["from_archive"]:
+                candidate["source_archive"] = display_name.rsplit("/", 1)[0]
+            _get_all_candidates().insert(0, candidate)
+            if fingerprint:
+                batch_index[fingerprint] = candidate
+                existing_index[fingerprint] = candidate
+            results.append({"filename": display_name, "ok": True, "candidate": candidate})
+        except ValueError as e:
+            results.append({"filename": display_name, "ok": False, "error": str(e)})
+        except Exception as e:
+            results.append({"filename": display_name, "ok": False, "error": f"处理失败: {e}"})
     storage.save()
     return {"ok": True, "data": results}
 
@@ -909,14 +1079,8 @@ def batch_action(body: dict):
                 c["state"] = "rejected"
                 cid = c["id"]
                 cname = c.get("name", "候选人")
-                history = storage.chat_history.setdefault(cid, [
-                    {
-                        "sender": "candidate",
-                        "name": cname,
-                        "text": f"您好！我是{cname}，我对贵司的这个岗位非常感兴趣。我的核心履历已经通过系统初筛，期待与您深入交流！",
-                        "time": "今天 09:30"
-                    }
-                ])
+                history = storage.chat_history.setdefault(cid, [])
+                _drop_seeded(history)
                 if not any(m.get("is_reject") for m in history):
                     history.append({
                         "sender": "system",
@@ -946,7 +1110,25 @@ def batch_action(body: dict):
         return {"ok": True, "data": {"updated": len(target)}, "message": f"已将 {len(target)} 位候选人批量转入企业人才公海！"}
         
     elif action == "greet":
-        return {"ok": True, "data": {"updated": len(target)}, "message": f"已向选中的 {len(target)} 位候选人批量发送初筛问候！"}
+        _ensure_init()
+        greeted, skipped = [], []
+        for c in target:
+            if _append_greeting(c):
+                greeted.append(c.get("name", "候选人"))
+            else:
+                skipped.append(c.get("name", "候选人"))
+        storage.save()
+        if greeted:
+            msg = f"已向 {len(greeted)} 位候选人发起沟通（由公司侧先发送招呼语，可前往「沟通中心」查看）"
+            if skipped:
+                msg += f"；另有 {len(skipped)} 位此前已招呼过，未重复发送"
+        else:
+            msg = f"选中的 {len(target)} 位候选人均已招呼过，未重复发送"
+        return {
+            "ok": True,
+            "data": {"updated": len(greeted), "skipped": len(skipped), "greeted_names": greeted},
+            "message": msg,
+        }
         
     elif action == "export":
         lines = ["# RecruitAI 候选人评审摘要清单", f"导出时间：{datetime.now().strftime('%Y-%m-%d %H:%M')}", ""]
@@ -968,5 +1150,21 @@ def batch_action(body: dict):
 
 @router.post("/api/reset")
 def reset_runtime_state():
-    storage.reset()
-    return {"ok": True, "message": "已成功重置为初始预设演示状态"}
+    """
+    一键数据恢复：将全量运行时数据还原为基线快照 (data/store.baseline.json)，
+    供开发人员反复上传简历测试各业务模块使用（基线缺失时退化为出厂预设数据）。
+    """
+    source = storage.restore_from_baseline()
+    label = "基线快照 (data/store.baseline.json)" if source == "baseline" else "出厂预设数据 (app/core/presets.py)"
+    return {
+        "ok": True,
+        "source": source,
+        "message": f"已成功恢复为{label}的初始演示状态",
+        "summary": {
+            "candidates": len(storage.candidates),
+            "talent_pool": len(storage.talent_pool),
+            "interviews": len(storage.interviews),
+            "chat_history": len(storage.chat_history),
+            "rejections": len(storage.rejections),
+        },
+    }
