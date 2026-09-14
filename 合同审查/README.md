@@ -31,6 +31,22 @@ mcp.json 注册、Skill 部署（`deploy/skills/contract-review`）、用户记�
 > （实测症状：`'xx' is not recognized as an internal or external command`）。
 > 中文提示由安装脚本输出（bat 内已 `chcp 65001`）。
 
+### 审查用的模型：本机 LM Studio，优先复用会话正在用的本地模型
+
+审查推理**始终跑在本机 LM Studio**（合同内容不出本机）。选模型规则：
+
+1. `AGENT_MODEL` 环境变量（若设置）→ 固定用它；
+2. 否则**优先复用你当前会话正在使用的本地模型**——若你在 WorkBuddy 里选的是
+   `custom-local:xxx` 且它此刻**已加载**，审查就用它（既符合预期，也避免 LM Studio
+   为换模型而卸载/重载，那种开销可达分钟级）；
+3. 否则按原有逻辑优选已加载的模型（优先 instruct 类 qwen），避免触发即时加载。
+
+> 会话用的是**云端模型**（deepseek-v4.1-flash / hy3 / kimi-* 等）时，工具进程拿不到
+> WorkBuddy 的云端凭据，**不做任何干预**，按第 3 条走本机模型。这是刻意的设计：
+> 审查链路保持纯本地、零额外时延。
+>
+> 用 `ping` 工具可查看当前会选用哪个模型。
+
 ---
 
 ## 🛠️ 系统全景架构

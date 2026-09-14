@@ -95,6 +95,23 @@ class ContractReviewEngine:
         # 1) 已加载模型优先（避免触发即时加载）
         loaded = await self._list_loaded_models()
         if loaded:
+            # 1.0 跟随「用户当前会话正在使用的本地模型」：该模型此刻必然已加载
+            #     （用户正在与它对话），复用它既贴合用户预期，又避免 LM Studio
+            #     换模型（卸载+重载大模型可带来分钟级时延）。
+            #     会话用的是云端模型 / 读不到 → 不干预，继续走下面的既有优选逻辑。
+            try:
+                from contract.session_model import model_id_matches, read_session_local_model
+
+                hint = read_session_local_model()
+                if hint:
+                    for m in loaded:
+                        if model_id_matches(m, hint):
+                            logger.info(f"选用会话正在使用的本地模型: {m}（已加载: {loaded}）")
+                            return m
+                    logger.info(f"会话本地模型 {hint} 当前未加载，改按已加载模型优选（避免触发加载）")
+            except Exception as e:
+                logger.debug(f"会话本地模型提示不可用（忽略）: {e}")
+
             qwen_loaded = [m for m in loaded if "qwen" in m.lower()]
             if qwen_loaded:
                 picked = _pick(qwen_loaded)

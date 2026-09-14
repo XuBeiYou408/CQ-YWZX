@@ -363,6 +363,16 @@ def ping() -> str:
     if _cfg.AGENT_MODEL:
         lines.append(f"指定模型（AGENT_MODEL）：{_cfg.AGENT_MODEL}（优先生效）")
 
+    # 会话本地模型提示：当前会话用的本地模型若已加载，审查会优先复用它（避免换模型带来的时延）
+    try:
+        from contract.session_model import read_session_local_model
+
+        _hint = read_session_local_model()
+        if _hint:
+            lines.append(f"会话本地模型：{_hint}（已加载则审查优先复用）")
+    except Exception:
+        pass
+
     try:
         req = urllib.request.Request(
             probe_url, headers={"Authorization": f"Bearer {_cfg.LM_STUDIO_API_KEY}"}
