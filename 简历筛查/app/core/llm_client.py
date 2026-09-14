@@ -193,7 +193,9 @@ async def generate_chat(
 
     user_content = prompt
     if json_mode:
-        user_content = f"{prompt}\n\n???? JSON?????????"
+        # 注意：本行原有中文因编码事故变成了 "????"，指令已失效（模型可能返回解释性文字导致 JSON 解析失败）；
+        # 这里恢复为明确的中文指令。
+        user_content = f"{prompt}\n\n请严格只输出 JSON，不要输出任何解释、前后缀或 Markdown 代码块标记。"
     messages.append({"role": "user", "content": user_content})
 
     payload = {

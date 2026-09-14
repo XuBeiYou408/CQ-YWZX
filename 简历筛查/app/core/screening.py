@@ -359,6 +359,50 @@ def check_hard_gates(resume_text: str, job: Dict[str, Any]) -> Dict[str, Any]:
     return check_candidate_hard_gates({"resume_text": resume_text}, job)
 
 
+#: 院校名称提取（规则，零算力）：XX大学 / XX学院 / XX职业技术学院 等
+_SCHOOL_NAME_RE = re.compile(r"[\u4e00-\u9fa5]{2,10}(?:大学|学院|职业技术学院|高等专科学校)")
+_SCHOOL_PREFIX_NOISE = ("毕业于", "就读于", "来自", "本科", "硕士", "博士", "学校", "院校")
+
+
+def extract_school_name(resume_text: str) -> str:
+    """从简历原文里抽取院校名称（纯规则，不调用模型）。
+
+    用于「未做结构化解析」的简历也能显示真实院校，避免前端出现「（高校）」空占位。
+    """
+    if not resume_text:
+        return ""
+    for line in resume_text.splitlines():
+        line = line.strip()
+        if not line or ("大学" not in line and "学院" not in line):
+            continue
+        m = _SCHOOL_NAME_RE.search(line)
+        if not m:
+            continue
+        name = m.group(0)
+        for noise in _SCHOOL_PREFIX_NOISE:          # 去掉「毕业于」这类前缀
+            if name.startswith(noise) and len(name) > len(noise) + 2:
+                name = name[len(noise):]
+        return name
+    return ""
+
+
+def basic_fields_from_gate(resume_text: str, gate_res: Dict[str, Any]) -> Dict[str, Any]:
+    """由硬性门槛结果回填「平铺基础字段」，让未做结构化解析的简历也有内容可展示。
+
+    与 rescreen_candidate() 的回填口径保持一致（school/education/school_tier/experience_years）。
+    """
+    fields = {
+        "education": gate_res.get("detected_edu") or "",
+        "school_tier": gate_res.get("detected_school_tier") or "",
+        "experience_years": gate_res.get("detected_exp_years"),
+        "school": extract_school_name(resume_text),
+    }
+    age = gate_res.get("detected_age")
+    if age:
+        fields["age"] = age
+    return fields
+
+
 def rescreen_candidate(candidate: Dict[str, Any], job: Dict[str, Any]) -> Dict[str, Any]:
     """
     当岗位门槛规则发生变化时，对指定候选人执行闭环重筛与状态重新核定：
@@ -376,6 +420,11 @@ def rescreen_candidate(candidate: Dict[str, Any], job: Dict[str, Any]) -> Dict[s
     candidate["experience_years"] = gate_res["detected_exp_years"]
     candidate["education"] = gate_res["detected_edu"]
     candidate["school_tier"] = gate_res["detected_school_tier"]
+    if not candidate.get("school"):
+        # 顺带回填院校名（规则提取），否则前端教育背景区只显示「（高校）」
+        candidate["school"] = extract_school_name(
+            candidate.get("resume_text") or candidate.get("raw_resume") or ""
+        )
     if gate_res["detected_age"] > 0 and not candidate.get("age"):
         candidate["age"] = gate_res["detected_age"]
 
@@ -859,6 +908,7 @@ async def screen_resume_full(
     job_id = job.get("id", "")
 
     hard_gate = check_hard_gates(resume_text, job)
+    basic = basic_fields_from_gate(resume_text, hard_gate)
 
     if not hard_gate["passed"]:
         return {
@@ -871,6 +921,10 @@ async def screen_resume_full(
             "detected_edu": hard_gate["detected_edu"],
             "detected_school_tier": hard_gate["detected_school_tier"],
             "detected_exp_years": hard_gate["detected_exp_years"],
+            # 基础字段回填：本分支刻意不调用模型（省算力），但规则能提取的字段照常落库，
+            # 否则前端「完整档案」区块会显示「（高校）」这类空占位
+            **basic,
+            "structured_parsed": False,
             "score": 45,
             "ai_score": 45,
             "tier": "D",
@@ -929,6 +983,8 @@ async def screen_resume_full(
         "detected_edu": hard_gate["detected_edu"],
         "detected_school_tier": hard_gate["detected_school_tier"],
         "detected_exp_years": hard_gate["detected_exp_years"],
+        **basic,
+        "structured_parsed": False,
         "score": score,
         "ai_score": score,
         "tier": tier,

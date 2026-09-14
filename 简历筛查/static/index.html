@@ -927,9 +927,17 @@
                       </div>
                     </div>
                   </div>
-                  <div v-else class="text-xs text-slate-600 bg-slate-50 p-4 rounded-xl">
-                    <div class="font-bold text-slate-900">{{ currentDetail.current_company }} · {{ currentDetail.current_title }}</div>
-                    <div class="text-slate-500 mt-1">工作资历：{{ currentDetail.experience_years }} 年</div>
+                  <div v-else class="text-xs text-slate-600 bg-slate-50 p-4 rounded-xl space-y-1">
+                    <div class="font-bold text-slate-900">
+                      {{ currentDetail.current_company || '—' }} · {{ currentDetail.current_title || '—' }}
+                    </div>
+                    <div class="text-slate-500">
+                      工作资历：{{ currentDetail.experience_years ?? currentDetail.detected_exp_years ?? '未知' }} 年
+                    </div>
+                    <div class="text-[11px] text-amber-600 pt-1">
+                      该简历未做「结构化解析」（初筛即被硬性门槛拦截，为省算力未调用模型），
+                      此处仅展示规则可提取到的字段；完整原文见下方。
+                    </div>
                   </div>
                 </div>
 
@@ -968,8 +976,12 @@
                       </div>
                     </div>
                   </div>
-                  <div v-else class="text-xs text-slate-600 bg-slate-50 p-4 rounded-xl">
-                    包含于简历附件中，技术栈匹配度达 {{ currentDetail.ai_score }}%。
+                  <div v-else class="text-xs text-slate-600 bg-slate-50 p-4 rounded-xl space-y-1">
+                    <div>未做结构化解析 —— 该简历在硬性门槛阶段即被拦截（未消耗模型算力），因此没有逐项项目档案。</div>
+                    <div class="text-slate-500">
+                      原始项目经历请查看下方「简历原文解析文本」。
+                      <span v-if="currentDetail.ai_score">技术栈匹配度 {{ currentDetail.ai_score }}%。</span>
+                    </div>
                   </div>
                 </div>
 
@@ -995,8 +1007,17 @@
                       <span class="text-xs text-slate-400 font-mono shrink-0">{{ edu.period }}</span>
                     </div>
                   </div>
-                  <div v-else class="text-xs text-slate-700 bg-slate-50 p-3.5 rounded-xl flex items-center justify-between">
-                    <div><strong>{{ currentDetail.school }}</strong> ({{ currentDetail.school_tier }}高校) · {{ formatEdu(currentDetail.education) }}</div>
+                  <div v-else class="text-xs text-slate-700 bg-slate-50 p-3.5 rounded-xl">
+                    <div>
+                      <strong>{{ currentDetail.school || '院校未识别' }}</strong>
+                      <span v-if="currentDetail.school_tier || currentDetail.detected_school_tier">
+                        （{{ currentDetail.school_tier || currentDetail.detected_school_tier }} 层次）
+                      </span>
+                      <span v-if="currentDetail.education || currentDetail.detected_edu">
+                        · {{ formatEdu(currentDetail.education || currentDetail.detected_edu) }}
+                      </span>
+                    </div>
+                    <div class="text-[11px] text-amber-600 pt-1">该简历未做结构化解析，以上为规则提取结果。</div>
                   </div>
                 </div>
 
@@ -2358,6 +2379,11 @@
             list = list.filter(c => c.state === 'scheduled');
           } else if (chatTabFilter.value === 'rejected') {
             list = list.filter(c => c.state === 'rejected');
+          } else {
+            // 「全部」= 仍在投递/沟通流程中的候选人。
+            // 已回绝/淘汰的只在「已回绝/淘汰」页签里出现 ——
+            // 否则一键回绝后候选人看起来仍「呆在投递岗位」，与操作结果不符。
+            list = list.filter(c => c.state !== 'rejected');
           }
           if (chatSearchQuery.value.trim()) {
             const q = chatSearchQuery.value.toLowerCase().trim();
