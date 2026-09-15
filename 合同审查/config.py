@@ -21,12 +21,15 @@ class AppConfig(BaseModel):
     AGENT_ENABLED: bool = os.getenv("AGENT_ENABLED", "1") == "1"
     AGENT_MODEL: str = os.getenv("AGENT_MODEL", "")                                      # 指定 Agent 用模型（留空则自动优选）
     AGENT_TIME_BUDGET_SECONDS: int = int(os.getenv("AGENT_TIME_BUDGET_SECONDS", "1500"))  # 全局时间预算
-    AGENT_MAX_DEEP_DIVE: int = int(os.getenv("AGENT_MAX_DEEP_DIVE", "5"))               # 深查预算（含快筛升级）
+    AGENT_MAX_DEEP_DIVE: int = int(os.getenv("AGENT_MAX_DEEP_DIVE", "3"))               # 深查预算（含快筛升级）；2026-09-15 由 5 降为 3：深查 +1 条 ≈ +50s/次模型调用
     AGENT_MAX_TOOL_ROUNDS_PER_CLAUSE: int = 3   # 单条款工具调用轮次上限
     AGENT_MAX_RETRY_PER_CLAUSE: int = 2         # 单条款 self-check 重取证上限
     AGENT_GLOBAL_REFLECT_ROUNDS: int = 1        # 全局反思回环上限
-    AGENT_SMALL_CONTRACT_CLAUSES: int = 8       # 条款 < 8 → 跳过规划走旧管道
-    AGENT_SMALL_CONTRACT_CHARS: int = 2000      # 字数 < 2000 → 跳过规划走旧管道
+    # 小合同豁免：两者**同时满足**才走 Agent 全链路（见 engine.py L177-184）
+    # 2026-09-15 调整：字数阈值 2000 → 3000（常见 2000~2200 字合同此前会走 Agent 全链路 ≈5~8 分钟，
+    # 调高后走单次管道 ≈80~90 秒）。如需更细粒度审查，把该值调回 2000 或设 AGENT_SMALL_CONTRACT_CHARS=2000。
+    AGENT_SMALL_CONTRACT_CLAUSES: int = int(os.getenv("AGENT_SMALL_CONTRACT_CLAUSES", "8"))      # 条款 < 8 → 跳过规划走旧管道
+    AGENT_SMALL_CONTRACT_CHARS: int = int(os.getenv("AGENT_SMALL_CONTRACT_CHARS", "3000"))       # 字数 < 3000 → 跳过规划走旧管道
 
     # 平台标识
     PLATFORM_TAG: str = "合同审查 AGENT · 本地端侧"
