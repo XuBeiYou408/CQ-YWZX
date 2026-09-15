@@ -22,6 +22,10 @@
 | **[合同审查/](./合同审查)** | 合同审查 AGENT · 企业级合同合规审查系统 (v2.0) | FastAPI + Vue 3 + Tailwind CSS + OOXML Lite + LM Studio | `8020` | ✅ 已交付 | **自主 Agent 闭环状态机（感知-规划-行动-反思）**：支持条款级自主分诊 (deep_dive/quick_scan/skip)、16 类专项门禁、32 项最高院裁判指引、评级矛盾自愈与 Word 原生批注导出。 |
 | **[简历筛查/](./简历筛查)** | RecruitAI · 企业智能招聘与深度尽调复合智能体 (v2.0) | FastAPI + Vue 3 + Tailwind CSS (Stitch 1:1) + LM Studio / Cloud LLM | `8030` | ✅ 已交付 | **漏斗式两段复合智能体（L1 极速拦截 + L2 资深猎头 ReAct 尽调）**：内嵌时间线测谎、代码探查、水分剥离与靶向出题 4 大工具链；支持岗位门槛调整联动人才公海自动召回；构建全量操作即时持久化存储引擎（`data/store.json` 原子写盘）与开机自愈校验（Self-Healing Audit）；支持方案 B 真实数据驱动的宏观全景动态诊断报告。 |
 | **[销售周报/](./销售周报)** | SalesAgent · 企业销售战区督导与业绩尽调复合智能体 (v2.0) | FastAPI + SQLite + Vue 3 + Tailwind CSS + LM Studio / Cloud LLM | `8040` | ✅ 已交付 | **两段漏斗复合智能体（L1 极速守门员 + L2 ReAct 战区参谋长）**：内嵌商机脱水测谎、断崖预测、死穴归因与靶向派工 4 大工具链；全流程 SQLite 强闭环数据持久化；方案 B 宏观战区动态诊断看板。 |
+| **[kb-tool/](./kb-tool)** | 企业本地知识库 MCP 工具 (v1.0) | stdio MCP（FastMCP）+ 父子双进程 + FAISS + BM25 + BGE 重排 | —（MCP 服务，无端口） | ✅ 已交付 | **面向 WorkBuddy 的纯本地知识库检索**：父子进程隔离规避 Windows torch Loader Lock 死锁，协议父进程 <1 秒完成握手；向量 Top-35 + BM25 Top-6 → BGE 重排的混合召回；数据全在本机 `data/`，不上云。 |
+
+> 其中 `kb-tool` 与 `合同审查` 同时以 **WorkBuddy MCP 工具**形态提供能力（服务名分别为
+> `enterprise-knowledge-base`、`contract-reviewer`），新电脑接入步骤见根目录 **`部署指南.md`**。
 
 ---
 
@@ -73,7 +77,7 @@
   - **Python**：建议 3.11 – 3.13。
   - **数据存储**：内置无依赖轻量级持久化存储引擎（开箱即用，重启不丢状态，支持 `/api/reset` 一键恢复演示出厂）。
   - **依赖管理**：双击 `一键启动.bat` 自动自举创建 `.venv` 并补齐依赖（含 python-multipart、PyMuPDF、FastAPI、httpx 等）。
-  - **大模型支持**：本地 LM Studio (`qwen3.8-27b`) 或在工作台模型设置弹窗中填入云端 API Key (DeepSeek / 通义千问 / Kimi 等)。
+  - **大模型支持**：本地 LM Studio（本机实测可用 `google/gemma-4-e4b`、`qwen/qwen3.5-9b`）或在工作台模型设置弹窗中填入云端 API Key (DeepSeek / 通义千问 / Kimi 等)；配置里填的模型名在本机不存在时会自动回退到同族可用模型。
 - **启动方式**：进入 `简历筛查/` 目录，双击运行 **`一键启动.bat`**。
 
 ### 4. [SalesAgent 销售战区督导与业绩尽调复合智能体](./销售周报) (端口: `8040`)
@@ -82,5 +86,13 @@
   - **Python**：建议 3.11 – 3.13。
   - **数据存储**：内置轻量级 SQLite 数据持久化（`data/sales_reports.db`，开箱即用无须额外安装配置数据库）。
   - **依赖管理**：双击 `一键启动.bat` 自动自举创建 `.venv` 并补全安装所有依赖（含 openpyxl、python-docx、python-multipart、FastAPI 等）。
-  - **大模型支持**：本地 LM Studio (`qwen3.8-27b`) 或云端大模型热切换（具备高保真确定性兜底保障）。
+  - **大模型支持**：本地 LM Studio（本机实测可用 `google/gemma-4-e4b`、`qwen/qwen3.5-9b`）或云端大模型热切换（具备高保真确定性兜底保障）；配置里填的模型名在本机不存在时会自动回退到同族可用模型。
 - **启动方式**：进入 `销售周报/` 目录，双击运行 **`一键启动.bat`**。
+
+### 5. [kb-tool · 企业本地知识库 MCP 工具](./kb-tool)（无端口，stdio MCP）
+- **核心架构**：协议父进程（FastMCP，秒级握手）+ 检索子进程（`rag_worker.py`，主线程加载 torch/BGE/FAISS）+ 混合检索（FAISS 向量 Top-35 + BM25 Top-6 → BGE 重排）。
+- **前置条件与系统要求**：
+  - **Python**：3.10+（`一键安装到WorkBuddy.bat` 会自动建 venv 并装依赖）。
+  - **依赖体积**：需联网安装 torch 等（约 10~30 分钟），并下载 BGE 嵌入模型（约 400MB，走 hf-mirror）。
+  - **大模型支持**：**检索不需要任何 LLM**（纯本地 BGE + BM25 规则检索），因此无需 LM Studio。
+- **接入方式**：进入 `kb-tool/` 目录，双击 **`一键安装到WorkBuddy.bat`**（自动注册 MCP、部署 Skill、写入记忆路由规则并做端到端体检）；详见根目录 `部署指南.md`。
