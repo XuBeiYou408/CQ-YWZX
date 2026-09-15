@@ -101,7 +101,6 @@ kb-tool/
 ├── deploy/skills/enterprise-kb-query/SKILL.md   # [MCP] 随项目分发的对话路由路标
 ├── 一键安装到WorkBuddy.bat        # [MCP] 主入口：全量安装 + 端到端体检（幂等，venv 有无均可）
 ├── 图形化配置助手.bat             # [MCP] 辅助入口：打开 GUI（自动挑选带 tkinter 的解释器）
-├── 优化过程报告.html              # MCP 调用链优化复盘（含流程图与踩坑记录）
 │
 ├── run.py                         # [Web] FastAPI 服务启动入口 (Uvicorn)
 ├── start.bat / 一键启动.bat       # [Web] 自举环境并拉起 API 服务
