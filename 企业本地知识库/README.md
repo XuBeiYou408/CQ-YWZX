@@ -134,8 +134,8 @@ flowchart TD
 ### 1. 配置环境变量
 在项目根目录下复制 `.env.example` 为 `.env` 并填入密钥（如使用纯本地部署模式，云端 Key 可留空）：
 ```ini
-DEEPSEEK_API_KEY='sk-ba81e719...'                  # DeepSeek 密钥 (可选)
-FIRECRAWL_API_KEY='fc-b1659da2...'                 # Firecrawl 密钥 (可选)
+DEEPSEEK_API_KEY='your_deepseek_api_key_here'      # DeepSeek 密钥 (可选)
+FIRECRAWL_API_KEY='your_firecrawl_api_key_here'                 # Firecrawl 密钥 (可选)
 DEEPSEEK_API_URL='https://api.deepseek.com'         # API 基址
 LOCAL_LLM_URL='http://127.0.0.1:1234/v1'           # 本地模型服务地址 (默认 LM Studio)
 LOCAL_DB_PATH='./data/faiss_db'                     # FAISS 持久化目录
