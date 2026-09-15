@@ -156,7 +156,7 @@
           </button>
 
           <!-- 批量上传按键 -->
-          <button @click="showUploadModal = true" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg transition flex items-center space-x-1.5 border border-slate-300">
+          <button @click="openUploadModal" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg transition flex items-center space-x-1.5 border border-slate-300">
             <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
             <span>批量导入周报</span>
           </button>
@@ -282,8 +282,35 @@
 
       </section>
 
+      <!-- 视图切换：周报台账 / 批阅工作台 / 成员档案 -->
+      <div class="flex items-center justify-between bg-white p-2 rounded-2xl border border-slate-200 shadow-sm">
+        <div class="flex items-center space-x-1 text-xs font-semibold">
+          <button @click="mainView = 'ledger'" class="px-3.5 py-2 rounded-xl transition" :class="mainView === 'ledger' ? 'bg-slate-900 text-white shadow' : 'text-slate-600 hover:bg-slate-100'">📊 周报台账</button>
+          <button @click="mainView = 'review'" class="px-3.5 py-2 rounded-xl transition flex items-center space-x-1.5" :class="mainView === 'review' ? 'bg-purple-600 text-white shadow' : 'text-slate-600 hover:bg-slate-100'">
+            <span>📋 批阅工作台</span>
+            <span v-if="unreviewedCount" class="px-1.5 py-0.5 rounded-full text-[10px] font-bold" :class="mainView === 'review' ? 'bg-white text-purple-700' : 'bg-purple-100 text-purple-700'">{{ unreviewedCount }}</span>
+          </button>
+          <button @click="mainView = 'members'" class="px-3.5 py-2 rounded-xl transition" :class="mainView === 'members' ? 'bg-brand-600 text-white shadow' : 'text-slate-600 hover:bg-slate-100'">👥 成员档案</button>
+        </div>
+        <div class="hidden sm:flex items-center space-x-2 text-xs text-slate-500 pr-1">
+          <template v-if="mainView === 'review'">
+            <span>批阅进度</span>
+            <div class="w-28 h-2 bg-slate-200 rounded-full overflow-hidden">
+              <div class="h-full bg-gradient-to-r from-brand-500 to-emerald-500 rounded-full transition-all" :style="{ width: reviewProgress + '%' }"></div>
+            </div>
+            <span class="font-bold text-slate-700">{{ reviewProgress }}%</span>
+          </template>
+          <template v-else-if="mainView === 'members'">
+            <span>{{ memberStats.length }} 位成员 · {{ metrics.rep_count || reports.length }} 份周报</span>
+          </template>
+          <template v-else>
+            <span>📅 {{ summaryData.cycle_period || '当前周期' }}</span>
+          </template>
+        </div>
+      </div>
+
       <!-- 2. 核心双栏操作台 -->
-      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+      <div v-show="mainView === 'ledger'" class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
 
         <!-- 左栏：销售代表周报流卡片 (占 5 列) -->
         <div class="lg:col-span-5 space-y-4">
@@ -334,6 +361,7 @@
                     <div class="flex items-center space-x-2">
                       <span class="font-bold text-slate-900 text-sm">{{ r.salesperson }}</span>
                       <span class="text-[11px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 font-medium">{{ r.department }}</span>
+                      <span v-if="r.report_period" class="text-[11px] px-1.5 py-0.5 rounded bg-brand-50 text-brand-700 font-semibold">{{ r.report_period }}</span>
                     </div>
                     <div class="text-[11px] text-slate-400 mt-0.5">{{ r.role_title || '客户经理' }}</div>
                   </div>
@@ -560,7 +588,306 @@
 
       </div>
 
+      <!-- 3. 批阅工作台：风险排序审查队列 -->
+      <div v-show="mainView === 'review'" class="space-y-4">
+
+        <!-- 进度与过滤 -->
+        <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-wrap items-center justify-between gap-3">
+          <div class="flex items-center space-x-4 text-xs">
+            <div class="flex items-center space-x-2">
+              <span class="w-2.5 h-2.5 rounded-full bg-rose-500"></span>
+              <span class="text-slate-600">待批阅 <strong class="text-slate-900">{{ unreviewedCount }}</strong> 份</span>
+            </div>
+            <div class="flex items-center space-x-2">
+              <span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+              <span class="text-slate-600">已批阅 <strong class="text-slate-900">{{ reports.length - unreviewedCount }}</strong> 份</span>
+            </div>
+            <div class="flex items-center space-x-2">
+              <span class="w-2.5 h-2.5 rounded-full bg-purple-500"></span>
+              <span class="text-slate-600">紧急介入 <strong class="text-rose-600">{{ urgentCount }}</strong> 份</span>
+            </div>
+          </div>
+          <div class="flex items-center space-x-1.5 text-xs">
+            <button @click="reviewFilter = 'all'" class="px-3 py-1.5 rounded-full font-medium transition" :class="reviewFilter === 'all' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'">全部 ({{ reviewQueue.length }})</button>
+            <button @click="reviewFilter = 'unreviewed'" class="px-3 py-1.5 rounded-full font-medium transition" :class="reviewFilter === 'unreviewed' ? 'bg-purple-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'">仅看待批 ({{ unreviewedCount }})</button>
+            <button v-if="selectedReviewIds.length" @click="selectedReviewIds = []" class="px-3 py-1.5 rounded-full font-medium bg-slate-100 text-slate-600 hover:bg-slate-200">取消已选 ({{ selectedReviewIds.length }})</button>
+          </div>
+        </div>
+
+        <!-- 批量批阅操作条 -->
+        <div v-if="selectedReviewIds.length" class="bg-purple-50 border border-purple-200 p-3 rounded-2xl flex flex-wrap items-center gap-2 text-xs sticky top-20 z-20 shadow-sm">
+          <span class="font-bold text-purple-800">已选 {{ selectedReviewIds.length }} 份：</span>
+          <select v-model="batchTemplate" class="border border-purple-300 rounded-lg px-2 py-1.5 bg-white text-slate-700 outline-none focus:border-purple-500">
+            <option value="">选择快捷批语模板…</option>
+            <option v-for="(t, i) in reviewTemplates" :key="i" :value="t">{{ t }}</option>
+          </select>
+          <input v-model="batchComment" type="text" placeholder="或输入统一批语…" class="flex-1 min-w-48 border border-purple-300 rounded-lg px-3 py-1.5 outline-none focus:border-purple-500">
+          <button @click="applyBatchTemplate" :disabled="!batchTemplate" class="px-2.5 py-1.5 border border-purple-300 text-purple-700 rounded-lg hover:bg-purple-100 disabled:opacity-40">填入</button>
+          <button @click="submitBatchReview" :disabled="batchReviewing || !(batchComment.trim())" class="px-3 py-1.5 bg-purple-600 text-white font-bold rounded-lg hover:bg-purple-700 disabled:opacity-50 shadow-sm">
+            {{ batchReviewing ? '下发中…' : '批量下发批阅' }}
+          </button>
+        </div>
+
+        <!-- 审查队列 -->
+        <div class="space-y-3">
+          <div v-for="q in reviewQueue" :key="q.id" class="bg-white rounded-2xl border p-4 space-y-3 transition hover:shadow-md" :class="q.risk.level >= 4 ? 'border-rose-300' : q.risk.level === 3 ? 'border-amber-300' : 'border-slate-200'">
+            <!-- 头部：勾选 + 成员信息 + 风险徽章 -->
+            <div class="flex items-start justify-between gap-3">
+              <div class="flex items-start space-x-3">
+                <input type="checkbox" :checked="selectedReviewIds.includes(q.id)" @change="toggleReviewSelect(q.id)" class="mt-1.5 w-4 h-4 accent-purple-600 cursor-pointer">
+                <div class="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold shadow-sm" :class="q.avatar_bg || 'bg-brand-600'">{{ (q.salesperson || '销')[0] }}</div>
+                <div>
+                  <div class="flex items-center space-x-2 flex-wrap">
+                    <span class="font-bold text-slate-900 text-sm">{{ q.salesperson }}</span>
+                    <span class="text-[11px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 font-medium">{{ q.department }}</span>
+                    <span v-if="q.report_period" class="text-[11px] px-1.5 py-0.5 rounded bg-brand-50 text-brand-700 font-semibold">{{ q.report_period }}</span>
+                    <span class="px-2 py-0.5 text-[11px] font-bold rounded-full" :class="getStatusBadgeClass(q.status)">{{ q.status_label }} {{ q.completion_rate }}%</span>
+                  </div>
+                  <div class="flex items-center space-x-2 mt-1">
+                    <span class="text-[11px] font-bold px-2 py-0.5 rounded border" :class="riskBadgeClass(q.risk.level)">{{ q.risk.label }}</span>
+                    <span class="text-[11px] text-slate-400">{{ q.risk.reason }}</span>
+                    <span v-if="q.reviewed" class="text-[11px] text-emerald-600 font-semibold">✓ 已批阅</span>
+                  </div>
+                </div>
+              </div>
+              <div class="text-right text-[11px] text-slate-500 flex-shrink-0">
+                <div>签约 <strong class="text-slate-800">{{ (q.actual_amount/10000).toFixed(1) }}</strong> / {{ (q.target_amount/10000).toFixed(1) }} 万</div>
+                <div>置信度 <strong :class="q.supervision_audit?.confidence_score < 60 ? 'text-rose-600' : 'text-slate-800'">{{ q.supervision_audit?.confidence_score ?? 70 }}%</strong></div>
+              </div>
+            </div>
+
+            <!-- 卡点提示 -->
+            <div v-if="q.blockers && q.blockers !== '无明显卡点，按计划推进'" class="text-xs text-rose-800 bg-rose-50 border border-rose-200 p-2.5 rounded-xl flex items-start space-x-2">
+              <span class="text-rose-600 mt-0.5">⚠️</span>
+              <span class="line-clamp-2"><strong>卡点求助：</strong>{{ q.blockers }}</span>
+            </div>
+
+            <!-- 批语草稿与操作 -->
+            <div class="space-y-2">
+              <textarea v-model="reviewDrafts[q.id]" rows="2" placeholder="批语草稿（可用右侧按钮生成）…" class="w-full text-xs p-2.5 border border-slate-200 rounded-xl outline-none focus:border-purple-400 bg-slate-50/50"></textarea>
+              <div class="flex items-center justify-between flex-wrap gap-2">
+                <div class="flex items-center space-x-1.5 flex-wrap">
+                  <button @click="aiSuggest(q)" :disabled="suggestingId === q.id" class="px-2.5 py-1.5 text-xs font-semibold rounded-lg border transition disabled:opacity-50" :class="suggestSources[q.id] === 'ai' ? 'bg-purple-600 text-white border-purple-600' : 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100'">
+                    {{ suggestingId === q.id ? 'AI 生成中…' : '✨ AI 润色批语' }}
+                  </button>
+                  <select @change="applyTemplate(q)" v-model="templatePicks[q.id]" class="text-xs border border-slate-200 rounded-lg px-2 py-1.5 bg-white text-slate-600 outline-none">
+                    <option value="" disabled selected>快捷模板</option>
+                    <option v-for="(t, i) in reviewTemplates" :key="i" :value="t">{{ t.slice(0, 18) }}…</option>
+                  </select>
+                  <button @click="openRawViewer(q, 'audit')" class="px-2.5 py-1.5 text-xs text-slate-600 hover:text-purple-700 font-medium hover:bg-slate-100 rounded-lg transition border border-slate-200">🕵️ 尽调档案</button>
+                </div>
+                <div class="flex items-center space-x-1.5">
+                  <button @click="openReviewModal(q, reviewDrafts[q.id])" class="px-2.5 py-1.5 text-xs text-slate-600 hover:bg-slate-100 rounded-lg transition border border-slate-200">编辑后批阅</button>
+                  <button @click="quickReview(q)" :disabled="!reviewDrafts[q.id]?.trim()" class="px-3 py-1.5 text-xs font-bold rounded-lg transition disabled:opacity-40" :class="q.reviewed ? 'bg-slate-100 text-slate-600 border border-slate-200' : 'bg-purple-600 text-white hover:bg-purple-700 shadow-sm'">
+                    {{ q.reviewed ? '更新批语' : '直接下发' }}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 4. 成员档案：多周趋势 + 横向对比 -->
+      <div v-show="mainView === 'members'" class="space-y-4">
+
+        <!-- 横向对比表 -->
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div class="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
+            <h3 class="text-sm font-bold text-slate-900 flex items-center space-x-2">
+              <span>🏆 组内横向对比</span>
+              <span class="text-[11px] font-normal text-slate-400">按各成员最新周期达成率排名 · 点击行查看档案明细</span>
+            </h3>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-xs">
+              <thead>
+                <tr class="bg-slate-50 text-slate-500 text-left">
+                  <th class="py-2.5 px-4 font-semibold">排名</th>
+                  <th class="py-2.5 px-4 font-semibold">成员</th>
+                  <th class="py-2.5 px-4 font-semibold">最新周期</th>
+                  <th class="py-2.5 px-4 font-semibold">达成率</th>
+                  <th class="py-2.5 px-4 font-semibold text-right">签约额(万)</th>
+                  <th class="py-2.5 px-4 font-semibold text-right">回款(万)</th>
+                  <th class="py-2.5 px-4 font-semibold text-right">拜访</th>
+                  <th class="py-2.5 px-4 font-semibold text-right">线索</th>
+                  <th class="py-2.5 px-4 font-semibold text-center">置信度</th>
+                  <th class="py-2.5 px-4 font-semibold text-center">环比</th>
+                  <th class="py-2.5 px-4 font-semibold text-center">待批</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="(m, idx) in memberStats" :key="m.name" @click="openMemberModal(m)" class="border-t border-slate-100 hover:bg-brand-50/40 cursor-pointer transition">
+                  <td class="py-3 px-4">
+                    <span class="w-6 h-6 inline-flex items-center justify-center rounded-full font-bold text-[11px]" :class="idx === 0 ? 'bg-amber-100 text-amber-700' : idx === 1 ? 'bg-slate-200 text-slate-600' : idx === 2 ? 'bg-orange-100 text-orange-700' : 'bg-slate-100 text-slate-400'">{{ idx + 1 }}</span>
+                  </td>
+                  <td class="py-3 px-4">
+                    <div class="flex items-center space-x-2">
+                      <div class="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-xs" :class="m.avatar_bg || 'bg-brand-600'">{{ m.name[0] }}</div>
+                      <div>
+                        <div class="font-bold text-slate-800">{{ m.name }}</div>
+                        <div class="text-[10px] text-slate-400">{{ m.department }}</div>
+                      </div>
+                    </div>
+                  </td>
+                  <td class="py-3 px-4 text-slate-500">{{ m.latest?.report_period || '—' }}</td>
+                  <td class="py-3 px-4">
+                    <div class="flex items-center space-x-2">
+                      <div class="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden flex-shrink-0">
+                        <div class="h-full rounded-full" :class="m.latest.completion_rate >= 100 ? 'bg-emerald-500' : m.latest.completion_rate >= 80 ? 'bg-blue-500' : m.latest.completion_rate >= 50 ? 'bg-amber-500' : 'bg-rose-500'" :style="{ width: Math.min(100, m.latest.completion_rate) + '%' }"></div>
+                      </div>
+                      <span class="font-bold" :class="m.latest.completion_rate >= 100 ? 'text-emerald-600' : m.latest.completion_rate < 50 ? 'text-rose-600' : 'text-slate-700'">{{ m.latest.completion_rate }}%</span>
+                    </div>
+                  </td>
+                  <td class="py-3 px-4 text-right font-bold text-slate-800">{{ (m.latest.actual_amount/10000).toFixed(1) }}</td>
+                  <td class="py-3 px-4 text-right text-blue-600 font-semibold">{{ (m.latest.collection_amount/10000).toFixed(1) }}</td>
+                  <td class="py-3 px-4 text-right text-purple-600 font-semibold">{{ m.latest.visit_count }}</td>
+                  <td class="py-3 px-4 text-right text-cyan-600 font-semibold">{{ m.latest.new_leads }}</td>
+                  <td class="py-3 px-4 text-center">
+                    <span class="font-bold" :class="(m.latest.supervision_audit?.confidence_score ?? 70) < 60 ? 'text-rose-600' : 'text-slate-700'">{{ m.latest.supervision_audit?.confidence_score ?? 70 }}%</span>
+                  </td>
+                  <td class="py-3 px-4 text-center">
+                    <span v-if="m.rate_delta === null" class="text-slate-300">—</span>
+                    <span v-else-if="m.rate_delta > 0" class="text-emerald-600 font-bold">↗ {{ m.rate_delta }}%</span>
+                    <span v-else-if="m.rate_delta < 0" class="text-rose-600 font-bold">↘ {{ Math.abs(m.rate_delta) }}%</span>
+                    <span v-else class="text-slate-400">→ 持平</span>
+                  </td>
+                  <td class="py-3 px-4 text-center">
+                    <span v-if="m.unreviewed_count" class="px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 font-bold">{{ m.unreviewed_count }}</span>
+                    <span v-else class="text-emerald-500">✓</span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 成员档案卡片 -->
+        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          <div v-for="m in memberStats" :key="'card-' + m.name" class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 space-y-3 hover:shadow-md transition">
+            <div class="flex items-start justify-between">
+              <div class="flex items-center space-x-3">
+                <div class="w-11 h-11 rounded-full flex items-center justify-center text-white font-bold shadow-sm" :class="m.avatar_bg || 'bg-brand-600'">{{ m.name[0] }}</div>
+                <div>
+                  <div class="font-bold text-slate-900 text-sm">{{ m.name }}</div>
+                  <div class="text-[11px] text-slate-400">{{ m.department }} · 已提交 {{ m.report_count }} 周</div>
+                </div>
+              </div>
+              <div class="text-right space-y-1">
+                <span class="px-2 py-0.5 text-[11px] font-bold rounded-full inline-block" :class="getStatusBadgeClass(m.latest.status)">{{ m.latest.status_label }}</span>
+                <div v-if="m.unreviewed_count" class="text-[10px] text-rose-600 font-bold">{{ m.unreviewed_count }} 份待批</div>
+              </div>
+            </div>
+
+            <!-- 多周达成率迷你趋势 -->
+            <div>
+              <div class="flex items-center justify-between text-[10px] text-slate-400 mb-1.5">
+                <span>多周达成率趋势</span>
+                <span v-if="m.rate_delta !== null">环比 <strong :class="m.rate_delta >= 0 ? 'text-emerald-600' : 'text-rose-600'">{{ m.rate_delta >= 0 ? '+' : '' }}{{ m.rate_delta }}%</strong></span>
+              </div>
+              <div class="flex items-end space-x-1.5 h-14">
+                <div v-for="t in m.trend" :key="t.period" class="flex-1 flex flex-col items-center justify-end space-y-1 group relative">
+                  <span class="text-[9px] font-bold text-slate-500">{{ t.completion_rate }}%</span>
+                  <div class="w-full rounded-t-md transition-all group-hover:opacity-80" :class="t.completion_rate >= 100 ? 'bg-emerald-500' : t.completion_rate >= 80 ? 'bg-blue-500' : t.completion_rate >= 50 ? 'bg-amber-500' : 'bg-rose-500'" :style="{ height: Math.max(8, Math.min(100, t.completion_rate) * 0.4) + 'px' }"></div>
+                  <span class="text-[9px] text-slate-400">{{ (t.period || '').replace('2026年第', '#') }}</span>
+                  <div class="absolute bottom-full mb-1 hidden group-hover:block bg-slate-900 text-white text-[10px] px-2 py-1 rounded-lg whitespace-nowrap z-10">{{ t.period }} · 签约 {{ (t.actual_amount/10000).toFixed(1) }}万 · {{ t.reviewed ? '已批阅' : '待批阅' }}</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 最新周期关键数据 -->
+            <div class="grid grid-cols-3 gap-2 bg-slate-50 p-2.5 rounded-xl text-center text-xs">
+              <div>
+                <span class="text-slate-400 text-[10px] block">最新签约</span>
+                <span class="font-bold text-slate-800">{{ (m.latest.actual_amount/10000).toFixed(1) }}万</span>
+              </div>
+              <div>
+                <span class="text-slate-400 text-[10px] block">累计签约</span>
+                <span class="font-bold text-brand-700">{{ (m.total_actual/10000).toFixed(1) }}万</span>
+              </div>
+              <div>
+                <span class="text-slate-400 text-[10px] block">平均达成</span>
+                <span class="font-bold text-slate-800">{{ m.avg_completion_rate }}%</span>
+              </div>
+            </div>
+
+            <!-- 最新卡点 -->
+            <div v-if="m.latest.blockers && m.latest.blockers !== '无明显卡点，按计划推进'" class="text-[11px] text-rose-700 bg-rose-50 border border-rose-200 p-2 rounded-xl line-clamp-2">⚠️ {{ m.latest.blockers }}</div>
+
+            <button @click="openMemberModal(m)" class="w-full py-2 text-xs font-semibold text-brand-700 bg-brand-50 hover:bg-brand-100 border border-brand-200 rounded-xl transition">查看完整成长档案</button>
+          </div>
+        </div>
+      </div>
+
     </main>
+
+    <!-- 弹窗 5：成员成长档案明细 -->
+    <div v-if="activeMember" class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+      <div class="bg-white w-full max-w-3xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
+        <div class="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+          <div class="flex items-center space-x-3">
+            <div class="w-11 h-11 rounded-full flex items-center justify-center text-white font-bold" :class="activeMember.avatar_bg || 'bg-brand-600'">{{ activeMember.name[0] }}</div>
+            <div>
+              <h3 class="text-base font-bold text-slate-900">{{ activeMember.name }} · 成长档案</h3>
+              <p class="text-xs text-slate-500">{{ activeMember.department }} · 覆盖 {{ activeMember.report_count }} 个周期 · 平均达成率 {{ activeMember.avg_completion_rate }}%</p>
+            </div>
+          </div>
+          <button @click="activeMember = null" class="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+          </button>
+        </div>
+        <div class="p-6 overflow-y-auto space-y-5">
+          <!-- 多周期明细表 -->
+          <div class="overflow-x-auto rounded-xl border border-slate-200">
+            <table class="w-full text-xs">
+              <thead>
+                <tr class="bg-slate-50 text-slate-500 text-left">
+                  <th class="py-2.5 px-3 font-semibold">周期</th>
+                  <th class="py-2.5 px-3 font-semibold text-right">达成率</th>
+                  <th class="py-2.5 px-3 font-semibold text-right">签约(万)</th>
+                  <th class="py-2.5 px-3 font-semibold text-right">回款(万)</th>
+                  <th class="py-2.5 px-3 font-semibold text-right">拜访</th>
+                  <th class="py-2.5 px-3 font-semibold text-right">线索</th>
+                  <th class="py-2.5 px-3 font-semibold text-center">尽调徽章</th>
+                  <th class="py-2.5 px-3 font-semibold text-center">批阅状态</th>
+                  <th class="py-2.5 px-3 font-semibold">主管批语</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="t in activeMember.trend" :key="'d-' + t.id" class="border-t border-slate-100">
+                  <td class="py-2.5 px-3 font-semibold text-slate-700">{{ t.period }}</td>
+                  <td class="py-2.5 px-3 text-right font-bold" :class="t.completion_rate >= 100 ? 'text-emerald-600' : t.completion_rate < 50 ? 'text-rose-600' : 'text-slate-700'">{{ t.completion_rate }}%</td>
+                  <td class="py-2.5 px-3 text-right text-slate-700">{{ (t.actual_amount/10000).toFixed(1) }}</td>
+                  <td class="py-2.5 px-3 text-right text-blue-600">{{ (t.collection_amount/10000).toFixed(1) }}</td>
+                  <td class="py-2.5 px-3 text-right text-purple-600">{{ t.visit_count }}</td>
+                  <td class="py-2.5 px-3 text-right text-cyan-600">{{ t.new_leads }}</td>
+                  <td class="py-2.5 px-3 text-center">
+                    <span v-if="t.supervision_audit?.audit_badge" class="px-1.5 py-0.5 text-[10px] font-bold rounded border" :class="t.supervision_audit.audit_badge_class || 'bg-slate-100 text-slate-600'">{{ t.supervision_audit.audit_badge }}</span>
+                    <span v-else class="text-slate-300">—</span>
+                  </td>
+                  <td class="py-2.5 px-3 text-center">
+                    <span v-if="t.reviewed" class="text-emerald-600 font-semibold">✓ 已批</span>
+                    <span v-else class="text-rose-500 font-semibold">待批</span>
+                  </td>
+                  <td class="py-2.5 px-3 text-slate-500 max-w-48 truncate" :title="t.supervisor_comment">{{ t.supervisor_comment || '—' }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <!-- 批阅历史时间线 -->
+          <div>
+            <h4 class="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">批阅历史</h4>
+            <div class="space-y-2">
+              <div v-for="t in activeMember.trend.filter(x => x.reviewed || x.supervisor_comment)" :key="'h-' + t.id" class="text-xs bg-slate-50 border border-slate-200 rounded-xl p-3 flex items-start space-x-2">
+                <span class="text-brand-600 font-bold whitespace-nowrap">{{ t.period }}</span>
+                <span class="text-slate-600 flex-1">{{ t.supervisor_comment }}</span>
+              </div>
+              <div v-if="!activeMember.trend.some(x => x.reviewed || x.supervisor_comment)" class="text-xs text-slate-400 bg-slate-50 rounded-xl p-3">暂无批阅记录，去批阅工作台给 {{ activeMember.name }} 下发第一条批语吧。</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <!-- 弹窗 1：【原始周报原件检视抽屉】(主管查看销售提交上来的 100% 完整原件) -->
     <div v-if="showRawModal" class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
@@ -789,23 +1116,42 @@
     <div v-if="showUploadModal" class="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
       <div class="bg-white w-full max-w-lg rounded-2xl shadow-xl border border-slate-200 overflow-hidden p-6 space-y-4">
         <div class="flex items-center justify-between border-b pb-3">
-          <h3 class="font-bold text-slate-900 text-sm">批量导入销售周报文件</h3>
+          <h3 class="font-bold text-slate-900 text-sm">批量导入销售周报（文件 / 文件夹 / ZIP）</h3>
           <button @click="showUploadModal = false" class="text-slate-400 hover:text-slate-600">✕</button>
         </div>
 
-        <div class="border-2 border-dashed border-slate-300 hover:border-brand-500 rounded-xl p-6 text-center cursor-pointer transition bg-slate-50" @click="triggerFileInput">
-          <input type="file" ref="fileInput" multiple accept=".docx,.xlsx,.md,.txt" class="hidden" @change="handleFileSelected">
+        <div class="border-2 border-dashed border-slate-300 hover:border-brand-500 rounded-xl p-6 text-center cursor-pointer transition bg-slate-50" :class="isDragging ? 'border-brand-500 bg-brand-50' : ''" @click="triggerFileInput" @dragover.prevent @drop.prevent="handleDropZone" @dragenter.prevent="isDragging = true" @dragleave.prevent="isDragging = false">
+          <input type="file" ref="fileInput" multiple accept=".docx,.xlsx,.md,.txt,.zip" class="hidden" @change="handleFileSelected">
+          <input type="file" ref="folderInput" webkitdirectory directory multiple class="hidden" @change="handleFolderSelected">
           <svg class="w-10 h-10 text-slate-400 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
-          <div class="text-xs font-semibold text-slate-700">点击选择或拖拽销售周报文件至此处</div>
-          <div class="text-[11px] text-slate-400 mt-1">支持格式：Word (.docx), Excel (.xlsx), Markdown (.md), 文本 (.txt)</div>
+          <div class="text-xs font-semibold text-slate-700">点击选择文件，或将文件 / 文件夹 / ZIP 压缩包拖拽至此处</div>
+          <div class="text-[11px] text-slate-400 mt-1">支持格式：Word (.docx), Excel (.xlsx), Markdown (.md), 文本 (.txt), 压缩包 (.zip)</div>
+          <button type="button" @click.stop="triggerFolderInput" class="mt-3 px-3 py-1 text-[11px] font-semibold text-brand-700 bg-brand-50 hover:bg-brand-100 border border-brand-200 rounded-lg">📁 选择整个文件夹</button>
+        </div>
+
+        <div class="flex items-center space-x-2">
+          <label class="text-xs font-semibold text-slate-700 whitespace-nowrap">汇报周期：</label>
+          <input v-model="uploadPeriod" type="text" placeholder="留空自动从文件识别（示例：2026年第38周）" class="flex-1 text-xs px-3 py-1.5 border border-slate-300 rounded-lg outline-none focus:border-brand-500">
         </div>
 
         <div v-if="selectedFiles.length > 0" class="space-y-1 text-xs max-h-32 overflow-y-auto">
           <div class="font-semibold text-slate-700">已选待解析文件 ({{ selectedFiles.length }})：</div>
           <div v-for="(f, i) in selectedFiles" :key="i" class="text-slate-600 flex items-center space-x-1">
-            <span>📄</span>
-            <span class="truncate">{{ f.name }}</span>
+            <span>{{ fileIcon(f) }}</span>
+            <span class="truncate" :title="f.relPath || f.name">{{ f.relPath || f.name }}</span>
             <span class="text-slate-400">({{ (f.size / 1024).toFixed(1) }} KB)</span>
+            <button @click="removeSelectedFile(i)" class="ml-auto text-slate-400 hover:text-red-500 flex-shrink-0">✕</button>
+          </div>
+        </div>
+
+        <div v-if="uploadResult && (uploadResult.skipped_duplicates.length || uploadResult.errors.length)" class="space-y-2 text-xs bg-slate-50 border border-slate-200 rounded-xl p-3 max-h-40 overflow-y-auto">
+          <div v-if="uploadResult.skipped_duplicates.length" class="text-amber-700 font-semibold">⏭️ 自动去重跳过 {{ uploadResult.skipped_duplicates.length }} 份：</div>
+          <div v-for="(s, i) in uploadResult.skipped_duplicates" :key="'sk'+i" class="text-amber-600 pl-2 truncate" :title="`${s.filename} — ${s.reason}`">
+            · {{ s.filename }} — {{ s.reason }}
+          </div>
+          <div v-if="uploadResult.errors.length" class="text-red-600 font-semibold mt-1">❌ 解析失败 {{ uploadResult.errors.length }} 份：</div>
+          <div v-for="(e, i) in uploadResult.errors" :key="'er'+i" class="text-red-500 pl-2 truncate" :title="`${e.filename} — ${e.error}`">
+            · {{ e.filename }} — {{ e.error }}
           </div>
         </div>
 
@@ -1001,7 +1347,7 @@
   </div>
 
   <script>
-    const { createApp, ref, computed, onMounted } = Vue;
+    const { createApp, ref, reactive, computed, onMounted } = Vue;
 
     createApp({
       setup() {
@@ -1048,6 +1394,30 @@
         const selectedFiles = ref([]);
         const uploading = ref(false);
         const fileInput = ref(null);
+        const folderInput = ref(null);
+        const isDragging = ref(false);
+        const uploadResult = ref(null);
+        const uploadPeriod = ref('');
+
+        // ---- 批阅工作台与成员档案状态 ----
+        const mainView = ref('ledger');
+        const reviewFilter = ref('all');
+        const selectedReviewIds = ref([]);
+        const reviewDrafts = reactive({});
+        const suggestSources = reactive({});
+        const suggestingId = ref(null);
+        const templatePicks = reactive({});
+        const reviewTemplates = [
+          '继续保持节奏，下周重点跟进在途订单签约与回款。',
+          '卡点已知晓，48 小时内一对一沟通，明确解卡责任人与时间表。',
+          '本周表现优秀，组会分享打法，资源倾斜支持冲刺更高目标。',
+          '达成率有差距，下周初一起复盘商机漏斗，聚焦高意向客户突破。',
+          '过程指标预警，必须补足拜访与线索蓄水，严防业绩断崖。',
+        ];
+        const batchTemplate = ref('');
+        const batchComment = ref('');
+        const batchReviewing = ref(false);
+        const activeMember = ref(null);
 
         const showModelModal = ref(false);
         const activeProvider = ref('local');
@@ -1162,6 +1532,7 @@
               reports.value = json.data;
               counts.value = json.counts;
               metrics.value = json.metrics;
+              initReviewDrafts();
             }
           } catch (e) {
             console.error(e);
@@ -1270,9 +1641,9 @@
         }
 
         // 2. 主管批阅
-        function openReviewModal(report) {
+        function openReviewModal(report, draft) {
           activeReviewReport.value = report;
-          reviewComment.value = report.supervisor_comment || '';
+          reviewComment.value = (draft !== undefined && draft !== null) ? draft : (report.supervisor_comment || '');
           showReviewModal.value = true;
         }
 
@@ -1295,20 +1666,111 @@
           }
         }
 
-        // 3. 文件上传
+        // 3. 文件上传（支持多文件 / 文件夹 / ZIP 压缩包 + 自动去重）
+        function openUploadModal() {
+          uploadResult.value = null;
+          isDragging.value = false;
+          uploadPeriod.value = '';
+          showUploadModal.value = true;
+        }
+
+        const SUPPORTED_FILE_EXTS = ['.docx', '.xlsx', '.md', '.txt', '.zip'];
+
+        function isSupportedFile(f) {
+          const name = (f.name || '').toLowerCase();
+          return SUPPORTED_FILE_EXTS.some(ext => name.endsWith(ext));
+        }
+
+        function fileIcon(f) {
+          const name = (f.name || '').toLowerCase();
+          if (name.endsWith('.zip')) return '🗜️';
+          if (name.endsWith('.xlsx')) return '📊';
+          if (name.endsWith('.docx')) return '📄';
+          return '📝';
+        }
+
         function triggerFileInput() {
           if (fileInput.value) fileInput.value.click();
         }
 
+        function triggerFolderInput() {
+          if (folderInput.value) folderInput.value.click();
+        }
+
+        function addFiles(files) {
+          const supported = [];
+          let ignored = 0;
+          files.forEach(f => { if (isSupportedFile(f)) supported.push(f); else ignored++; });
+          if (ignored > 0) showToast(`已忽略 ${ignored} 个不支持的文件（仅支持 ${SUPPORTED_FILE_EXTS.join(' / ')}）`, 'error', '⚠️');
+          // 按 名称+大小 简单去重，避免同一文件重复出现在待选列表
+          const seen = new Set(selectedFiles.value.map(f => `${f.name}:${f.size}`));
+          const fresh = supported.filter(f => {
+            const key = `${f.name}:${f.size}`;
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+          });
+          selectedFiles.value = [...selectedFiles.value, ...fresh];
+        }
+
+        function removeSelectedFile(index) {
+          selectedFiles.value.splice(index, 1);
+        }
+
         function handleFileSelected(e) {
-          selectedFiles.value = Array.from(e.target.files);
+          addFiles(Array.from(e.target.files));
+          e.target.value = '';
+        }
+
+        function handleFolderSelected(e) {
+          const files = Array.from(e.target.files).map(f => {
+            f.relPath = f.webkitRelativePath || f.name;
+            return f;
+          });
+          addFiles(files);
+          e.target.value = '';
+        }
+
+        // 拖拽上传：兼容文件与文件夹（递归遍历 DirectoryEntry）
+        function collectEntryFiles(entry, out) {
+          return new Promise(resolve => {
+            if (!entry) return resolve();
+            if (entry.isFile) {
+              entry.file(f => { out.push(f); resolve(); }, () => resolve());
+            } else if (entry.isDirectory) {
+              const reader = entry.createReader();
+              const readBatch = () => reader.readEntries(async entries => {
+                if (!entries.length) return resolve();
+                for (const child of entries) await collectEntryFiles(child, out);
+                readBatch(); // readEntries 每次最多返回 100 条，需循环读完
+              }, () => resolve());
+              readBatch();
+            } else {
+              resolve();
+            }
+          });
+        }
+
+        async function handleDropZone(e) {
+          isDragging.value = false;
+          const items = e.dataTransfer.items;
+          const files = [];
+          if (items && items.length && items[0].webkitGetAsEntry) {
+            const entries = Array.from(items).map(i => i.webkitGetAsEntry()).filter(Boolean);
+            for (const entry of entries) await collectEntryFiles(entry, files);
+          } else {
+            files.push(...e.dataTransfer.files);
+          }
+          if (files.length) addFiles(files);
         }
 
         async function uploadFiles() {
           if (!selectedFiles.value.length) return;
           uploading.value = true;
+          uploadResult.value = null;
           const formData = new FormData();
-          selectedFiles.value.forEach(f => formData.append('files', f));
+          selectedFiles.value.forEach(f => formData.append('files', f, f.relPath || f.name));
+          if (uploadPeriod.value.trim()) formData.append('period', uploadPeriod.value.trim());
           try {
             const res = await fetch('/api/reports/upload', {
               method: 'POST',
@@ -1316,17 +1778,212 @@
             });
             const json = await res.json();
             if (json.ok) {
-              showToast(`成功解析并导入 ${json.data.uploaded_count} 份周报！`);
-              showUploadModal.value = false;
-              selectedFiles.value = [];
-              await fetchReports();
-              await fetchSummary();
+              const d = json.data;
+              uploadResult.value = d;
+              const parts = [`成功解析并导入 ${d.uploaded_count} 份周报`];
+              if (d.updated_count) parts.push(`同人同期覆盖更新 ${d.updated_count} 份`);
+              if (d.skipped_duplicates && d.skipped_duplicates.length) parts.push(`自动去重跳过 ${d.skipped_duplicates.length} 份重复`);
+              if (d.errors && d.errors.length) parts.push(`${d.errors.length} 份解析失败`);
+              showToast(parts.join('，') + '！');
+              if (d.uploaded_count > 0 || d.updated_count > 0) {
+                selectedFiles.value = [];
+                uploadPeriod.value = '';
+                await fetchReports();
+                await fetchSummary();
+              }
             }
           } catch (e) {
             showToast('上传解析失败: ' + e, 'error', '❌');
           } finally {
             uploading.value = false;
           }
+        }
+
+        // ---- 批阅工作台与成员档案 ----
+        function periodSortKeyJs(period) {
+          const m = /(\d{4})\s*年\s*第?\s*(\d{1,2})\s*周/.exec(period || '');
+          return m ? [Number(m[1]), Number(m[2])] : [0, 0];
+        }
+
+        // 风险分级（与后端 app/core/review.py 同规则）
+        function assessRiskJs(r) {
+          const audit = r.supervision_audit || {};
+          const badge = audit.audit_badge || '';
+          const confidence = audit.confidence_score ?? 70;
+          if (badge.includes('致命') || badge.includes('合规拦截')) return { level: 4, label: '🚨 紧急介入', reason: `尽调徽章：${badge}` };
+          if (badge.includes('断崖')) return { level: 3, label: '⚠️ 断崖风险', reason: `尽调徽章：${badge}` };
+          if (r.status === 'blocked') return { level: 3, label: '⚠️ 遇阻卡单', reason: '达成率过低，触发遇阻预警' };
+          if (r.status === 'at_risk' || confidence < 60) return { level: 2, label: '🔶 需要关注', reason: r.status === 'at_risk' ? '达成率距目标有差距' : `尽调置信度仅 ${confidence}%` };
+          if (r.status === 'exceeded' && confidence >= 70) return { level: 1, label: '🌟 亮眼标杆', reason: `达成 ${r.completion_rate}% 且尽调可信` };
+          return { level: 0, label: '✓ 正常推进', reason: '按计划推进' };
+        }
+
+        function riskBadgeClass(level) {
+          if (level >= 4) return 'bg-rose-100 text-rose-700 border-rose-300';
+          if (level === 3) return 'bg-amber-100 text-amber-700 border-amber-300';
+          if (level === 2) return 'bg-amber-50 text-amber-700 border-amber-200';
+          if (level === 1) return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+          return 'bg-slate-100 text-slate-600 border-slate-200';
+        }
+
+        // 规则版批语草稿（0 Token，即时填充；AI 润色走后端）
+        function ruleSuggestionJs(r) {
+          const audit = r.supervision_audit || {};
+          const confidence = audit.confidence_score ?? 70;
+          const rate = r.completion_rate || 0;
+          const actualW = ((r.actual_amount || 0) / 10000).toFixed(1);
+          const visits = r.visit_count || 0;
+          const leads = r.new_leads || 0;
+          const blockers = (r.blockers || '').slice(0, 50);
+          const highlight = (r.highlight_summary || '').slice(0, 40);
+          const risk = assessRiskJs(r);
+          if (risk.level === 4) return `${r.salesperson}本周${risk.reason.replace('尽调徽章：', '触发')}，卡点：${blockers}。建议今日内亲自介入协调资源，优先消化尽调档案中的卡单死穴。`;
+          if (risk.level === 3 && risk.label.includes('断崖')) return `达成率 ${rate}% 表面尚可，但过程指标预警（拜访 ${visits} 家 / 新增线索 ${leads} 条），存在断崖风险。下周必须补足商机蓄水，建议安排陪访或线索支援。`;
+          if (risk.level === 3) return `${r.salesperson}本周遇阻（${blockers}），建议 48 小时内一对一沟通，明确卡点责任人与解卡时间表，必要时协调资源介入。`;
+          if (risk.level === 2) return `本周达成率 ${rate}%，距目标仍有差距（尽调置信度 ${confidence}%）。建议下周初一起复盘商机漏斗，聚焦 2-3 个高意向客户重点突破。`;
+          if (risk.level === 1) return `本周达成 ${rate}%、签约 ${actualW} 万，尽调置信度 ${confidence}%，表现优秀。建议组会分享「${highlight}」打法，并考虑资源倾斜冲刺更高目标。`;
+          if (r.status === 'growing') return `新人成长期表现稳健，拜访密度良好（${visits} 家次）。建议安排导师带教，聚焦 2-3 个高意向客户重点突破。`;
+          return `本周按计划推进（达成 ${rate}%）。继续保持拜访节奏，下周重点关注回款进度与在途订单签约。`;
+        }
+
+        function initReviewDrafts() {
+          reports.value.forEach(r => {
+            if (reviewDrafts[r.id] === undefined) {
+              reviewDrafts[r.id] = r.reviewed ? (r.supervisor_comment || '') : ruleSuggestionJs(r);
+            }
+          });
+        }
+
+        const reviewQueue = computed(() => {
+          let list = reports.value.map(r => ({ ...r, risk: assessRiskJs(r) }));
+          list.sort((a, b) =>
+            b.risk.level - a.risk.level
+            || (a.reviewed ? 1 : 0) - (b.reviewed ? 1 : 0)
+            || (a.completion_rate || 0) - (b.completion_rate || 0)
+          );
+          if (reviewFilter.value === 'unreviewed') list = list.filter(x => !x.reviewed);
+          return list;
+        });
+
+        const unreviewedCount = computed(() => reports.value.filter(r => !r.reviewed).length);
+        const urgentCount = computed(() => reports.value.filter(r => assessRiskJs(r).level >= 4).length);
+        const reviewProgress = computed(() => reports.value.length ? Math.round((reports.value.length - unreviewedCount.value) / reports.value.length * 100) : 0);
+
+        function toggleReviewSelect(id) {
+          const i = selectedReviewIds.value.indexOf(id);
+          if (i >= 0) selectedReviewIds.value.splice(i, 1);
+          else selectedReviewIds.value.push(id);
+        }
+
+        function applyTemplate(q) {
+          const t = templatePicks[q.id];
+          if (t) reviewDrafts[q.id] = t;
+        }
+
+        async function quickReview(q) {
+          const comment = (reviewDrafts[q.id] || '').trim();
+          if (!comment) { showToast('批语不能为空', 'error', '⚠️'); return; }
+          try {
+            const res = await fetch(`/api/reports/${q.id}/review`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ comment })
+            });
+            const json = await res.json();
+            if (json.ok) {
+              showToast(`已为 ${q.salesperson} 下发批阅！`);
+              await fetchReports();
+            }
+          } catch (e) {
+            showToast('批阅提交失败: ' + e, 'error', '❌');
+          }
+        }
+
+        async function aiSuggest(q) {
+          suggestingId.value = q.id;
+          try {
+            const res = await fetch('/api/review/suggest', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ report_id: q.id })
+            });
+            const json = await res.json();
+            if (json.ok) {
+              reviewDrafts[q.id] = json.data.suggestion;
+              suggestSources[q.id] = json.data.source;
+              showToast(json.data.source === 'ai' ? 'AI 批语已生成，可再编辑后下发' : 'AI 未就绪，已生成规则版批语', 'success', json.data.source === 'ai' ? '✨' : 'ℹ️');
+            }
+          } catch (e) {
+            showToast('AI 批语生成失败: ' + e, 'error', '❌');
+          } finally {
+            suggestingId.value = null;
+          }
+        }
+
+        function applyBatchTemplate() {
+          if (batchTemplate.value) batchComment.value = batchTemplate.value;
+        }
+
+        async function submitBatchReview() {
+          const comment = batchComment.value.trim();
+          if (!comment || !selectedReviewIds.value.length) return;
+          batchReviewing.value = true;
+          try {
+            const res = await fetch('/api/reports/review-batch', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ reviews: selectedReviewIds.value.map(id => ({ id, comment })) })
+            });
+            const json = await res.json();
+            if (json.ok) {
+              showToast(`已批量批阅 ${json.data.updated_count} 份周报！`);
+              selectedReviewIds.value = [];
+              batchComment.value = '';
+              batchTemplate.value = '';
+              await fetchReports();
+            }
+          } catch (e) {
+            showToast('批量批阅失败: ' + e, 'error', '❌');
+          } finally {
+            batchReviewing.value = false;
+          }
+        }
+
+        // ---- 成员档案 ----
+        const memberStats = computed(() => {
+          const groups = {};
+          reports.value.forEach(r => {
+            const name = r.salesperson || '未知';
+            if (!groups[name]) groups[name] = { name, department: r.department || '', avatar_bg: r.avatar_bg || 'bg-brand-600', list: [] };
+            groups[name].list.push(r);
+          });
+          const stats = Object.values(groups).map(g => {
+            const trend = [...g.list].sort((a, b) => {
+              const ka = periodSortKeyJs(a.report_period);
+              const kb = periodSortKeyJs(b.report_period);
+              return ka[0] - kb[0] || ka[1] - kb[1];
+            });
+            const latest = trend[trend.length - 1];
+            const prev = trend.length > 1 ? trend[trend.length - 2] : null;
+            return {
+              name: g.name,
+              department: g.department,
+              avatar_bg: g.avatar_bg,
+              trend,
+              latest,
+              report_count: trend.length,
+              rate_delta: prev ? Math.round((latest.completion_rate - prev.completion_rate) * 10) / 10 : null,
+              avg_completion_rate: Math.round(trend.reduce((s, x) => s + (x.completion_rate || 0), 0) / trend.length),
+              total_actual: trend.reduce((s, x) => s + (x.actual_amount || 0), 0),
+              unreviewed_count: trend.filter(x => !x.reviewed).length,
+            };
+          });
+          stats.sort((a, b) => (b.latest?.completion_rate || 0) - (a.latest?.completion_rate || 0));
+          return stats;
+        });
+
+        function openMemberModal(m) {
+          activeMember.value = m;
         }
 
         // 4. 重置演示数据
@@ -1492,12 +2149,48 @@
           submitReview,
 
           showUploadModal,
+          openUploadModal,
           selectedFiles,
           uploading,
           fileInput,
+          folderInput,
+          isDragging,
+          uploadResult,
+          uploadPeriod,
           triggerFileInput,
+          triggerFolderInput,
           handleFileSelected,
+          handleFolderSelected,
+          handleDropZone,
+          removeSelectedFile,
+          fileIcon,
           uploadFiles,
+
+          mainView,
+          reviewFilter,
+          selectedReviewIds,
+          reviewDrafts,
+          suggestSources,
+          suggestingId,
+          templatePicks,
+          reviewTemplates,
+          batchTemplate,
+          batchComment,
+          batchReviewing,
+          activeMember,
+          reviewQueue,
+          unreviewedCount,
+          urgentCount,
+          reviewProgress,
+          memberStats,
+          riskBadgeClass,
+          toggleReviewSelect,
+          applyTemplate,
+          quickReview,
+          aiSuggest,
+          applyBatchTemplate,
+          submitBatchReview,
+          openMemberModal,
 
           showModelModal,
           activeProvider,

@@ -82,6 +82,7 @@ def init_db() -> None:
                         department TEXT,
                         role_title TEXT,
                         avatar_bg TEXT,
+                        report_period TEXT DEFAULT '',
                         target_amount REAL DEFAULT 0.0,
                         actual_amount REAL DEFAULT 0.0,
                         collection_amount REAL DEFAULT 0.0,
@@ -103,6 +104,12 @@ def init_db() -> None:
                         updated_at TEXT
                     );
                 """)
+
+                # 存量库迁移：补齐 report_period 列（早期版本无周期维度）
+                cur = conn.execute("PRAGMA table_info(reports);")
+                existing_cols = {row[1] for row in cur.fetchall()}
+                if "report_period" not in existing_cols:
+                    conn.execute("ALTER TABLE reports ADD COLUMN report_period TEXT DEFAULT '';")
 
                 # 2. 销售部每周运营汇总与决策内参表
                 conn.execute("""
@@ -150,22 +157,23 @@ def _seed_presets_internal(conn: sqlite3.Connection) -> None:
     for r in PRESET_SALES_REPORTS:
         hard_gate_json = json.dumps(r.get("hard_gate", {}), ensure_ascii=False)
         supervision_json = json.dumps(r.get("supervision_audit", {}), ensure_ascii=False)
-        conn.execute("""
-            INSERT OR REPLACE INTO reports (
-                id, filename, salesperson, department, role_title, avatar_bg,
-                target_amount, actual_amount, collection_amount, completion_rate,
-                visit_count, new_leads, status, status_label, highlight_summary,
-                blockers, next_week_plan, raw_content, reviewed, supervisor_comment,
-                review_time, hard_gate, supervision_audit, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
-        """, (
-            r.get("id"),
-            r.get("filename", ""),
-            r.get("salesperson", ""),
-            r.get("department", ""),
-            r.get("role_title", "客户经理"),
-            r.get("avatar_bg", "bg-teal-600"),
-            float(r.get("target_amount", 0.0)),
+    conn.execute("""
+        INSERT OR REPLACE INTO reports (
+            id, filename, salesperson, department, role_title, avatar_bg, report_period,
+            target_amount, actual_amount, collection_amount, completion_rate,
+            visit_count, new_leads, status, status_label, highlight_summary,
+            blockers, next_week_plan, raw_content, reviewed, supervisor_comment,
+            review_time, hard_gate, supervision_audit, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+    """, (
+        r.get("id"),
+        r.get("filename", ""),
+        r.get("salesperson", ""),
+        r.get("department", ""),
+        r.get("role_title", "客户经理"),
+        r.get("avatar_bg", "bg-teal-600"),
+        r.get("report_period", "2026年第36周"),
+        float(r.get("target_amount", 0.0)),
             float(r.get("actual_amount", 0.0)),
             float(r.get("collection_amount", 0.0)),
             float(r.get("completion_rate", 0.0)),
@@ -268,13 +276,13 @@ def save_reports_batch(reports: List[Dict[str, Any]]) -> None:
                     supervision_json = json.dumps(r.get("supervision_audit", {}), ensure_ascii=False)
                     conn.execute("""
                         INSERT OR REPLACE INTO reports (
-                            id, filename, salesperson, department, role_title, avatar_bg,
+                            id, filename, salesperson, department, role_title, avatar_bg, report_period,
                             target_amount, actual_amount, collection_amount, completion_rate,
                             visit_count, new_leads, status, status_label, highlight_summary,
                             blockers, next_week_plan, raw_content, reviewed, supervisor_comment,
                             review_time, hard_gate, supervision_audit, created_at, updated_at
                         ) VALUES (
-                            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                             COALESCE((SELECT created_at FROM reports WHERE id = ?), ?),
                             ?
                         );
@@ -285,6 +293,7 @@ def save_reports_batch(reports: List[Dict[str, Any]]) -> None:
                         r.get("department", ""),
                         r.get("role_title", "客户经理"),
                         r.get("avatar_bg", "bg-teal-600"),
+                        r.get("report_period", ""),
                         float(r.get("target_amount", 0.0)),
                         float(r.get("actual_amount", 0.0)),
                         float(r.get("collection_amount", 0.0)),

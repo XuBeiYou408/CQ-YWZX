@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any, Dict, List
 import urllib.parse
 
-from fastapi import APIRouter, File, HTTPException, Response, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, Response, UploadFile
 from fastapi.responses import PlainTextResponse
 
 from app.config import CLOUD_PRESETS, load_config, save_config
@@ -17,8 +17,10 @@ from app.core.aggregator import (
     generate_ai_executive_summary,
     generate_docx_report,
 )
+from app.core.dedup import detect_report_period, extract_zip_entries, find_duplicate
 from app.core.llm_client import generate_chat, get_model_status, test_cloud_connection
 from app.core.parser import parse_weekly_report
+from app.core.review import build_suggested_comment
 from app.core.screening import run_report_screening_pipeline
 
 router = APIRouter()
@@ -135,34 +137,94 @@ def get_report_raw_content(report_id: str):
 
 
 @router.post("/api/reports/upload")
-async def upload_reports(files: List[UploadFile] = File(...)):
+async def upload_reports(files: List[UploadFile] = File(...), period: str = Form("")):
     existing_reports = db.get_all_reports()
     cfg = load_config()
     added_list = []
+    replaced_list = []
+    replaced_info = []
     errors = []
+    skipped_duplicates = []
 
+    # 1) 展开上传项：ZIP 压缩包在内存中解包为内部周报文件，普通文件直通
+    expanded: List[Dict[str, Any]] = []
     for f in files:
+        content_bytes = await f.read()
+        filename = f.filename or "周报.docx"
+        if Path(filename).suffix.lower() == ".zip":
+            try:
+                inner_entries, inner_skipped = extract_zip_entries(content_bytes)
+            except Exception as exc:
+                errors.append({"filename": filename, "error": f"压缩包解析失败，请确认是有效的 .zip 文件（{exc}）"})
+                continue
+            for note in inner_skipped:
+                skipped_duplicates.append({"filename": f"{filename} → {note}", "reason": "压缩包内跳过"})
+            if not inner_entries:
+                errors.append({"filename": filename, "error": "压缩包内没有可识别的周报文件（支持 .docx/.xlsx/.md/.txt）"})
+                continue
+            for inner_name, inner_bytes in inner_entries:
+                expanded.append({"filename": f"{Path(filename).stem}/{inner_name}", "content": inner_bytes})
+        else:
+            expanded.append({"filename": filename, "content": content_bytes})
+
+    # 2) 逐份解析 → 标注周期 → 与库内及本批次周报判重（同人同期覆盖） → L1/L2 尽调
+    for item in expanded:
         try:
-            content_bytes = await f.read()
-            parsed = parse_weekly_report(f.filename or "周报.docx", content_bytes)
-            parsed["id"] = f"rep-up-{int(datetime.now().timestamp())}-{len(existing_reports)+len(added_list)+1}"
+            parsed = parse_weekly_report(item["filename"], item["content"])
+            parsed["report_period"] = (
+                (period or "").strip()
+                or detect_report_period(item["filename"], parsed.get("raw_content", ""))
+            )
+
+            # 自动判重：与库内已有周报 + 本批次已加入/已覆盖的周报比较
+            dup = find_duplicate(parsed, existing_reports + added_list + replaced_list)
+            if dup:
+                matched = dup.get("matched", {})
+                if dup["action"] == "replace":
+                    # 同人同期：以最新提交覆盖原记录（沿用原 ID，批阅状态自动重置）
+                    parsed["id"] = matched.get("existing_id") or f"rep-up-{int(datetime.now().timestamp())}-{len(existing_reports)+len(added_list)+len(replaced_list)+1}"
+                    parsed["avatar_bg"] = "bg-teal-600"
+                    await run_report_screening_pipeline(parsed, cfg=cfg)
+                    replaced_list.append(parsed)
+                    replaced_info.append({
+                        "id": parsed["id"],
+                        "filename": item["filename"],
+                        "salesperson": parsed.get("salesperson", "未知"),
+                        "report_period": parsed.get("report_period", ""),
+                        "reason": dup["reason"],
+                    })
+                else:
+                    skipped_duplicates.append({
+                        "filename": item["filename"],
+                        "salesperson": parsed.get("salesperson", "未知"),
+                        "report_period": parsed.get("report_period", ""),
+                        "reason": dup["reason"],
+                        "existing_salesperson": matched.get("existing_salesperson", ""),
+                        "existing_filename": matched.get("existing_filename", ""),
+                    })
+                continue
+
+            parsed["id"] = f"rep-up-{int(datetime.now().timestamp())}-{len(existing_reports)+len(added_list)+len(replaced_list)+1}"
             parsed["avatar_bg"] = "bg-teal-600"
             # 运行 L1 极速守门员与 L2 智能体深度穿透
             await run_report_screening_pipeline(parsed, cfg=cfg)
             added_list.append(parsed)
         except Exception as e:
-            errors.append({"filename": f.filename, "error": str(e)})
+            errors.append({"filename": item["filename"], "error": str(e)})
 
     # 持久化落盘并联动更新内参大盘
-    if added_list:
-        db.save_reports_batch(added_list)
-        db.sync_summary_on_upload(len(added_list))
+    if added_list or replaced_list:
+        db.save_reports_batch(added_list + replaced_list)
+        db.sync_summary_on_upload(len(added_list) + len(replaced_list))
 
     return {
         "ok": True,
         "data": {
             "uploaded_count": len(added_list),
+            "updated_count": len(replaced_list),
             "added": added_list,
+            "updated": replaced_info,
+            "skipped_duplicates": skipped_duplicates,
             "errors": errors,
         },
     }
@@ -196,6 +258,67 @@ def review_report(report_id: str, body: dict):
     review_time = datetime.now().strftime("%Y-%m-%d %H:%M")
     updated = db.update_report_review(report_id, comment, review_time)
     return {"ok": True, "data": updated or target}
+
+
+@router.post("/api/review/suggest")
+async def suggest_review_comment(body: dict):
+    """
+    AI 批语建议：基于周报事实与尽调档案生成主管批语草稿；
+    模型不可用时自动降级为确定性规则批语（app/core/review.py）。
+    """
+    report_id = (body.get("report_id") or "").strip()
+    if not report_id:
+        raise HTTPException(status_code=400, detail="缺少 report_id")
+    target = db.get_report_by_id(report_id)
+    if not target:
+        raise HTTPException(status_code=404, detail="周报不存在")
+
+    fallback = build_suggested_comment(target)
+    cfg = load_config()
+    audit = target.get("supervision_audit") or {}
+
+    prompt = f"""请以销售经理身份，为 {target.get('salesperson', '销售')} 的周报（{target.get('report_period') or '本周期'}）写一段主管批语，60-100 字，称呼对方、有肯定也有要求。
+
+本周数据：达成率 {target.get('completion_rate', 0)}%，签约 {round((target.get('actual_amount') or 0) / 10000, 1)} 万 / 目标 {round((target.get('target_amount') or 0) / 10000, 1)} 万，回款 {round((target.get('collection_amount') or 0) / 10000, 1)} 万，拜访 {target.get('visit_count', 0)} 家次，新增线索 {target.get('new_leads', 0)} 条。
+AI 尽调：徽章 {audit.get('audit_badge', '无')}，置信度 {audit.get('confidence_score', 70)}%。
+核心战报：{target.get('highlight_summary', '') or '无'}
+卡点求助：{target.get('blockers', '') or '无'}
+下周计划：{target.get('next_week_plan', '') or '无'}
+
+要求：针对上述事实给出具体指导，不得编造数据；只输出批语正文，不要任何解释或前缀。"""
+    try:
+        ai = await generate_chat(prompt, "你是一位经验丰富、既有温度又有原则的销售总监。", cfg)
+        text = (ai or "").strip()
+        if len(text) >= 20:
+            return {"ok": True, "data": {"suggestion": text[:500], "source": "ai"}}
+    except Exception:
+        pass
+    return {"ok": True, "data": {"suggestion": fallback, "source": "rule"}}
+
+
+@router.post("/api/reports/review-batch")
+def review_reports_batch(body: dict):
+    """
+    批量批阅：一次为多份周报下发相同或各自不同的批语。
+    请求体：{"reviews": [{"id": "...", "comment": "..."}, ...]}
+    """
+    reviews = body.get("reviews") or []
+    if not isinstance(reviews, list) or not reviews:
+        raise HTTPException(status_code=400, detail="reviews 不能为空")
+
+    review_time = datetime.now().strftime("%Y-%m-%d %H:%M")
+    updated = []
+    for item in reviews[:200]:
+        rid = (item.get("id") or "").strip()
+        comment = (item.get("comment") or "").strip()
+        if not rid or not comment:
+            continue
+        if not db.get_report_by_id(rid):
+            continue
+        u = db.update_report_review(rid, comment, review_time)
+        if u:
+            updated.append(u)
+    return {"ok": True, "data": {"updated_count": len(updated), "updated": updated}}
 
 
 @router.post("/api/reports/reset")
