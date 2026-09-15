@@ -95,9 +95,11 @@
 │   └── main.py                  # FastAPI 应用入口与生命周期数据库挂载
 ├── static/
 │   └── index.html               # 现代化销售战区参谋驾驶舱 SPA (Vue 3 + Tailwind CSS + Stitch 1:1)
-├── data/                        # SQLite 本地运行时数据库目录（自动创建，已加入 .gitignore）
-│   └── sales_reports.db         # 核心数据库文件
-├── exports/                     # 导出产物目录 (Word 周报台账 / Markdown 决策内参)
+├── config.json                  # 运行时配置（首次启动自动生成；界面填入的 api_key 不入库）
+├── data/                        # SQLite 运行时库目录（自动创建，已 .gitignore）
+│   └── sales_reports.db         # 销售台账数据库（含真实客户与金额，不入库）
+├── uploads/                     # 周报/明细上传目录（自动创建，已 .gitignore）
+├── exports/                     # 导出产物目录 (Word 台账 / Markdown 内参，已 .gitignore)
 ├── .gitignore                   # 版本控制忽略清单
 ├── requirements.txt             # 项目核心依赖清单
 ├── 一键启动.bat                 # Windows 一键启动与自检脚本
