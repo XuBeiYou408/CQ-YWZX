@@ -1,7 +1,14 @@
 # ==================== 1. 强力静音消红防御塔（必须放在最顶部） ====================
 import os
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"  # 解决 Windows 上 OpenMP 冲突导致的 Python 闪退
-os.environ["HF_HUB_OFFLINE"] = "1"  # 强制 HuggingFace 离线模式，必须在 import transformers 之前
+
+# 自适应检测本地 Embedding 权重：本地存在时强制 100% 离线，无外部网络请求；缺失时允许通过镜像源自动拉取
+_base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_default_local_bge = os.path.join(_base_dir, 'data', 'models', 'bge-base-zh-v1.5')
+if os.path.isdir(_default_local_bge):
+    os.environ["HF_HUB_OFFLINE"] = "1"
+else:
+    os.environ.setdefault("HF_ENDPOINT", "https://hf-mirror.com")
 import warnings
 import numpy
 import scipy

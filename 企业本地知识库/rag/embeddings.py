@@ -22,9 +22,25 @@ class BGEEmbeddings(Embeddings):
                 if os.path.isdir(local_dir):
                     model_name = local_dir
                 else:
-                    model_name = os.getenv('BGE_MODEL_PATH', 'BAAI/bge-base-zh-v1.5')
-            self.model = SentenceTransformer(model_name, device=self.device)
-            logger.info(f"本地 BGE Embedding 模型已成功加载到内存中 (设备: {self.device}, 路径: {model_name})。")
+                    env_model = os.getenv('BGE_MODEL_PATH')
+                    if env_model and os.path.isdir(env_model):
+                        model_name = os.path.abspath(env_model)
+                    else:
+                        model_name = 'BAAI/bge-base-zh-v1.5'
+            try:
+                self.model = SentenceTransformer(model_name, device=self.device)
+                logger.info(f"本地 BGE Embedding 模型已成功加载到内存中 (设备: {self.device}, 路径: {model_name})。")
+            except Exception as e:
+                err_msg = str(e)
+                if "huggingface.co" in err_msg or "offline" in err_msg.lower() or "not find" in err_msg.lower():
+                    raise RuntimeError(
+                        f"无法加载 BGE 嵌入模型（目标路径: '{model_name}'）。\n"
+                        f"【排查建议】：\n"
+                        f"1. 离线部署环境：请确认已将模型权重放置于项目 'data/models/bge-base-zh-v1.5' 目录下；\n"
+                        f"2. 在线自动下载：请检查当前机器网络是否通畅（系统已默认配置国内镜像源 https://hf-mirror.com）。\n"
+                        f"底包错误: {err_msg}"
+                    ) from e
+                raise
 
     def embed_documents(self, texts: List[str]) -> List[List[float]]:
         """

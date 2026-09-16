@@ -159,11 +159,18 @@ def qi_dong_lu_jin() -> Tuple[FAISS, List[Document]]:
                 old_manifest = json.load(f)
         except Exception:
             old_manifest = {}
-            
     db_exists = os.path.exists(os.path.join(LOCAL_DB_PATH, "xby.faiss"))
-    added_files = [f for f in current_states if f not in old_manifest]
-    deleted_files = [f for f in old_manifest if f not in current_states]
-    modified_files = [f for f in current_states if f in old_manifest and old_manifest[f]['hash'] != current_states[f]['hash']]
+
+    # 跨平台与路径归一化：支持依据文件名对比，避免跨操作系统（如 Windows -> Linux）部署时绝对路径变化误判全量重建
+    old_by_base = {os.path.basename(k): (k, v) for k, v in old_manifest.items()}
+    curr_by_base = {os.path.basename(k): (k, v) for k, v in current_states.items()}
+
+    added_files = [v[0] for k, v in curr_by_base.items() if k not in old_by_base]
+    deleted_files = [v[0] for k, v in old_by_base.items() if k not in curr_by_base]
+    modified_files = [
+        v[0] for k, v in curr_by_base.items()
+        if k in old_by_base and old_by_base[k][1].get('hash') != v[1].get('hash')
+    ]
     
     from rag.loader import load_all_documents
     from rag.splitter import docx_qingxi, txt_qingxi
