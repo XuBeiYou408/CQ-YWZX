@@ -25,6 +25,22 @@ export function renderMarkdown(rawText) {
   // 将行首的特殊圆点符号替换为 Markdown 标准无序列表项 "- "
   text = text.replace(/(^|\n)\s*[•·◦▪]\s+/g, '$1- ')
 
+  // 1.5 自动补齐因上下文截断而未闭合的语法（防止公式因截断展示为碎片文本）
+  const openBlockLatex = (text.match(/\\\[/g) || []).length
+  const closeBlockLatex = (text.match(/\\\]/g) || []).length
+  if (openBlockLatex > closeBlockLatex) text += '\n\\]'
+
+  const openInlineLatex = (text.match(/\\\(/g) || []).length
+  const closeInlineLatex = (text.match(/\\\)/g) || []).length
+  if (openInlineLatex > closeInlineLatex) text += '\\)'
+
+  const openDoubleDollar = (text.match(/\$\$/g) || []).length
+  if (openDoubleDollar % 2 === 1) text += '\n$$'
+
+  const openBracketBlock = (text.match(/(?:^|\n)\s*\[\s*\n/g) || []).length
+  const closeBracketBlock = (text.match(/(?:^|\n)\s*\]\s*(?:$|\n)/g) || []).length
+  if (openBracketBlock > closeBracketBlock) text += '\n]'
+
   // 2. 兜底容错：若大模型输出了孤立成行的 "[" 与 "]" 包裹数学表达式
   // 例如：
   // [

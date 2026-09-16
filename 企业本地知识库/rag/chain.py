@@ -39,7 +39,6 @@ def create_qa_chain(target_llm=None, provider="cloud", model_name="deepseek-chat
         }
         | dynamic_prompt
         | use_llm
-        | StrOutputParser()
     )
 
 # 默认兼容实例

@@ -9,6 +9,8 @@ const props = defineProps({
   },
 })
 
+const emit = defineEmits(['continue'])
+
 const elapsedTime = ref(0)
 let timer = null
 
@@ -94,6 +96,29 @@ const renderedContent = computed(() => {
           class="content-markdown markdown-body"
           v-html="renderedContent"
         ></div>
+
+        <!-- 截断提示卡片 (当达到上下文/Token 上限时展示) -->
+        <div v-if="message.role === 'assistant' && message.isTruncated" class="truncated-alert">
+          <div class="truncated-header">
+            <el-icon class="truncated-icon" :size="16"><WarningFilled /></el-icon>
+            <span class="truncated-title">回答已截断：已达到大模型单次生成 Token / 上下文上限</span>
+          </div>
+          <p class="truncated-desc">
+            {{ message.truncateMessage || '大模型单次生成长度已达上限，内容未能全部输出。' }}
+          </p>
+          <div class="truncated-actions">
+            <el-button
+              type="warning"
+              size="small"
+              class="continue-btn"
+              @click="emit('continue')"
+            >
+              <el-icon style="margin-right: 4px"><Right /></el-icon>
+              <span>继续生成</span>
+            </el-button>
+            <span class="truncated-tip">点击“继续生成”或在下方发送“继续”，模型将接着未完成的内容继续回答</span>
+          </div>
+        </div>
 
         <!-- 引用卡片 -->
         <div v-if="message.citations && message.citations.length" class="citations">
@@ -424,5 +449,68 @@ const renderedContent = computed(() => {
 
 :deep(.katex-display) {
   margin: 0 !important;
+}
+
+/* === 截断提示卡片 === */
+.truncated-alert {
+  margin-top: 14px;
+  padding: 12px 16px;
+  border-radius: var(--radius-md, 8px);
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  color: #92400e;
+  animation: fadeIn 0.25s ease-out;
+}
+
+.truncated-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 13.5px;
+  color: #b45309;
+}
+
+.truncated-icon {
+  color: #d97706;
+  flex-shrink: 0;
+}
+
+.truncated-desc {
+  margin: 6px 0 10px 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: #78350f;
+}
+
+.truncated-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.continue-btn {
+  background-color: #d97706 !important;
+  border-color: #d97706 !important;
+  color: #ffffff !important;
+  font-weight: 500;
+  border-radius: 6px;
+}
+
+.continue-btn:hover {
+  background-color: #b45309 !important;
+  border-color: #b45309 !important;
+}
+
+.truncated-tip {
+  font-size: 12px;
+  color: #92400e;
+  opacity: 0.85;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 </style>

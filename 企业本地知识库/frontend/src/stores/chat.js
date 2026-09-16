@@ -157,7 +157,7 @@ export const useChatStore = defineStore('chat', () => {
       return
     }
 
-    const { type, content, intent } = chunk || {}
+    const { type, content, intent, reason, message } = chunk || {}
     if (type === 'route') {
       last.routeIntent = intent
       if (intent === 'agent') {
@@ -175,6 +175,10 @@ export const useChatStore = defineStore('chat', () => {
       }
     } else if (type === 'output' || type === 'content') {
       if (content) last.content += content
+    } else if (type === 'truncated') {
+      last.isTruncated = true
+      last.truncateReason = reason || 'length'
+      last.truncateMessage = message || '回答已达模型单次最大输出 Token / 上下文长度上限，内容已被截断。'
     } else if (content) {
       last.content += content
     }
@@ -186,6 +190,24 @@ export const useChatStore = defineStore('chat', () => {
       last.costTime = costTime
       last.isThinking = false
       last.isCollapsed = true
+
+      // 启发式截断智能检测：若后端未直接返回截断通知，但文本在语法中途（如公式未闭合、代码未闭合、孤立换行等）突然中断
+      if (!last.isTruncated && last.content) {
+        const trimmed = last.content.trim()
+        const openBlockLatex = (trimmed.match(/\\\[/g) || []).length
+        const closeBlockLatex = (trimmed.match(/\\\]/g) || []).length
+        const openInlineLatex = (trimmed.match(/\\\(/g) || []).length
+        const closeInlineLatex = (trimmed.match(/\\\)/g) || []).length
+        const backticksCount = (trimmed.match(/```/g) || []).length
+        const openBracket = (trimmed.match(/(?:^|\n)\s*\[\s*\n/g) || []).length
+        const closeBracket = (trimmed.match(/(?:^|\n)\s*\]\s*(?:$|\n)/g) || []).length
+
+        if (openBlockLatex > closeBlockLatex || openInlineLatex > closeInlineLatex || (backticksCount % 2 === 1) || (openBracket > closeBracket)) {
+          last.isTruncated = true
+          last.truncateReason = 'syntax_unclosed'
+          last.truncateMessage = '模型回答在公式或语法段中途突然中止输出，已达到单次最大 Token / 上下文长度限制。'
+        }
+      }
     }
     isStreaming.value = false
     syncCurrentSessionToStorage()

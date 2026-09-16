@@ -180,6 +180,11 @@ function handleClear() {
   store.createNewSession()
 }
 
+function handleContinue() {
+  if (store.isStreaming) return
+  handleSend('请接着上述未完成的内容继续输出，保持结构连贯，无需重复前文已输出的内容。')
+}
+
 function getTodayLabel() {
   return new Date().toLocaleDateString('zh-CN', {
     month: 'long', day: 'numeric', weekday: 'long',
@@ -248,7 +253,7 @@ document.title = '企业本地知识库'
         <div class="timeline-label">{{ getTodayLabel() }}</div>
       </div>
 
-      <MessageList :messages="store.messages" />
+      <MessageList :messages="store.messages" @continue="handleContinue" />
 
       <div v-if="thinking" class="thinking-bubble">
         <div class="think-avatar">AI</div>

@@ -7,6 +7,8 @@ defineProps({
     default: () => [],
   },
 })
+
+const emit = defineEmits(['continue'])
 </script>
 
 <template>
@@ -15,6 +17,7 @@ defineProps({
       v-for="(msg, idx) in messages"
       :key="idx"
       :message="msg"
+      @continue="emit('continue')"
     />
   </div>
 </template>

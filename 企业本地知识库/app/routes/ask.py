@@ -93,10 +93,11 @@ async def ask(req: QueryRequest):
         result = await dyn_qa_chain.ainvoke({
             "input": req.question
         })
+        answer_text = result.content if hasattr(result, "content") else str(result)
         cost = round(time.time() - start_time, 2)
         logger.info(f"问答响应完成，耗时: {cost}s")
         return APIResponse(data={
-            "answer": result,
+            "answer": answer_text,
             "cost_time": cost
         })
     except Exception as e:
@@ -147,14 +148,39 @@ async def stream(req: AgentQueryRequest):
                 yield f"data: {_sse({'type': 'content', 'content': fast_meta_resp})}\n\n"
             elif intent == "simple_rag":
                 output_has_content = False
+                finish_reason = None
                 async for chunk in dyn_qa_chain.astream({"input": req.question}):
-                    if chunk:
+                    content = chunk.content if hasattr(chunk, "content") else str(chunk)
+                    if content:
                         output_has_content = True
-                        yield f"data: {_sse({'type': 'content', 'content': chunk})}\n\n"
+                        yield f"data: {_sse({'type': 'content', 'content': content})}\n\n"
+                    if hasattr(chunk, "response_metadata") and chunk.response_metadata:
+                        r = chunk.response_metadata.get("finish_reason")
+                        if r:
+                            finish_reason = r
+                    elif hasattr(chunk, "additional_kwargs") and chunk.additional_kwargs:
+                        r = chunk.additional_kwargs.get("finish_reason")
+                        if r:
+                            finish_reason = r
+
+                if finish_reason == "length":
+                    yield f"data: {_sse({'type': 'truncated', 'reason': 'length', 'message': '回答已达模型单次最大输出 Token / 上下文长度上限，内容已被截断。'})}\n\n"
+
                 if not output_has_content:
                     # 降级退回由包含丰富知识库的 Agent 兜底回答
                     async for chunk in dyn_stream_llm.astream(req.question):
-                        yield f"data: {_sse({'type': 'content', 'content': chunk.content})}\n\n"
+                        content = chunk.content if hasattr(chunk, "content") else str(chunk)
+                        yield f"data: {_sse({'type': 'content', 'content': content})}\n\n"
+                        if hasattr(chunk, "response_metadata") and chunk.response_metadata:
+                            r = chunk.response_metadata.get("finish_reason")
+                            if r == "length":
+                                finish_reason = "length"
+                        elif hasattr(chunk, "additional_kwargs") and chunk.additional_kwargs:
+                            r = chunk.additional_kwargs.get("finish_reason")
+                            if r == "length":
+                                finish_reason = "length"
+                    if finish_reason == "length":
+                        yield f"data: {_sse({'type': 'truncated', 'reason': 'length', 'message': '回答已达模型单次最大输出 Token / 上下文长度上限，内容已被截断。'})}\n\n"
             else:
                 lock = get_session_lock(req.session_id)
                 async with lock:
@@ -177,6 +203,7 @@ async def stream(req: AgentQueryRequest):
                             final_output = chunk["output"]
                             if "Agent stopped due to iteration limit" in final_output or "time limit" in final_output:
                                 final_output = "已为您完成知识库深度检索与分析。"
+                                yield f"data: {_sse({'type': 'truncated', 'reason': 'iteration_limit', 'message': '智能体推理已达最大步数限制，已为您返回当前阶段性分析。'})}\n\n"
                             yield f"data: {_sse({'type': 'output', 'content': final_output})}\n\n"
                             
                     if final_output:
