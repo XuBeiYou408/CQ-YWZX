@@ -1,11 +1,6 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { marked } from 'marked'
-
-marked.setOptions({
-  breaks: true,
-  gfm: true
-})
+import { renderMarkdown } from '../utils/markdown.js'
 
 const props = defineProps({
   message: {
@@ -41,7 +36,7 @@ function toggleCollapse() {
 const renderedContent = computed(() => {
   if (!props.message.content) return ''
   try {
-    return marked.parse(props.message.content)
+    return renderMarkdown(props.message.content)
   } catch (e) {
     return props.message.content
   }
@@ -412,4 +407,22 @@ const renderedContent = computed(() => {
 
 .user .bubble-meta { text-align: right; }
 .assistant .bubble-meta { text-align: left; }
+
+/* === KaTeX 数学公式渲染优化 === */
+:deep(.katex-display-wrapper) {
+  margin: 12px 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  text-align: center;
+  padding: 6px 0;
+}
+
+:deep(.katex) {
+  font-size: 1.05em;
+  text-indent: 0;
+}
+
+:deep(.katex-display) {
+  margin: 0 !important;
+}
 </style>
