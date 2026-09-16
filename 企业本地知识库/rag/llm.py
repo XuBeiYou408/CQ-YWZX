@@ -48,6 +48,9 @@ def huode_dongtai_llm(
         # ☁️ 云端 API 模式 (DeepSeek / OpenAI 兼容协议)
         resolved_key = api_key or os.getenv('DEEPSEEK_API_KEY') or "sk-placeholder"
         resolved_base = base_url or os.getenv('DEEPSEEK_API_URL', 'https://api.deepseek.com')
+        # 智能适配：若配置为智谱开放平台 (bigmodel.cn) 且模型名为默认 deepseek-chat，自动安全映射为 glm-4-flash
+        if "bigmodel.cn" in resolved_base and (not model_name or model_name in ("deepseek-chat", "deepseek-reasoner", "")):
+            target_model = "glm-4-flash"
         return ChatOpenAI(
             model=target_model,
             api_key=resolved_key,

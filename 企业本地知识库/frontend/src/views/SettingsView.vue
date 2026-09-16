@@ -11,6 +11,7 @@ const localServiceInfo = ref({ service: 'LM Studio', url: 'http://127.0.0.1:1234
 const testingConnection = ref(false)
 
 const cloudOptions = [
+  { label: 'GLM-4-Flash (智谱清言 0元免费极速模型)', value: 'glm-4-flash' },
   { label: 'DeepSeek Chat (DeepSeek-V3 通用模型)', value: 'deepseek-chat' },
   { label: 'DeepSeek Reasoner (DeepSeek-R1 推理模型)', value: 'deepseek-reasoner' },
   { label: 'GPT-4o (OpenAI 旗舰通用模型)', value: 'gpt-4o' },
