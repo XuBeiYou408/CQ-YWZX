@@ -1,5 +1,5 @@
 <script setup>
-import { ref, nextTick, watch } from 'vue'
+import { ref, nextTick, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useChatStore } from '../stores/chat.js'
 import { useModelStore } from '../stores/model.js'
@@ -15,6 +15,59 @@ const thinking = ref(false)
 const abortController = ref(null)
 const messagesContainer = ref(null)
 const searchMode = ref('hybrid')
+
+// 智能滚动状态控制：防止打字时强制刷新到底部导致用户无法上滑查看
+const userScrolledUp = ref(false)
+const SCROLL_THRESHOLD = 80
+let isSmoothScrolling = false
+let smoothScrollTimer = null
+
+function handleScroll() {
+  if (!messagesContainer.value) return
+  const { scrollTop, scrollHeight, clientHeight } = messagesContainer.value
+  const distanceFromBottom = scrollHeight - scrollTop - clientHeight
+
+  if (distanceFromBottom <= SCROLL_THRESHOLD) {
+    userScrolledUp.value = false
+    isSmoothScrolling = false
+  } else if (!isSmoothScrolling) {
+    userScrolledUp.value = true
+  }
+}
+
+function scrollToBottom(smooth = true) {
+  if (!messagesContainer.value) return
+  userScrolledUp.value = false
+  if (smooth) {
+    isSmoothScrolling = true
+    if (smoothScrollTimer) clearTimeout(smoothScrollTimer)
+    smoothScrollTimer = setTimeout(() => {
+      isSmoothScrolling = false
+    }, 400)
+    messagesContainer.value.scrollTo({
+      top: messagesContainer.value.scrollHeight,
+      behavior: 'smooth'
+    })
+  } else {
+    messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
+  }
+}
+
+onMounted(() => {
+  nextTick(() => {
+    if (messagesContainer.value && store.messages.length > 0) {
+      messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
+    }
+  })
+})
+
+watch(() => store.currentSessionId, async () => {
+  userScrolledUp.value = false
+  await nextTick()
+  if (messagesContainer.value) {
+    messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
+  }
+})
 
 const HISTORY_KEY = 'rag_chat_history'
 
@@ -49,10 +102,16 @@ function saveToHistory(question, answer, costTime) {
 async function handleSend(question) {
   if (store.isStreaming) return
 
+  userScrolledUp.value = false
   store.addUserMessage(question)
   loading.value = true
   store.isStreaming = true
   thinking.value = true
+
+  await nextTick()
+  if (messagesContainer.value) {
+    messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
+  }
 
   if (store.mode === 'stream') {
     const startTime = Date.now()
@@ -68,7 +127,8 @@ async function handleSend(question) {
         }
         store.addAssistantChunk(chunk)
         await nextTick()
-        if (messagesContainer.value) {
+        // 关键防护：仅当用户未上滑查看历史时才自动跟随滚动，保证用户可自由上滑浏览
+        if (messagesContainer.value && !userScrolledUp.value) {
           messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
         }
       }
@@ -86,6 +146,10 @@ async function handleSend(question) {
       const result = await askQuestion(question, modelStore.provider, modelStore.activeModelName)
       store.addAssistantChunk({ type: 'content', content: result.answer })
       store.finishStreaming(result.cost_time)
+      await nextTick()
+      if (messagesContainer.value && !userScrolledUp.value) {
+        messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
+      }
     } catch (e) {
       store.addAssistantChunk({ type: 'content', content: '请求失败: ' + e.message })
       store.isStreaming = false
@@ -107,6 +171,7 @@ function handleStop() {
 }
 
 function handleClear() {
+  userScrolledUp.value = false
   store.createNewSession()
 }
 
@@ -162,7 +227,7 @@ document.title = '企业本地知识库'
       </div>
     </header>
 
-    <div class="chat-body" ref="messagesContainer">
+    <div class="chat-body" ref="messagesContainer" @scroll="handleScroll">
       <div v-if="store.messages.length === 0 && !thinking" class="empty-state">
         <div class="empty-icon">
           <svg width="72" height="72" viewBox="0 0 24 24" fill="none" stroke="#c0c4cc" stroke-width="1.2">
@@ -194,6 +259,27 @@ document.title = '企业本地知识库'
     </div>
 
     <footer class="chat-footer">
+      <!-- 浮动回到底部快捷按钮（用户上滑查看历史时柔和呈现） -->
+      <transition name="scroll-btn-fade">
+        <div
+          v-if="userScrolledUp && store.messages.length > 0"
+          class="scroll-bottom-wrapper"
+        >
+          <button
+            class="scroll-bottom-btn"
+            @click="scrollToBottom(true)"
+            title="回到底部"
+          >
+            <el-icon :size="13"><ArrowDown /></el-icon>
+            <span>回到底部</span>
+            <span v-if="store.isStreaming" class="streaming-badge">
+              <span class="pulse-dot"></span>
+              <span>生成中</span>
+            </span>
+          </button>
+        </div>
+      </transition>
+
       <InputBox
         :loading="loading"
         :streaming="store.isStreaming"
@@ -380,5 +466,82 @@ document.title = '企业本地知识库'
   -webkit-backdrop-filter: blur(12px);
   border-top: 1px solid rgba(195, 198, 215, 0.5);
   flex-shrink: 0;
+}
+
+/* === 回到底部浮动按钮 === */
+.scroll-bottom-wrapper {
+  position: absolute;
+  top: -44px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 50;
+  pointer-events: auto;
+}
+
+.scroll-bottom-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  color: var(--color-primary-container);
+  border: 1px solid var(--color-outline-variant);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.1);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  user-select: none;
+}
+
+.scroll-bottom-btn:hover {
+  background: #f0f6ff;
+  border-color: var(--color-primary-container);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(37, 99, 235, 0.18);
+}
+
+.streaming-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 2px;
+  padding: 1px 6px;
+  background: var(--color-success-bg);
+  color: var(--color-success-text);
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.pulse-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: #10b981;
+  animation: pulse-dot 1.2s ease-in-out infinite;
+}
+
+@keyframes pulse-dot {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.3;
+    transform: scale(0.7);
+  }
+}
+
+.scroll-btn-fade-enter-active,
+.scroll-btn-fade-leave-active {
+  transition: all 0.2s ease;
+}
+
+.scroll-btn-fade-enter-from,
+.scroll-btn-fade-leave-to {
+  opacity: 0;
+  transform: translateY(8px);
 }
 </style>
