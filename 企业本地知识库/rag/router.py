@@ -43,11 +43,8 @@ async def xitong_luyou(question: str, target_llm=None) -> Literal["simple_rag", 
     if any(k in q_lower for k in ["制度清单", "所有制度", "有哪些制度", "制度目录", "规章清单", "有哪些规章", "清单", "目录", "全景", "总结一下", "系统概括", "梳理大纲", "全文概括", "归纳总结"]):
         return "summarize"
         
-    # 3. 确定性计算与外部时效识别 -> 直通 Agent
-    if any(k in q_lower for k in ["计算器", "等于多少", "计算", "算一下", "扣除多少", "扣发", "扣多少钱", "联网搜索", "最新新闻", "今天天气", "天气预报", "国家规定", "外网", "航班", "飞机票", "最新"]):
-        return "agent"
-
-    # 4. 本地端侧大模型模式：默认单步问题直通 simple_rag 快车道（1~2秒），消除排队
+    # 3. 本地端侧大模型模式 (LM Studio / 本地 27B 等)：
+    # 本地硬件必须 100% 优先走单步流式直出 (simple_rag)，首字秒出，彻底消除多轮等待！
     is_local = False
     if target_llm:
         endpoint = str(getattr(target_llm, "openai_api_base", "") or getattr(target_llm, "base_url", ""))
@@ -56,6 +53,10 @@ async def xitong_luyou(question: str, target_llm=None) -> Literal["simple_rag", 
 
     if is_local:
         return "simple_rag"
+
+    # 4. 云端模式下：明确调用外部/计算器工具时才走 Agent
+    if any(k in q_lower for k in ["计算器", "算一下:", "联网搜索", "外网搜索", "今天天气", "天气预报", "最新航班"]):
+        return "agent"
 
     # 5. 云端模型模式下通过轻量级 LLM 判定
     try:

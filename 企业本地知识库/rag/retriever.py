@@ -1,4 +1,5 @@
 import os
+import re
 import pickle
 import json
 import hashlib
@@ -111,6 +112,46 @@ class _LazyBM25Proxy:
 zhaohui = _LazyRetrieverProxy()
 bm25 = _LazyBM25Proxy()
 
+# ==================== 规章相关性置信度门禁 ====================
+def _filter_by_relevance(question: str, docs: List[Document]) -> List[Document]:
+    """
+    规章相关性置信度门禁：
+    基于中文二元语法 (bi-grams) 结合停用词过滤，杜绝通用数学、技术与常识提问（如'不等式如何计算'）
+    因单一泛词（如'计算'）误召回企业员工考勤或差旅规章的假阳性现象。
+    """
+    if not docs or not question:
+        return docs
+
+    STOP_BIGRAMS = {
+        "如何", "怎么", "怎样", "什么", "为何", "哪个", "哪位", "哪儿", "哪里",
+        "可以", "能否", "是否", "请问", "一下", "这个", "那个", "计算", "求解",
+        "处理", "了解", "介绍", "告诉我", "有哪些", "帮我", "规则", "规定", "制度",
+        "办法", "细则", "标准", "流程", "要求", "几天", "多少", "具体", "相关"
+    }
+
+    clean_q = ''.join(c for c in str(question).lower() if '\u4e00' <= c <= '\u9fff' or c.isalnum())
+    if len(clean_q) < 2:
+        return docs
+
+    # 提取提问中的核心实质 2-gram 关键词
+    substantive_bigrams = [
+        clean_q[i:i+2] for i in range(len(clean_q) - 1)
+        if clean_q[i:i+2] not in STOP_BIGRAMS
+    ]
+
+    # 若提问全部由停用词构成（如"请问一下具体规定"），则放行
+    if not substantive_bigrams:
+        return docs
+
+    relevant_docs = []
+    for doc in docs:
+        content = ((doc.page_content or "") + " " + str(doc.metadata.get("source", ""))).lower()
+        # 只要提问中的实质关键词有在文档正文或来源中命中，即判定为相关
+        if any(bg in content for bg in substantive_bigrams):
+            relevant_docs.append(doc)
+
+    return relevant_docs
+
 # ==================== 定义上下文格式化 ====================
 def huidalaiyuan(docs: List[Document]) -> str:
     results = []
@@ -192,9 +233,12 @@ async def zhaohui_and_rerank(
             expanded_docs.append(doc)
             
     final_docs = deduplicate_docs(expanded_docs)
+    final_docs = _filter_by_relevance(question, final_docs)
     if is_local:
         final_docs = final_docs[:2]
     
     if return_documents:
         return final_docs
+    if not final_docs:
+        return ""
     return huidalaiyuan(final_docs)

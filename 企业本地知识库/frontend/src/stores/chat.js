@@ -133,7 +133,11 @@ export const useChatStore = defineStore('chat', () => {
     } else if (type === 'thought') {
       if (content) last.thought += content + '\n'
     } else if (type === 'observation') {
-      if (content) last.thought += `[检索观察] ${content}\n`
+      if (content) {
+        const cleanObs = String(content).replace(/[\r\n]+/g, ' ').trim()
+        const shortObs = cleanObs.length > 90 ? cleanObs.slice(0, 90) + '...' : cleanObs
+        last.thought += `[检索观察] ${shortObs}\n`
+      }
     } else if (type === 'output' || type === 'content') {
       if (content) last.content += content
     } else if (content) {
