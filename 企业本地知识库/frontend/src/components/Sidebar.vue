@@ -1,11 +1,18 @@
 <script setup>
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { computed } from 'vue'
 
 const route = useRoute()
+const router = useRouter()
 const activeIndex = computed(() => route.path)
 
 const emit = defineEmits(['newChat'])
+
+function handleSelect(index) {
+  if (route.path !== index) {
+    router.push(index).catch(() => {})
+  }
+}
 </script>
 
 <template>
@@ -29,6 +36,7 @@ const emit = defineEmits(['newChat'])
     <el-menu
       :default-active="activeIndex"
       router
+      @select="handleSelect"
       background-color="transparent"
       text-color="#a0a0b8"
       active-text-color="#ffffff"

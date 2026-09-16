@@ -55,7 +55,12 @@ async def auth_and_rate_limit_middleware(request: Request, call_next):
     # 修复 G：豁免开放端点（健康检查、前端静态文件及 SPA 网页入口）
     _OPEN_PATHS = ("/", "/index.html", "/favicon.ico")
     if path.startswith("/health") or path.startswith("/assets") or path in _OPEN_PATHS:
-        return await call_next(request)
+        response = await call_next(request)
+        if path in ("/", "/index.html"):
+            response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+            response.headers["Pragma"] = "no-cache"
+            response.headers["Expires"] = "0"
+        return response
 
     # 1) 鉴权：显式开启 或 已配置 Key → 强制校验；显式开启但缺 Key → fail-closed
     if AUTH_ENABLED:
