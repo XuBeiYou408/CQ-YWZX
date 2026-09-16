@@ -543,8 +543,30 @@ class ContractReviewEngine:
         model_name: str = None
     ) -> str:
         """
-        从零智能起草一份严谨专业的合同初稿全文
+        依据民法典标准示范文本库快速合成高标准商事合同初稿全文。
+        优先使用权威示范范本快速合成（毫秒级响应、严格符合民法典规范、立场自适应），
+        若匹配不到模板或需要深度AI自由扩展，则平滑回退至本地大模型生成。
         """
+        from contract.draft_templates import render_contract_draft
+
+        try:
+            # 1. 优先使用权威示范范本快速合成（毫秒级极速生成，零幻觉）
+            draft = render_contract_draft(
+                contract_type=contract_type,
+                party_a=party_a,
+                party_b=party_b,
+                core_subject=core_subject,
+                payment_terms=payment_terms,
+                special_terms=special_terms,
+                client_role=client_role
+            )
+            if draft and len(draft) >= 500:
+                logger.info(f"已依据【{contract_type}】示范范本库快速合成初稿 (共 {len(draft)} 字)")
+                return draft
+        except Exception as e:
+            logger.warning(f"示范范本快速合成异常，回退至大模型从零生成: {e}")
+
+        # 2. 回退模式：若示范文本未命中，调用大模型生成
         active_model = await self.get_active_model_name(model_name)
         sys_prompt = CONTRACT_DRAFT_FROM_SCRATCH_PROMPT.format(client_role=client_role)
 
@@ -571,7 +593,8 @@ class ContractReviewEngine:
                 max_tokens=3500
             )
             content = response.choices[0].message.content or ""
-            return content.strip()
+            clean_content = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL).strip()
+            return clean_content or content.strip()
         except Exception as e:
             logger.error(f"合同起草异常: {e}", exc_info=True)
             raise RuntimeError(f"合同初稿起草失败: {str(e)}")
