@@ -1,10 +1,10 @@
-# 面向异构技术文档的自适应容灾型问答 Agent 协同系统 (v3.0)
+# 面向异构技术文档的自适应容灾型问答 Agent 协同系统 (v3.5)
 
-基于 LangChain + DeepSeek / LM Studio + Firecrawl + FAISS + Vue 3 的企业级智能问答 Agent 协同系统。项目旨在解决静态知识库（RAG）检索中**无法处理逻辑算术运算、缺乏互联网时效性扩展、搜索反爬/死循环、端云模型切换困难以及会话历史在动态环境部署易混淆崩溃**等工程痛点。
+基于 LangChain + DeepSeek / LM Studio + Firecrawl + FAISS + Vue 3 的企业级智能问答 Agent 协同系统。项目旨在解决静态知识库（RAG）检索中**无法处理逻辑算术运算、缺乏互联网时效性扩展、搜索反爬/死循环、端云模型切换困难、思维链空白等待、模型上下文截断丢失以及会话历史在动态环境部署易混淆崩溃**等工程痛点。
 
 ---
 
-## 🛠️ 项目技术亮点与核心架构 (v3.0 全景)
+## 🛠️ 项目技术亮点与核心架构 (v3.5 全景)
 
 本系统由**前端全景大盘 (Vue 3 + Pinia)、端云模型管理中心 (Settings)、前置分类网关 (Router)、动态 LLM 实例化工厂 (Dynamic Factory)、ReAct 协同决策环 (Firecrawl/LangChain)、自适应记忆网关 (Session Isolation)** 等核心模块组成：
 
@@ -39,7 +39,7 @@ flowchart TD
 
 ---
 
-## 🔥 v3.0 核心重构与升级特性
+## 🔥 v3.5 核心重构与最新升级特性
 
 1. **端云混合模型管理大盘 (Multi-Provider Hybrid Architecture)**：
    - **云端 API 模式 (Cloud API)**：对接主流云端大模型 API（支持 `deepseek-chat` / `deepseek-reasoner` / `gpt-4o` / `claude-3-5-sonnet` / `qwen-max` 等），具备高并发推理能力与弹性拓展能力。
@@ -53,6 +53,26 @@ flowchart TD
    - 在底层系统提示词中自动注入后端当前的真实运行模式与模型标识，解决大模型呆板套话与空转问题。
    - 实现知识库未命中时的通用 LLM 知识无缝自愈回答，防止机械式输出“未找到”。
 
+4. **大模型思维链 (Chain of Thought) 实时流式传输与状态机重组渲染**：
+   - **全链路底层支持**：打通 `langchain_openai` 与本地推理引擎（LM Studio / Qwen / DeepSeek-R1 / vLLM），底层捕获 `delta.reasoning_content`，避免长推理模型长达数十秒的空白等待。
+   - **状态机碎片重组算法 (`cleanThought`)**：彻底攻克流式 Token 碎片断裂导致的孤立单字、单数字（如 `3\n8\n0\n元\n/\n晚`）垂直碎裂排版，实现无缝连贯自然段落。
+   - **动态折叠与富文本排版**：思考中实时呈现秒级计时与淡蓝光晕，完成后自动收起为 `✨ 已深度思考 (用时 X.X 秒)`，支持点击随时复盘。
+
+5. **上下文截断自适应检测与一键无缝续写 (Context Truncation Alert & Continuation)**：
+   - **双轨截断检测**：后端基于 `finish_reason == 'length'` 标识实时发出截断信号；前端针对未闭合公式/代码/括号进行启发式智能容灾检测。
+   - **一键连贯续写**：检测到截断时，底部醒目弹出警告条并提供“继续生成”一键续写操作，免除用户重新组织语言的繁琐交互。
+
+6. **会话物理隔离与智能自动恢复 (Smart Session Persistence)**：
+   - 每次对话拥有独立隔离的 `session_id` 与锁机制；在刷新网页或服务重启后，系统默认智能恢复用户最近一次活跃会话，保障连续业务体验。
+
+7. **智能滚动防护与浮动快捷回到底部 (Smart Scroll Guard & Float Button)**：
+   - 用户上滑查阅历史记录时，自动抑制新文字吐出引起的强行滚到底部；
+   - 距离底部超过阈值时，右下角柔和呈现悬浮快捷按钮，点击平滑触底并伴随生成中脉冲动效。
+
+8. **高保真 LaTeX 数学公式与极简现代输入交互 (KaTeX Typography & Minimal UI)**：
+   - 深度集成 KaTeX 原生排版引擎，支持块级与行内数学公式美观渲染；
+   - 移除底部多余的“搜索模式”和“流式输出”手动开关，默认锁定最佳实践（BM25+BGE 混合检索与流畅流式思维链），界面极简清爽。
+
 ---
 
 ## 📂 项目目录结构
@@ -61,7 +81,7 @@ flowchart TD
 企业本地知识库/
 ├── run.py                         # FastAPI 服务启动入口 (Uvicorn)
 ├── config.py                      # 环境变量读取 (Firecrawl / DeepSeek / 路径预检)
-├── README.md                      # [v3.0 UPGRADED] 项目最新架构与使用说明文档
+├── README.md                      # [v3.5 UPGRADED] 项目最新架构与使用说明文档
 ├── requirements.txt               # 第三方依赖库列表 (已包含 firecrawl-py / langchain)
 ├── .env / .env.example            # 环境变量配置（.env.example 为脱敏范本）
 ├── start.bat / 一键启动.bat       # 自举环境并拉起服务
@@ -75,14 +95,16 @@ flowchart TD
 │       ├── ask.py                 # 问答/流式 SSE /本地模型探测/评估结果全套路由
 │       └── documents.py           # 文档入库与管理路由
 │
-├── frontend/                      # [v3.0 UPGRADED] Vue 3 + Pinia + Element Plus 前端源码项目
+├── frontend/                      # [v3.5 UPGRADED] Vue 3 + Pinia + Element Plus 前端源码
+│   ├── dist/                      # [v3.5] 预打包好的前端静态资源产物 (由 run.py 统一托管，开箱即用)
 │   ├── src/
 │   │   ├── api/                   # 接口请求封装 (含 SSE 流解析、端云模式透传)
-│   │   ├── stores/                # Pinia 状态中心 (chat.js 记忆隔离, model.js 端云配置)
+│   │   ├── stores/                # Pinia 状态中心 (chat.js 记忆隔离与恢复, model.js 端云配置)
 │   │   ├── views/                 # 页面视图 (ChatView, HistoryView, EvaluationView, SettingsView 模型管理)
-│   │   └── components/            # DeepSeek 思考流卡片、评分卡片、Sidebar 导航
+│   │   ├── utils/                 # 工具函数 (markdown.js 状态机重组算法、KaTeX 数学排版)
+│   │   └── components/            # DeepSeek 思考流卡片、智能滚动回底按钮、MessageBubble
 │   ├── package.json
-│   └── vite.config.js             # ⚠️ 需先构建: cd frontend && npm install && npm run build 生成 dist/
+│   └── vite.config.js             # 前端构建配置 (二次开发可用: cd frontend && npm run build)
 │
 ├── rag/                           # 核心算法与智能体逻辑层
 │   ├── agent.py                   # [v3.0] 动态 ReAct Agent 装配中心与 Strict Format Protocol 防死锁
@@ -145,7 +167,7 @@ YUAN_SUCAI_PATH='./data/documents'                 # 文档目录
 ### 2. 前置条件与自举启动说明
 
 - **Python 环境**：建议 **Python 3.11 – 3.13**（安装时勾选 `Add Python to PATH`）。
-- **Node.js 前端环境**：前端基于 Vue 3 + Vite 构建。项目**未附带 `frontend/dist` 构建产物**，首次使用需 Node.js (v18+) 执行 `cd frontend && npm install && npm run build` 生成 dist 后方可开箱运行。
+- **Node.js 前端环境**：项目已**预置打包完成的 `frontend/dist` 静态产物**，直接启动 Python 服务即可开箱使用，无需预装 Node.js！如需二次定制开发，可通过 Node.js (v18+) 执行 `cd frontend && npm install && npm run build`。
 - **模型支持**：
   - 嵌入与重排模型：系统依赖 BGE 模型（`BAAI/bge-large-zh-v1.5`），启动时默认通过镜像源自动加载；
   - 大模型：需启动 LM Studio（端口 `1234`）或在 `.env` 中配置云端 Key。
