@@ -14,7 +14,6 @@ const loading = ref(false)
 const thinking = ref(false)
 const abortController = ref(null)
 const messagesContainer = ref(null)
-const searchMode = ref('hybrid')
 
 // 智能滚动状态控制：防止打字时强制刷新到底部导致用户无法上滑查看
 const userScrolledUp = ref(false)
@@ -289,12 +288,8 @@ document.title = '企业本地知识库'
       <InputBox
         :loading="loading"
         :streaming="store.isStreaming"
-        :mode="store.mode"
-        :search-mode="searchMode"
         @send="handleSend"
         @stop="handleStop"
-        @toggle-mode="store.setMode"
-        @update:search-mode="(v) => searchMode = v"
         @clear="handleClear"
       />
     </footer>

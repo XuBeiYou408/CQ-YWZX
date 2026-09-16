@@ -4,11 +4,9 @@ import { ref } from 'vue'
 const props = defineProps({
   loading: Boolean,
   streaming: Boolean,
-  mode: String,
-  searchMode: String,
 })
 
-const emit = defineEmits(['send', 'stop', 'toggleMode', 'clear', 'update:searchMode'])
+const emit = defineEmits(['send', 'stop', 'clear'])
 
 const inputText = ref('')
 
@@ -29,32 +27,6 @@ function handleKeydown(e) {
 
 <template>
   <div class="input-box">
-    <div class="input-params">
-      <div class="param-group">
-        <span class="param-label">搜索模式</span>
-        <el-segmented
-          :model-value="searchMode"
-          :options="[
-            { label: '混合搜索', value: 'hybrid' },
-            { label: '语义搜索', value: 'semantic' },
-          ]"
-          size="small"
-          @change="(val) => emit('update:searchMode', val)"
-        />
-      </div>
-      <div class="param-group">
-        <span class="param-label">流式输出</span>
-        <el-switch
-          :model-value="mode === 'stream'"
-          inline-prompt
-          active-text="开"
-          inactive-text="关"
-          size="small"
-          @change="(val) => emit('toggleMode', val ? 'stream' : 'sync')"
-        />
-      </div>
-    </div>
-
     <div class="input-row">
       <el-button
         class="attach-btn"
@@ -108,25 +80,6 @@ function handleKeydown(e) {
   display: flex;
   flex-direction: column;
   gap: 10px;
-}
-
-.input-params {
-  display: flex;
-  gap: 20px;
-  align-items: center;
-}
-
-.param-group {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.param-label {
-  font: var(--text-metadata);
-  color: var(--color-secondary);
-  text-transform: none;
-  letter-spacing: 0;
 }
 
 .input-row {
