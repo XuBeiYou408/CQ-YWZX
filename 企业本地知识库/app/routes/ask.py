@@ -142,8 +142,8 @@ async def stream(req: AgentQueryRequest):
             yield f"data: {_sse({'type': 'route', 'intent': intent})}\n\n"
             
             if intent == "system_meta":
-                prov_label = "🏠 本地部署" if req.provider == "local" else "☁️ 云端 API"
-                fast_meta_resp = f"我是运行在 **[{prov_label}]** 环境下的 **{req.model_name}** 大语言模型！结合企业级 RAG 知识库与 Agent 工具箱为您提供智能技术支持。"
+                prov_label = "🏠 本地端侧硬件部署" if req.provider == "local" else "☁️ 云端 API"
+                fast_meta_resp = f"我是运行在 **[{prov_label}]** 环境下的 **{req.model_name}** 大语言模型！结合企业本地知识库与端侧算力协同为您提供业务合规智能支持。"
                 yield f"data: {_sse({'type': 'content', 'content': fast_meta_resp})}\n\n"
             elif intent == "simple_rag":
                 output_has_content = False

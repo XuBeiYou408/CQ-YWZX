@@ -1,17 +1,26 @@
+import logging
 from langchain.tools import tool
 from rag.retriever import zhaohui_and_rerank
 
-# ==================== 封装知识库召回和重排为 Tool ====================
+logger = logging.getLogger(__name__)
+
+# ==================== 封装本地企业规章库检索为 Tool ====================
 @tool
-async def xiangliang_and_bm25_zhaohui(query: str) -> str:
+async def enterprise_kb_search(query: str) -> str:
     """
-    在知识库中搜索与问题相关的技术文档和资料。
-    适用于：需要获取本地知识库、产品文档、代码教程、LangChain 或 BGE 模型的底层原理等问题。
-    输入：具体的查询问题或关键词。
-    输出：从知识库中召回并经过重排的参考资料片段。
+    在本地企业知识库中精准检索规章制度、管理办法、报销流程、考勤规范等技术与行政文件。
+    适用于：任何关于企业内部政策、福利待遇、出差报销、保密协议、入职流程等制度查询。
+    输入：具体的查询问题或核心关键词。
+    输出：本地向量数据库与BM25混合检索重排后的权威规章段落与条款出处。
     """
     try:
-        shuju = await zhaohui_and_rerank(query, rerank_limit=15)
-        return shuju
+        shuju = await zhaohui_and_rerank(query, rerank_limit=10)
+        if not shuju or not str(shuju).strip():
+            return "【🏢 本地企业规章库】：在本地知识库中未检索到高度相关的明文条款。建议结合制度目录探查或进行外网时效检索。"
+        return f"【🏢 本地企业规章库检索结果】:\n{shuju}"
     except Exception as e:
-        return f"检索知识库时发生错误: {str(e)}"
+        logger.error(f"检索知识库异常: {e}")
+        return f"检索本地知识库时发生错误: {str(e)}"
+
+# 保持向后兼容旧命名
+xiangliang_and_bm25_zhaohui = enterprise_kb_search

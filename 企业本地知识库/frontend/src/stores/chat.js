@@ -126,7 +126,9 @@ export const useChatStore = defineStore('chat', () => {
     if (type === 'route') {
       last.routeIntent = intent
       if (intent === 'agent') {
-        last.thought += `[智能规划] 启动多步 Agent 推理与工具调用...\n`
+        last.thought += `[🏢 智能规划] 启动企业知识库多工具协同推演...\n`
+      } else if (intent === 'summarize') {
+        last.thought += `[📋 制度清单] 启动规章全景探查与要点分析...\n`
       }
     } else if (type === 'thought') {
       if (content) last.thought += content + '\n'

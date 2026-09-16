@@ -99,4 +99,7 @@ def jisuanqi_tool(expression: str) -> str:
         result = _safe_eval(tree)
         return str(result)
     except Exception as e:
-        return f"计算错误：{str(e)}。请确保输入是合法的 Python 数学表达式，例如 '2 ** 10'。"
+        return f"计算错误：{str(e)}。请确保输入是合法的 Python 数学表达式，例如 '15000 / 21.75 * 2.5'。"
+
+# 增加合规计算器别名
+policy_calculator = jisuanqi_tool
