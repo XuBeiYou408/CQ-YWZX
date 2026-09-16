@@ -25,13 +25,13 @@ CURRENT_DIR = Path(__file__).resolve().parent
 if str(CURRENT_DIR) not in sys.path:
     sys.path.insert(0, str(CURRENT_DIR))
 
-HOST = '127.0.0.1'
-PORT = 8030
+HOST = os.getenv('HOST', '0.0.0.0')
+PORT = int(os.getenv('PORT', '8030'))
 
 def is_port_in_use(port: int) -> bool:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.settimeout(0.5)
-        return s.connect_ex((HOST, port)) == 0
+        return s.connect_ex(('127.0.0.1', port)) == 0
 
 def check_local_model() -> tuple[str, str]:
     """检查本地模型连通性"""
