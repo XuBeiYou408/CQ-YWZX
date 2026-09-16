@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
-import { renderMarkdown } from '../utils/markdown.js'
+import { renderMarkdown, renderThought } from '../utils/markdown.js'
 
 const props = defineProps({
   message: {
@@ -58,6 +58,10 @@ const renderedContent = computed(() => {
     return props.message.content
   }
 })
+
+const renderedThought = computed(() => {
+  return renderThought(props.message.thought)
+})
 </script>
 
 <template>
@@ -72,7 +76,7 @@ const renderedContent = computed(() => {
       <div
         v-if="message.role === 'assistant' && (message.isThinking || (message.thought && message.thought.trim()))"
         class="thinking-card"
-        :class="{ collapsed: message.isCollapsed }"
+        :class="{ collapsed: message.isCollapsed, 'is-thinking': message.isThinking }"
       >
         <div class="thinking-header" @click="toggleCollapse">
           <div class="header-title">
@@ -82,7 +86,7 @@ const renderedContent = computed(() => {
               </svg>
             </span>
             <span v-if="message.isThinking" class="think-status-text">
-              正在思考... <span class="think-timer">({{ elapsedTime }}s)</span>
+              思考中... <span class="think-timer">({{ elapsedTime }}s)</span>
             </span>
             <span v-else class="think-status-text">
               已深度思考 <span class="think-timer">(用时 {{ message.costTime != null ? message.costTime : elapsedTime }} 秒)</span>
@@ -90,6 +94,7 @@ const renderedContent = computed(() => {
           </div>
 
           <div class="header-action">
+            <span class="collapse-tip">{{ message.isCollapsed ? '展开' : '收起' }}</span>
             <span class="collapse-icon" :class="{ rotated: !message.isCollapsed }">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <polyline points="6 9 12 15 18 9"></polyline>
@@ -99,7 +104,8 @@ const renderedContent = computed(() => {
         </div>
 
         <div ref="thoughtLogRef" v-show="!message.isCollapsed" class="thinking-content">
-          <div class="thought-log">{{ message.thought || '正在推演与检索企业本地规章...' }}</div>
+          <div v-if="renderedThought" class="thought-markdown markdown-body" v-html="renderedThought"></div>
+          <div v-else class="thought-placeholder">正在检索企业知识库并推演合规回答...</div>
         </div>
       </div>
 
@@ -219,28 +225,39 @@ const renderedContent = computed(() => {
   width: 100%;
 }
 
-/* === DeepSeek 深度思考卡片 === */
+/* === 深度思考 (Chain of Thought) 现代卡片 === */
 .thinking-card {
-  margin-bottom: 10px;
-  border-radius: 10px;
-  background-color: #f7f8fa;
-  border: 1px solid #eaedf1;
+  margin-bottom: 12px;
+  border-radius: 12px;
+  background-color: #f8fafc;
+  border: 1px solid #e2e8f0;
   overflow: hidden;
-  transition: all 0.2s ease;
+  transition: all 0.25s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
 }
 
 .thinking-card:hover {
-  border-color: #dcdfe6;
+  border-color: #cbd5e1;
+}
+
+.thinking-card.is-thinking {
+  border-color: #c7d2fe;
+  box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.15);
 }
 
 .thinking-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 14px;
+  padding: 9px 15px;
   cursor: pointer;
   user-select: none;
-  background-color: rgba(240, 242, 245, 0.6);
+  background-color: #f1f5f9;
+  transition: background-color 0.2s ease;
+}
+
+.thinking-header:hover {
+  background-color: #e2e8f0;
 }
 
 .header-title {
@@ -248,37 +265,48 @@ const renderedContent = computed(() => {
   align-items: center;
   gap: 8px;
   font-size: 13px;
-  color: #606266;
+  color: #475569;
   font-weight: 500;
 }
 
 .think-icon-sparkle {
-  color: #4f46e5;
+  color: #6366f1;
   display: flex;
   align-items: center;
-  animation: pulseSparkle 2s infinite ease-in-out;
+  animation: pulseSparkle 2.2s infinite ease-in-out;
 }
 
 @keyframes pulseSparkle {
-  0%, 100% { opacity: 0.6; transform: scale(0.95); }
+  0%, 100% { opacity: 0.65; transform: scale(0.95); }
   50% { opacity: 1; transform: scale(1.1); }
 }
 
 .think-status-text {
   font-size: 13px;
-  color: #606266;
+  color: #475569;
 }
 
 .think-timer {
-  color: #909399;
+  color: #94a3b8;
   font-size: 12px;
   margin-left: 2px;
+}
+
+.header-action {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.collapse-tip {
+  font-size: 11.5px;
+  color: #94a3b8;
 }
 
 .collapse-icon {
   display: flex;
   align-items: center;
-  color: #909399;
+  color: #94a3b8;
   transition: transform 0.25s ease;
 }
 
@@ -287,21 +315,47 @@ const renderedContent = computed(() => {
 }
 
 .thinking-content {
-  padding: 10px 14px;
-  border-top: 1px dashed #e4e7ed;
-  background-color: #fafafa;
-  max-height: 260px;
+  padding: 12px 18px;
+  border-top: 1px dashed #e2e8f0;
+  background-color: #ffffff;
+  max-height: 280px;
   overflow-y: auto;
   scroll-behavior: smooth;
 }
 
-.thought-log {
+.thought-markdown {
+  font-size: 13px;
+  line-height: 1.75;
+  color: #475569;
+}
+
+.thought-markdown :deep(p) {
+  margin: 0 0 8px 0;
+}
+
+.thought-markdown :deep(p:last-child) {
+  margin-bottom: 0;
+}
+
+.thought-markdown :deep(ul),
+.thought-markdown :deep(ol) {
+  margin: 4px 0 8px 18px;
+  padding: 0;
+}
+
+.thought-markdown :deep(li) {
+  margin-bottom: 3px;
+}
+
+.thought-markdown :deep(strong) {
+  color: #1e293b;
+  font-weight: 600;
+}
+
+.thought-placeholder {
   font-size: 12.5px;
-  line-height: 1.6;
-  color: #66696e;
-  white-space: pre-wrap;
-  word-break: break-word;
-  font-family: SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+  color: #94a3b8;
+  font-style: italic;
 }
 
 /* === 正文 Bubble === */

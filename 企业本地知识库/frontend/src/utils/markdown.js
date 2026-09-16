@@ -140,3 +140,44 @@ export function renderMarkdown(rawText) {
 
   return html
 }
+
+/**
+ * 优化思维链格式化：
+ * 1. 彻底消除流式推理或历史记录中产生的碎片化单字/单词折行
+ * 2. 保护真正的双换行段落和列表项排版
+ */
+export function cleanThought(text) {
+  if (!text || typeof text !== 'string') return ''
+  let t = text.replace(/\r\n/g, '\n')
+
+  // 保护真正的段落换行（双换行）
+  t = t.replace(/\n\s*\n+/g, '@@PARAGRAPH_BREAK@@')
+
+  // 保护列表项换行（如 "- ", "* ", "1. ", "• "）
+  t = t.replace(/\n(?=\s*[-*•·\d+\.])/g, '@@LIST_BREAK@@')
+
+  // 规则：汉字与标点符号（包括全角标点、CJK标点如句号顿号引号）之间的单个换行直接剔除；汉字与英数之间单个换行剔除；英数之间的单个换行变为空格
+  const CJK_CHARS = '[\\u4e00-\\u9fa5\\u3000-\\u303f\\uff00-\\uffef“”‘’《》、（）\\[\\]]'
+  t = t.replace(new RegExp(`(${CJK_CHARS})\\n+(?=${CJK_CHARS})`, 'g'), '$1')
+  t = t.replace(new RegExp(`(${CJK_CHARS})\\n+(?=[a-zA-Z0-9])`, 'g'), '$1')
+  t = t.replace(new RegExp(`([a-zA-Z0-9])\\n+(?=${CJK_CHARS})`, 'g'), '$1')
+  t = t.replace(/([a-zA-Z0-9])\n+(?=[a-zA-Z0-9])/g, '$1 ')
+
+  // 还原真正的段落与列表换行
+  t = t.replace(/@@PARAGRAPH_BREAK@@/g, '\n\n')
+  t = t.replace(/@@LIST_BREAK@@/g, '\n')
+  return t
+}
+
+/**
+ * 高保真思维链富文本渲染
+ */
+export function renderThought(rawText) {
+  if (!rawText) return ''
+  const cleaned = cleanThought(rawText)
+  try {
+    return renderMarkdown(cleaned)
+  } catch {
+    return cleaned
+  }
+}
