@@ -142,31 +142,88 @@ export function renderMarkdown(rawText) {
 }
 
 /**
- * 优化思维链格式化：
- * 1. 彻底消除流式推理或历史记录中产生的碎片化单字/单词折行
- * 2. 保护真正的双换行段落和列表项排版
+ * 工业级思维链碎片清洗与排版规范化：
+ * 彻底消除流式推理或历史记录中产生的碎片化单字、单数字、短词与符号孤立折行（如 "3\n8\n0"、"元\n/" 等）
+ * 精准保护真正的列表项、标题与完整段落换行
  */
 export function cleanThought(text) {
   if (!text || typeof text !== 'string') return ''
-  let t = text.replace(/\r\n/g, '\n')
+  const rawLines = text.replace(/\r\n/g, '\n').split('\n')
+  const merged = []
 
-  // 保护真正的段落换行（双换行）
-  t = t.replace(/\n\s*\n+/g, '@@PARAGRAPH_BREAK@@')
+  for (let i = 0; i < rawLines.length; i++) {
+    const cur = rawLines[i].trim()
+    if (!cur) {
+      const prev = merged.length > 0 ? merged[merged.length - 1].trim() : ''
+      // 只有当前面内容是完整句子结尾（。！？!?），且不是列表项，且长度充足时才保留段落空行
+      if (prev && /[。！？!?]$/.test(prev) && !/^[-*+•·\d+\.]/.test(prev) && prev.length > 5) {
+        if (merged[merged.length - 1] !== '') {
+          merged.push('')
+        }
+      }
+      continue
+    }
 
-  // 保护列表项换行（如 "- ", "* ", "1. ", "• "）
-  t = t.replace(/\n(?=\s*[-*•·\d+\.])/g, '@@LIST_BREAK@@')
+    if (merged.length === 0) {
+      merged.push(cur)
+      continue
+    }
 
-  // 规则：汉字与标点符号（包括全角标点、CJK标点如句号顿号引号）之间的单个换行直接剔除；汉字与英数之间单个换行剔除；英数之间的单个换行变为空格
-  const CJK_CHARS = '[\\u4e00-\\u9fa5\\u3000-\\u303f\\uff00-\\uffef“”‘’《》、（）\\[\\]]'
-  t = t.replace(new RegExp(`(${CJK_CHARS})\\n+(?=${CJK_CHARS})`, 'g'), '$1')
-  t = t.replace(new RegExp(`(${CJK_CHARS})\\n+(?=[a-zA-Z0-9])`, 'g'), '$1')
-  t = t.replace(new RegExp(`([a-zA-Z0-9])\\n+(?=${CJK_CHARS})`, 'g'), '$1')
-  t = t.replace(/([a-zA-Z0-9])\n+(?=[a-zA-Z0-9])/g, '$1 ')
+    const prev = merged[merged.length - 1]
+    if (prev === '') {
+      merged.push(cur)
+      continue
+    }
 
-  // 还原真正的段落与列表换行
-  t = t.replace(/@@PARAGRAPH_BREAK@@/g, '\n\n')
-  t = t.replace(/@@LIST_BREAK@@/g, '\n')
-  return t
+    const isCurList = /^([-*+•·]|\d+\.|\(\d+\))\s+/.test(cur)
+    const isCurHeader = /^[#]{1,6}\s+/.test(cur)
+    const isPrevHeader = /^[#]{1,6}\s+/.test(prev)
+    const isPrevList = /^([-*+•·]|\d+\.|\(\d+\))\s+/.test(prev)
+
+    // 绝对不合并的情况：当前行是列表项、当前行是标题、前一行是标题
+    if (isCurList || isCurHeader || isPrevHeader) {
+      merged.push(cur)
+      continue
+    }
+
+    // 如果前一行是列表项：只有当当前行是碎片（<=4 字符）或以连接标点开头时才合并进列表项，否则作为新行
+    if (isPrevList) {
+      if (cur.length <= 4 || /^[/\\+*%=<>~,，;；)）\]】}、]/.test(cur)) {
+        merged[merged.length - 1] = prev + cur
+      } else {
+        merged.push(cur)
+      }
+      continue
+    }
+
+    // 针对普通正文段落：
+    // 如果当前行或前一行是短碎片（<= 4个字符，如 "3"、"8"、"0"、"元"、"/"、"晚" 等）
+    // 或者前一行没有以标点句末符（。！？!?）结尾
+    // 或者当前行以标点符号开头
+    const shouldMerge = (
+      cur.length <= 4 ||
+      prev.length <= 4 ||
+      !/[。！？!?]$/.test(prev) ||
+      /^[/\\+*%=<>~,，;；)）\]】}、]/.test(cur) ||
+      /[/\\+*%=<>~(（\[【{、]$/.test(prev)
+    )
+
+    if (shouldMerge) {
+      const prevLastChar = prev.slice(-1)
+      const curFirstChar = cur.charAt(0)
+      let separator = ''
+      if (/[a-zA-Z]/.test(prevLastChar) && /[a-zA-Z]/.test(curFirstChar)) {
+        separator = ' '
+      } else if (/[0-9]/.test(prevLastChar) && /[a-zA-Z]/.test(curFirstChar)) {
+        separator = ' '
+      }
+      merged[merged.length - 1] = prev + separator + cur
+    } else {
+      merged.push(cur)
+    }
+  }
+
+  return merged.join('\n')
 }
 
 /**
