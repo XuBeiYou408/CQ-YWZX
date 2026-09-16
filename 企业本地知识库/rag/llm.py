@@ -1,5 +1,20 @@
 import os
 from langchain_openai import ChatOpenAI
+import langchain_openai.chat_models.base as _lc_base
+
+# 动态补丁：使 LangChain ChatOpenAI 在流式模式下完整保留 OpenAI 兼容端点 (LM Studio, DeepSeek-R1, Qwen 等) 传回的 reasoning_content 推理思考链
+_orig_convert_delta = _lc_base._convert_delta_to_message_chunk
+
+def _patched_convert_delta(_dict, default_class):
+    chunk = _orig_convert_delta(_dict, default_class)
+    # 提取推理链/思维链内容
+    reasoning = _dict.get("reasoning_content") or _dict.get("reasoning") or _dict.get("thought")
+    if reasoning and hasattr(chunk, "additional_kwargs"):
+        chunk.additional_kwargs["reasoning_content"] = reasoning
+    return chunk
+
+_lc_base._convert_delta_to_message_chunk = _patched_convert_delta
+
 
 def huode_dongtai_llm(
     provider: str = "cloud",

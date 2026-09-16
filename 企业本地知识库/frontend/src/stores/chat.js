@@ -138,7 +138,7 @@ export const useChatStore = defineStore('chat', () => {
     syncCurrentSessionToStorage()
   }
 
-  function addAssistantChunk(chunk) {
+  function startAssistantMessage() {
     let last = messages.value[messages.value.length - 1]
     if (!last || last.role !== 'assistant') {
       last = {
@@ -150,6 +150,14 @@ export const useChatStore = defineStore('chat', () => {
         timestamp: Date.now(),
       }
       messages.value.push(last)
+    }
+    return last
+  }
+
+  function addAssistantChunk(chunk) {
+    let last = messages.value[messages.value.length - 1]
+    if (!last || last.role !== 'assistant') {
+      last = startAssistantMessage()
     }
 
     if (typeof chunk === 'string') {
@@ -164,14 +172,20 @@ export const useChatStore = defineStore('chat', () => {
         last.thought += `[🏢 智能规划] 启动企业知识库多工具协同推演...\n`
       } else if (intent === 'summarize') {
         last.thought += `[📋 制度清单] 启动规章全景探查与要点分析...\n`
+      } else if (intent === 'simple_rag') {
+        last.thought += `[🔍 检索增强] 检索企业本地规章并推演回答...\n`
       }
     } else if (type === 'thought') {
-      if (content) last.thought += content + '\n'
+      if (content) {
+        last.thought += content
+        last.isThinking = true
+        last.isCollapsed = false
+      }
     } else if (type === 'observation') {
       if (content) {
         const cleanObs = String(content).replace(/[\r\n]+/g, ' ').trim()
         const shortObs = cleanObs.length > 90 ? cleanObs.slice(0, 90) + '...' : cleanObs
-        last.thought += `[检索观察] ${shortObs}\n`
+        last.thought += `\n[检索观察] ${shortObs}\n`
       }
     } else if (type === 'output' || type === 'content') {
       if (content) last.content += content
@@ -232,6 +246,7 @@ export const useChatStore = defineStore('chat', () => {
     loadSession,
     syncCurrentSessionToStorage,
     addUserMessage,
+    startAssistantMessage,
     addAssistantChunk,
     finishStreaming,
     clearMessages,

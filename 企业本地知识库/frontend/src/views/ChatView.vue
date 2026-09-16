@@ -109,9 +109,10 @@ async function handleSend(question) {
 
   userScrolledUp.value = false
   store.addUserMessage(question)
+  store.startAssistantMessage()
   loading.value = true
   store.isStreaming = true
-  thinking.value = true
+  thinking.value = false
 
   await nextTick()
   if (messagesContainer.value) {
@@ -124,12 +125,7 @@ async function handleSend(question) {
       const controller = new AbortController()
       abortController.value = controller
 
-      let firstToken = true
       for await (const chunk of streamQuestion(question, controller.signal, store.currentSessionId, modelStore.provider, modelStore.activeModelName)) {
-        if (firstToken) {
-          thinking.value = false
-          firstToken = false
-        }
         store.addAssistantChunk(chunk)
         await nextTick()
         // 关键防护：仅当用户未上滑查看历史时才自动跟随滚动，保证用户可自由上滑浏览

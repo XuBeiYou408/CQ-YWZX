@@ -150,6 +150,15 @@ async def stream(req: AgentQueryRequest):
                 output_has_content = False
                 finish_reason = None
                 async for chunk in dyn_qa_chain.astream({"input": req.question}):
+                    # 1. 实时提取并推送模型思维链/深度推理过程 (LM Studio / DeepSeek-R1 / Qwen 等)
+                    reasoning = (
+                        (chunk.additional_kwargs.get("reasoning_content") if hasattr(chunk, "additional_kwargs") and chunk.additional_kwargs else None)
+                        or (chunk.response_metadata.get("reasoning_content") if hasattr(chunk, "response_metadata") and chunk.response_metadata else None)
+                    )
+                    if reasoning:
+                        yield f"data: {_sse({'type': 'thought', 'content': reasoning})}\n\n"
+
+                    # 2. 实时推送最终生成内容
                     content = chunk.content if hasattr(chunk, "content") else str(chunk)
                     if content:
                         output_has_content = True
@@ -169,8 +178,16 @@ async def stream(req: AgentQueryRequest):
                 if not output_has_content:
                     # 降级退回由包含丰富知识库的 Agent 兜底回答
                     async for chunk in dyn_stream_llm.astream(req.question):
+                        reasoning = (
+                            (chunk.additional_kwargs.get("reasoning_content") if hasattr(chunk, "additional_kwargs") and chunk.additional_kwargs else None)
+                            or (chunk.response_metadata.get("reasoning_content") if hasattr(chunk, "response_metadata") and chunk.response_metadata else None)
+                        )
+                        if reasoning:
+                            yield f"data: {_sse({'type': 'thought', 'content': reasoning})}\n\n"
+
                         content = chunk.content if hasattr(chunk, "content") else str(chunk)
-                        yield f"data: {_sse({'type': 'content', 'content': content})}\n\n"
+                        if content:
+                            yield f"data: {_sse({'type': 'content', 'content': content})}\n\n"
                         if hasattr(chunk, "response_metadata") and chunk.response_metadata:
                             r = chunk.response_metadata.get("finish_reason")
                             if r == "length":

@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { renderMarkdown } from '../utils/markdown.js'
 
 const props = defineProps({
@@ -12,6 +12,7 @@ const props = defineProps({
 const emit = defineEmits(['continue'])
 
 const elapsedTime = ref(0)
+const thoughtLogRef = ref(null)
 let timer = null
 
 onMounted(() => {
@@ -20,6 +21,20 @@ onMounted(() => {
     timer = setInterval(() => {
       elapsedTime.value = parseFloat(((Date.now() - startTime) / 1000).toFixed(1))
     }, 100)
+  }
+})
+
+watch(() => props.message.isThinking, (isThinking) => {
+  if (!isThinking && timer) {
+    clearInterval(timer)
+    timer = null
+  }
+})
+
+// 当思维链实时流式输出时，思维卡片内部平滑自动向下滚动
+watch(() => props.message.thought, () => {
+  if (props.message.isThinking && !props.message.isCollapsed && thoughtLogRef.value) {
+    thoughtLogRef.value.scrollTop = thoughtLogRef.value.scrollHeight
   }
 })
 
@@ -53,9 +68,9 @@ const renderedContent = computed(() => {
     </div>
 
     <div class="bubble-body">
-      <!-- Assistant 深度思考/Agent 推理面板：仅当存在实际思考推理日志时展示 -->
+      <!-- Assistant 深度思考/Agent 推理面板：当处于思考中，或者已有思考推理日志时展示 -->
       <div
-        v-if="message.role === 'assistant' && (message.thought && message.thought.trim())"
+        v-if="message.role === 'assistant' && (message.isThinking || (message.thought && message.thought.trim()))"
         class="thinking-card"
         :class="{ collapsed: message.isCollapsed }"
       >
@@ -83,13 +98,16 @@ const renderedContent = computed(() => {
           </div>
         </div>
 
-        <div v-show="!message.isCollapsed" class="thinking-content">
-          <div class="thought-log">{{ message.thought || '思考逻辑推演中...' }}</div>
+        <div ref="thoughtLogRef" v-show="!message.isCollapsed" class="thinking-content">
+          <div class="thought-log">{{ message.thought || '正在推演与检索企业本地规章...' }}</div>
         </div>
       </div>
 
       <!-- 核心回答正文区 (Markdown 渲染) -->
-      <div :class="['bubble-content', message.role]">
+      <div
+        v-if="message.role === 'user' || message.content"
+        :class="['bubble-content', message.role]"
+      >
         <div v-if="message.role === 'user'" class="content-text">{{ message.content }}</div>
         <div
           v-else
@@ -272,6 +290,9 @@ const renderedContent = computed(() => {
   padding: 10px 14px;
   border-top: 1px dashed #e4e7ed;
   background-color: #fafafa;
+  max-height: 260px;
+  overflow-y: auto;
+  scroll-behavior: smooth;
 }
 
 .thought-log {
