@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 
 const SESSIONS_STORAGE_KEY = 'rag_sessions_history'
+const ACTIVE_SESSION_ID_KEY = 'rag_active_session_id'
 
 function generateUUID() {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -27,11 +28,43 @@ function saveAllSessionsToStorage(sessions) {
   }
 }
 
+/**
+ * 获取初始会话状态：
+ * 默认恢复到用户最近的一次对话（若重启服务或刷新网页时优先呈现历史记录，而非空白新对话）
+ */
+function getInitialSessionState() {
+  const sessions = loadAllSessionsFromStorage()
+  if (sessions && sessions.length > 0) {
+    const savedActiveId = localStorage.getItem(ACTIVE_SESSION_ID_KEY)
+    let target = null
+    // 1. 如果上次存在活跃会话且包含对话记录，优先恢复
+    if (savedActiveId) {
+      target = sessions.find(s => s.sessionId === savedActiveId && s.messages && s.messages.length > 0)
+    }
+    // 2. 否则默认恢复到最近的一次对话 (位于数组首位即最新的历史记录)
+    if (!target) {
+      target = sessions.find(s => s.messages && s.messages.length > 0) || sessions[0]
+    }
+    if (target && target.messages && target.messages.length > 0) {
+      localStorage.setItem(ACTIVE_SESSION_ID_KEY, target.sessionId)
+      return {
+        sessionId: target.sessionId,
+        messages: target.messages
+      }
+    }
+  }
+  return {
+    sessionId: generateUUID(),
+    messages: []
+  }
+}
+
 export const useChatStore = defineStore('chat', () => {
-  const messages = ref([])
+  const initial = getInitialSessionState()
+  const messages = ref(initial.messages)
   const isStreaming = ref(false)
   const mode = ref('stream')
-  const currentSessionId = ref(generateUUID())
+  const currentSessionId = ref(initial.sessionId)
 
   // 类似于 Antigravity，将会话首轮提问作为中文会话标题
   const currentChatTitle = computed(() => {
@@ -54,6 +87,7 @@ export const useChatStore = defineStore('chat', () => {
   function createNewSession() {
     currentSessionId.value = generateUUID()
     messages.value = []
+    localStorage.removeItem(ACTIVE_SESSION_ID_KEY)
   }
 
   function loadSession(sessionId) {
@@ -62,6 +96,7 @@ export const useChatStore = defineStore('chat', () => {
     if (target) {
       currentSessionId.value = target.sessionId
       messages.value = target.messages || []
+      localStorage.setItem(ACTIVE_SESSION_ID_KEY, target.sessionId)
     }
   }
 
@@ -86,12 +121,12 @@ export const useChatStore = defineStore('chat', () => {
 
     const existingIdx = sessions.findIndex(s => s.sessionId === currentSessionId.value)
     if (existingIdx >= 0) {
-      sessions[existingIdx] = sessionData
-    } else {
-      sessions.unshift(sessionData)
+      sessions.splice(existingIdx, 1)
     }
+    sessions.unshift(sessionData)
 
     saveAllSessionsToStorage(sessions)
+    localStorage.setItem(ACTIVE_SESSION_ID_KEY, currentSessionId.value)
   }
 
   function addUserMessage(question) {

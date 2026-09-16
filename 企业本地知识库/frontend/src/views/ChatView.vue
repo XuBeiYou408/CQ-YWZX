@@ -57,6 +57,11 @@ onMounted(() => {
   nextTick(() => {
     if (messagesContainer.value && store.messages.length > 0) {
       messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
+      setTimeout(() => {
+        if (messagesContainer.value && !userScrolledUp.value) {
+          messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
+        }
+      }, 80)
     }
   })
 })

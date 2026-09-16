@@ -53,6 +53,12 @@ function handleSelect(conv) {
 function handleDelete(sessionId) {
   conversations.value = conversations.value.filter(c => c.sessionId !== sessionId)
   localStorage.setItem(SESSIONS_STORAGE_KEY, JSON.stringify(conversations.value))
+  if (localStorage.getItem('rag_active_session_id') === sessionId) {
+    localStorage.removeItem('rag_active_session_id')
+    if (chatStore.currentSessionId === sessionId) {
+      chatStore.createNewSession()
+    }
+  }
   if (selected.value?.sessionId === sessionId) {
     selected.value = null
   }
@@ -67,6 +73,8 @@ function handleClearAll() {
   conversations.value = []
   selected.value = null
   localStorage.removeItem(SESSIONS_STORAGE_KEY)
+  localStorage.removeItem('rag_active_session_id')
+  chatStore.createNewSession()
 }
 
 const filteredConversations = computed(() => {
