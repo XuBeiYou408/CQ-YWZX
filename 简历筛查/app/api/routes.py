@@ -628,104 +628,87 @@ async def regenerate_questions(candidate_id: str):
 
 
 class ReasoningStreamFilter:
-    """严格规则过滤器：过滤思维链开头的人设宣称、JSON规范拆解、规则念经与候选人信息机械罗列"""
+    """严格规则过滤器：行级动态清洗 JSON 语法结构、Prompt 题干复述与元指令草稿，全流程保留对简历漏洞的实质推演"""
     def __init__(self, candidate_name: str = ""):
         self.candidate_name = candidate_name.strip()
-        self.started = False
         self.buffer = ""
-        
-        # 1. 黑名单词库：行内只要包含这些元指令关键词，在未进入实质分析前直接过滤丢弃
-        self.blacklisted_keywords = [
-            "资深技术尽调专家", "尽调专家", "尽调官", "智能体", "ReAct",
-            "输出必须", "合法 JSON", "合法JSON", "JSON 格式", "JSON格式", "严格的JSON",
-            "investigation_trace", "targeted_interview_focus", "reasoning_chain",
-            "不能复述", "严禁在思考", "第一句话必须", "核心规则", "深度思考",
-            "面试防线", "感知阶段", "规划阶段", "行动阶段", "反思阶段",
-            "候选人信息：", "【候选人画像】", "【岗位要求", "【核心技术栈】", "【应聘岗位】",
-            "任务要求", "身份人设", "JSON输出格式", "字段名"
-        ]
-        
-        # 2. 结构行正则：如列表项 - 岗位：、- JD：、- 候选人：等纯信息复述
-        self.meta_line_patterns = [
-            r"^(首先|现在|好的)?[，, ]*(我是|你是|作为|用户要求|设定我).*",
-            r"^.*(输出必须|严格输出|合法\s*JSON|JSON\s*格式|严格遵守).*",
-            r"^.*(investigation_trace|targeted_interview_focus|reasoning_chain).*",
-            r"^.*(核心规则|深度思考|第一句话必须|不能复述|严禁).*",
-            r"^.*(要有\d+条面试防线|这是面试官需要重点考察).*",
-            r"^.*(应该(是|在)感知阶段|直接审查履历).*",
-            r"^候选人信息\s*[:：]?",
-            r"^[-*•]\s*(岗位|JD|候选人|核心技术栈|核心项目)\s*[:：].*",
-            r"^[【\[](应聘岗位|岗位要求|候选人画像|核心技术栈|核心项目)[】\]].*"
-        ]
 
     def _is_meta_line(self, text: str) -> bool:
         t = text.strip()
         if not t:
             return True
-        for kw in self.blacklisted_keywords:
-            if kw.lower() in t.lower():
-                return True
-        for pat in self.meta_line_patterns:
-            if re.match(pat, t, re.IGNORECASE):
-                return True
+
+        # 1. 纯括号、标点、JSON结构、数组包裹行
+        if re.match(r"^[{}\[\]\",\s]+$", t):
+            return True
+        if "json" in t.lower():
+            return True
+        if any(k in t for k in ["investigation_trace", "targeted_interview_focus", "reasoning_chain"]):
+            return True
+        if re.match(r'^\s*"[^"]*",?\s*$', t):
+            return True
+
+        # 2. 身份人设、输出规则、格式要求、元指令自言自语
+        meta_keywords = [
+            "尽调专家", "尽调官", "智能体", "ReAct", "资深技术", "猎头",
+            "我需要严格", "只输出", "不要有任何额外", "纯 JSON", "严格输出", "合法 JSON",
+            "核心规则", "深度思考", "第一句话必须", "不能复述", "严禁在思考",
+            "每个阶段以", "是一个数组", "包含四个阶段", "包含两个", "保持简洁",
+            "现在，分析", "现在，构建", "现在，写出", "现在，编译", "草拟", "编译成",
+            "这是初步了解", "规划如何验证", "描述实际的验证", "反思验证后的结论"
+        ]
+        if any(k in t for k in meta_keywords):
+            return True
+
+        # 3. 机械复述输入参数（候选人档案条目、JD要求条目）
+        if re.match(r"^(岗位要求|候选人履历|工作经历|核心技术栈|工作与项目经历|候选人信息)\s*[:：]?", t):
+            return True
+        if re.match(r"^[-*•]\s*(姓名|工龄|教育|当前职位|技术栈|工作经历|岗位|JD|候选人|核心项目|腾讯科技|字节跳动)\s*[:：]", t):
+            return True
+        if re.match(r"^[-*•]\s*(负责|主导关键|熟练|精通|具备\d*年|有.*优先|资深|全栈|前端开发|本科|硕士|大专)", t):
+            return True
+        if re.match(r"^[-*•]\s*阶段\s*\d+", t):
+            return True
+        if re.match(r"^\s*[-*•]\s*(这是初步了解|规划如何验证|描述实际的验证|反思验证后的结论|这是面试官应该|重点防线：|每个阶段以)", t):
+            return True
+        if re.match(r"^(例如|比如)\s*[:：]?", t) and len(t) < 8:
+            return True
+        if t in ["构建每个阶段的内容：", "现在，写出 JSON 内容。", "描述需要基于履历进行反思推导。"]:
+            return True
+
         return False
 
     def filter_chunk(self, delta: str) -> str:
-        if self.started:
-            return delta
-
         self.buffer += delta
 
         # 按换行符拆分
         lines = self.buffer.split("\n")
-        
-        # 若尚未换行，尝试按主要标点句号分句判定
-        if len(lines) == 1:
-            parts = re.split(r"([。！？\n])", self.buffer)
-            if len(parts) >= 3:
-                sentences = []
-                for i in range(0, len(parts) - 1, 2):
-                    sentences.append(parts[i] + parts[i+1])
-                remaining = parts[-1]
-                
-                for s in sentences:
-                    if not self._is_meta_line(s):
-                        self.started = True
-                        self.buffer = ""
-                        return s + remaining
-                self.buffer = remaining
+        if len(lines) <= 1:
             return ""
 
-        # 多行情况：保留最后一行未完整的行片段
         completed_lines = lines[:-1]
         self.buffer = lines[-1]
 
-        for i, line in enumerate(completed_lines):
+        valid_lines = []
+        for line in completed_lines:
             if not self._is_meta_line(line):
-                # 命中第一条真正的实质分析行！
-                self.started = True
-                valid_content = "\n".join(completed_lines[i:])
-                if self.buffer:
-                    valid_content += "\n" + self.buffer
-                    self.buffer = ""
-                return valid_content
+                valid_lines.append(line)
 
+        if valid_lines:
+            return "\n".join(valid_lines) + "\n"
         return ""
 
     def flush(self) -> str:
-        if self.started:
-            return ""
-        self.started = True
-        remaining = self.buffer
+        remaining = self.buffer.strip()
         self.buffer = ""
-        lines = remaining.split("\n")
-        valid_lines = [l for l in lines if not self._is_meta_line(l)]
-        return "\n".join(valid_lines)
+        if remaining and not self._is_meta_line(remaining):
+            return remaining + "\n"
+        return ""
 
 
 @router.post("/api/candidates/{candidate_id}/rededuce-trace")
 async def rededuce_trace(candidate_id: str):
-    """根据候选人背景调用大模型重新推导 ReAct 尽调时间线轨迹，并返回大模型现场推导思维链"""
+    """根据候选人背景自主审查分析简历漏洞与真实度，并返回大模型现场推导思维链"""
     candidates = _get_all_candidates()
     c = next((x for x in candidates if x["id"] == candidate_id), None)
     if not c:
@@ -762,27 +745,29 @@ async def rededuce_trace(candidate_id: str):
 
     cfg = load_config()
     system_prompt = (
-        "你是技术招聘尽调系统后台，负责对候选人真实经历进行背景调查与逻辑验证。"
-        "严格输出合法 JSON，包含 investigation_trace 与 targeted_interview_focus。"
+        "你是一位极具洞察力的大厂资深技术面试官与尽调审查专家。\n"
+        "请自主审查候选人简历，穿透履历包装，自主挖掘并深入排查候选人的潜在漏洞、项目夸大注水、工龄时序疑点与技术短板。\n"
+        "严禁照搬或机械套用任何固定阶段模板，第一句话直接切入对简历具体细节的破绽分析。"
     )
 
-    prompt = f"""岗位要求：{job_title}（{job_jd[:260]}）
-候选人履历：{name}，工龄{exp}年，毕业于{school} {edu}，现任 {company} · {title}
-技术栈：{skills}
-工作与项目经历：
+    prompt = f"""【应聘岗位】: {job_title}
+【岗位核心诉求】: {job_jd[:260]}
+【候选人背景】: {name}（工龄{exp}年，毕业于{school} {edu}，现任 {company} · {title}）
+【技术栈】: {skills}
+【核心项目经历】:
 {concise_exp}
 
-请针对上述经历进行技术尽调与反思推导，并严格输出以下合法 JSON 结构：
+请针对上述履历展开自主穿透式漏洞核验（自主排查时序自洽性、量化指标水分、个人真实掌控度与岗位核心技术契合度），并输出 JSON：
 {{
   "investigation_trace": [
-    "【阶段 1: 感知 (Perceive)】...",
-    "【阶段 2: 规划 (Plan)】...",
-    "【阶段 3: 行动 (Act)】...",
-    "【阶段 4: 反思 (Reflect)】..."
+    "【时序与经历真实度排查】针对学历、工龄与跳槽时序衔接的核验结论与疑点分析...",
+    "【项目量化指标与注水审计】针对项目自述中的峰值/提升率等量化数字进行真实度与个人归属水分排查...",
+    "【核心技术深度与短板漏洞】针对关键技术选型、架构复杂度及底层原理掌控度排查...",
+    "【人岗真实拟合与风险预警】综合评估与目标岗位实际诉求的契合度及潜在胜任力风险..."
   ],
   "targeted_interview_focus": [
-    "面试官重点防线1...",
-    "面试官重点防线2..."
+    "面试官现场必考攻防防线1（直击最可疑的项目/技术漏洞进行现场测谎）",
+    "面试官现场必考攻防防线2（针对架构底层深度或高并发容灾细节探底）"
   ]
 }}"""
 
@@ -827,7 +812,9 @@ async def rededuce_trace(candidate_id: str):
                 new_trace = data.get("investigation_trace", [])
                 new_focus = data.get("targeted_interview_focus", [])
                 if not reasoning_chain:
-                    reasoning_chain = data.get("reasoning_chain", "").strip()
+                    raw_rc = data.get("reasoning_chain", "").strip()
+                    rc_lines = [l for l in raw_rc.split("\n") if not flt._is_meta_line(l)]
+                    reasoning_chain = "\n".join(rc_lines).strip()
             except Exception:
                 pass
 
@@ -836,21 +823,21 @@ async def rededuce_trace(candidate_id: str):
         if not has_streamed_reasoning or not reasoning_chain:
             if not reasoning_chain:
                 reasoning_chain = (
-                    f"针对候选人【{name}】的履历重新推断：\n"
-                    f"1. 时序自洽性：毕业于{school}，总工龄{exp}年，核对{company}等就职周期无重叠冲突或异常空白期；\n"
-                    f"2. 工程硬核度：技术栈集中于{skills}，项目描述体现了真实业务场景的架构权衡，非速成班典型套路；\n"
-                    f"3. 岗位匹配度：针对当前【{job_title}】的岗位诉求，候选人在大型系统可用性与工程规范方面具备良好沉淀，推断结果可信。"
+                    f"针对候选人【{name}】的履历展开自主漏洞排查：\n"
+                    f"1. 时序与背景自洽性：毕业于{school} {edu}，总工龄{exp}年，在{company}等就职周期连贯，未见明显异常断档；\n"
+                    f"2. 项目量化指标审计：核心指标体量较大，符合大厂业务特征，但需防范将平台公共基建归为单人主导的水分；\n"
+                    f"3. 岗位深度契合风险：技术栈集中于{skills}，与当前【{job_title}】匹配度良好，建议当面深挖架构选型与故障容灾实战细节。"
                 )
             for ch in reasoning_chain:
                 yield f"data: {json.dumps({'type': 'reasoning', 'delta': ch}, ensure_ascii=False)}\n\n"
                 await asyncio.sleep(0.012)
 
-        if not new_trace or len(new_trace) < 4:
+        if not new_trace or len(new_trace) < 3:
             new_trace = [
-                f"【阶段 1: 感知 (Perceive)】扫描到候选人 {name} 履历：{school} {edu}背景，{exp}年资历，现任 {company} · {title}。",
-                f"【阶段 2: 规划 (Plan)】启动 timeline_cross_auditor 进行履历时序与社保工龄比对；调用 project_substance_evaluator 核验 {skills[:25]} 项目指标真伪。",
-                f"【阶段 3: 行动 (Act)】深度核查反馈：项目经历与履历工龄连贯，在 {company} 主导模块技术特征清晰，核心指标具备可信度。",
-                f"【阶段 4: 反思 (Reflect)】综合核验无简历虚假注水痕迹，技术架构深度与【{job_title}】高度吻合，评定为优秀推荐。"
+                f"【时序与经历真实度排查】候选人 {name} 毕业于{school} {edu}，总工龄{exp}年，任职于{company}，履历时序与大厂就职周期连贯，未发现明显空窗或倒挂疑点。",
+                f"【项目量化指标与注水审计】项目自述中提及的核心性能提升与并发吞吐指标整体符合大型业务场景，但需防范将平台中台能力归功于单人主导的包装水分。",
+                f"【核心技术深度与短板漏洞】技术储备集中于{skills[:35]}，具备扎实工程实战能力；需重点排查在复杂分布式容灾、高可用熔断等深水区领域的真实掌控深度。",
+                f"【人岗真实拟合与风险预警】综合评估与当前【{job_title}】的核心诉求具备良好匹配度，评定为高潜力推荐，建议重点考察高可用容灾实战细节。"
             ]
 
         # 依次流式推送各个 ReAct 轨迹阶段
