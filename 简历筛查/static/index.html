@@ -1078,7 +1078,7 @@
               <!-- ══════════════════════════════════════════════════════════ -->
               <!-- NEW: AI 资深猎头深度尽调与测谎痕迹 (Agent ReAct 调查轨迹) ── -->
               <!-- ══════════════════════════════════════════════════════════ -->
-              <div v-if="currentDetail.deep_audit" class="bg-white rounded-2xl p-5 space-y-4 border border-slate-200 shadow-xs">
+              <div v-if="currentDetail" class="bg-white rounded-2xl p-5 space-y-4 border border-slate-200 shadow-xs">
                 <div class="flex items-center justify-between border-b border-slate-100 pb-3">
                   <div class="flex items-center gap-2">
                     <span class="text-lg">🕵️</span>
@@ -1093,7 +1093,7 @@
                 </div>
 
                 <!-- 1. 风险警示 (Risk Warnings) -->
-                <div v-if="currentDetail.deep_audit.risk_warnings && currentDetail.deep_audit.risk_warnings.length" class="space-y-1.5">
+                <div v-if="currentDetail.deep_audit?.risk_warnings && currentDetail.deep_audit.risk_warnings.length" class="space-y-1.5">
                   <div class="text-xs font-bold text-amber-800 flex items-center gap-1.5">
                     <span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
                     <span>⚠️ 履历真实性与打假风险预警：</span>
@@ -1107,7 +1107,7 @@
                 </div>
 
                 <!-- 2. 实名核实亮点 (Verified Highlights) -->
-                <div v-if="currentDetail.deep_audit.verified_highlights && currentDetail.deep_audit.verified_highlights.length" class="space-y-1.5">
+                <div v-if="currentDetail.deep_audit?.verified_highlights && currentDetail.deep_audit.verified_highlights.length" class="space-y-1.5">
                   <div class="text-xs font-bold text-emerald-800 flex items-center gap-1.5">
                     <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
                     <span>✓ 官方资质与工具链核验实锤：</span>
@@ -1121,7 +1121,7 @@
                 </div>
 
                 <!-- 3. ReAct 完整调查时间线日志 (Trace Logs) 与大模型推导思维链 -->
-                <div v-if="currentDetail.deep_audit.investigation_trace && currentDetail.deep_audit.investigation_trace.length" class="space-y-2 pt-1">
+                <div class="space-y-2 pt-1">
                   <div class="text-xs font-bold text-slate-800 flex items-center justify-between">
                     <span class="flex items-center gap-1.5">
                       <svg class="w-3.5 h-3.5 text-[#008770]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
@@ -1142,7 +1142,7 @@
 
                   <div v-show="showTraceLog" class="space-y-2">
                     <!-- 大模型实时推导思维链卡片 (Reasoning Process) -->
-                    <div v-if="currentDetail.deep_audit.reasoning_chain" 
+                    <div v-if="currentDetail.deep_audit?.reasoning_chain" 
                          class="bg-indigo-950/95 text-indigo-100 rounded-xl p-3.5 font-mono text-[11px] leading-relaxed border border-indigo-700/60 shadow-inner space-y-1.5">
                       <div class="flex items-center justify-between text-indigo-300 font-bold border-b border-indigo-800/80 pb-1.5">
                         <span class="flex items-center gap-1.5">
@@ -1155,17 +1155,21 @@
                     </div>
 
                     <!-- 4大 ReAct 阶段日志 -->
-                    <div class="bg-slate-900 text-slate-200 rounded-xl p-3.5 font-mono text-[11px] leading-relaxed space-y-1.5 max-h-60 overflow-y-auto border border-slate-800 shadow-inner">
+                    <div v-if="currentDetail.deep_audit?.investigation_trace && currentDetail.deep_audit.investigation_trace.length" 
+                         class="bg-slate-900 text-slate-200 rounded-xl p-3.5 font-mono text-[11px] leading-relaxed space-y-1.5 max-h-60 overflow-y-auto border border-slate-800 shadow-inner">
                       <div v-for="(step, sIdx) in currentDetail.deep_audit.investigation_trace" :key="sIdx" class="flex items-start gap-2">
                         <span class="text-[#00C5A8] font-bold select-none">&gt;</span>
                         <span class="whitespace-pre-wrap">{{ step }}</span>
                       </div>
                     </div>
+                    <div v-else class="p-3 text-center text-xs text-slate-400 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                      暂无调查轨迹，请点击上方「重新尽调推测」由大模型实时生成。
+                    </div>
                   </div>
                 </div>
 
                 <!-- 4. 靶向面试重点 (Targeted Interview Focus) -->
-                <div v-if="currentDetail.deep_audit.targeted_interview_focus && currentDetail.deep_audit.targeted_interview_focus.length" class="space-y-1.5 pt-1">
+                <div v-if="currentDetail.deep_audit?.targeted_interview_focus && currentDetail.deep_audit.targeted_interview_focus.length" class="space-y-1.5 pt-1">
                   <div class="text-xs font-bold text-slate-800 flex items-center gap-1">
                     <span>🎯 面试官重点防线与攻防要点：</span>
                   </div>
@@ -2790,17 +2794,31 @@
           try {
             const res = await fetch(`/api/candidates/${candidateId}/rededuce-trace`, { method: 'POST' });
             const json = await res.json();
-            if (json.ok) {
+            if (json.ok && json.data) {
+              const auditData = json.data.deep_audit || {
+                investigation_trace: json.data.investigation_trace || [],
+                reasoning_chain: json.data.reasoning_chain || '',
+                targeted_interview_focus: json.data.targeted_interview_focus || [],
+                risk_warnings: currentDetail.value?.deep_audit?.risk_warnings || [],
+                verified_highlights: currentDetail.value?.deep_audit?.verified_highlights || []
+              };
               if (currentDetail.value) {
-                currentDetail.value.deep_audit = json.data.deep_audit;
+                currentDetail.value.deep_audit = {
+                  ...(currentDetail.value.deep_audit || {}),
+                  ...auditData
+                };
               }
               const item = (candidates.value || []).find(c => c.id === candidateId);
               if (item) {
-                item.deep_audit = json.data.deep_audit;
+                item.deep_audit = {
+                  ...(item.deep_audit || {}),
+                  ...auditData
+                };
               }
+              showTraceLog.value = true;
               showToast('已完成大模型实时推导思维链与 ReAct 全流程重新尽调！');
             } else {
-              showToast('重新推测失败: ' + (json.error || '未知错误'));
+              showToast('重新推测失败: ' + (json?.error || '未知错误'));
             }
           } catch (e) {
             showToast('重新推测异常: ' + e);

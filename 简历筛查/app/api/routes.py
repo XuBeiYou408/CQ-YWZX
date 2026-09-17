@@ -742,6 +742,7 @@ async def rededuce_trace(candidate_id: str):
     return {
         "ok": True,
         "data": {
+            "deep_audit": deep_audit,
             "investigation_trace": new_trace,
             "reasoning_chain": reasoning_chain,
             "targeted_interview_focus": deep_audit.get("targeted_interview_focus", [])
