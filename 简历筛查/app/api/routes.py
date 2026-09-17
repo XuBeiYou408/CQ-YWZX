@@ -627,6 +627,91 @@ async def regenerate_questions(candidate_id: str):
     }
 
 
+class ReasoningStreamFilter:
+    """过滤大模型思维链开头的元指令、人设复读与输出格式套话，确保首字即进入实质分析"""
+    def __init__(self, candidate_name: str = ""):
+        self.candidate_name = candidate_name.strip()
+        self.started = False
+        self.buffer = ""
+        self.meta_patterns = [
+            r"^(首先|现在|好的)?[，, ]*(用户|指令|题目)?(要求|让我|需要我|希望我|设定我).*",
+            r"^作为(一位|一名|严谨|大厂|资深|猎头|智能体|尽调官).*",
+            r"^输出(必须|需要|格式|包含).*",
+            r"^(reasoning_chain|investigation_trace|targeted_interview_focus)[\s\S]*",
+            r"^包含(三个|四个|以下)部分.*",
+            r"^(这是一个|这是|包括)数组.*",
+            r"^每个阶段(都|需要|必须).*",
+            r"^现在[，, ]*(开始)?分析.*",
+            r"^我们(来|先)?看(一下|下)?(候选人|需求|信息).*",
+        ]
+
+    def filter_chunk(self, delta: str) -> str:
+        if self.started:
+            return delta
+
+        self.buffer += delta
+
+        # 1. 检测到候选人姓名，直接从候选人姓名（或其前置短语）切入
+        if self.candidate_name and self.candidate_name in self.buffer:
+            idx = self.buffer.find(self.candidate_name)
+            for p in ["针对候选人【", "针对候选人", "候选人【", "候选人", "关于候选人", "针对"]:
+                if idx >= len(p) and self.buffer[idx - len(p) : idx] == p:
+                    idx -= len(p)
+                    break
+            self.started = True
+            output = self.buffer[idx:]
+            self.buffer = ""
+            return output
+
+        # 2. 检测到通用实质性分析标志短语
+        general_markers = ["从履历来看", "从候选人的", "候选人的履历", "时序自洽性", "工程硬核度", "岗位匹配度", "学历背景真实"]
+        for marker in general_markers:
+            idx = self.buffer.find(marker)
+            if idx != -1:
+                self.started = True
+                output = self.buffer[idx:]
+                self.buffer = ""
+                return output
+
+        # 3. 若换行较多，逐行检测并剥离元话术
+        lines = self.buffer.split("\n")
+        if len(lines) > 1:
+            for i, line in enumerate(lines[:-1]):
+                stripped = line.strip()
+                if not stripped:
+                    continue
+                is_meta = any(re.match(p, stripped, re.IGNORECASE) for p in self.meta_patterns)
+                if any(w in stripped for w in ["JSON格式", "字段", "数组", "智能体", "用户要求", "prompt", "输出必须"]):
+                    is_meta = True
+
+                if not is_meta and len(stripped) > 6:
+                    self.started = True
+                    output = "\n".join(lines[i:])
+                    self.buffer = ""
+                    return output
+
+        # 4. 兜底保护：缓冲区过长仍未命中候选人姓名时强制清洗元正则
+        if len(self.buffer) > 200:
+            self.started = True
+            output = self.buffer
+            self.buffer = ""
+            for p in self.meta_patterns:
+                output = re.sub(p, "", output, flags=re.MULTILINE).strip()
+            return output
+
+        return ""
+
+    def flush(self) -> str:
+        if self.started:
+            return ""
+        self.started = True
+        output = self.buffer
+        self.buffer = ""
+        for p in self.meta_patterns:
+            output = re.sub(p, "", output, flags=re.MULTILINE).strip()
+        return output
+
+
 @router.post("/api/candidates/{candidate_id}/rededuce-trace")
 async def rededuce_trace(candidate_id: str):
     """根据候选人背景调用大模型重新推导 ReAct 尽调时间线轨迹，并返回大模型现场推导思维链"""
@@ -666,23 +751,9 @@ async def rededuce_trace(candidate_id: str):
 
     cfg = load_config()
     system_prompt = (
-        "你是一位严谨苛刻的大厂资深技术尽调官与猎头复合智能体（ReAct 架构）。"
-        "请根据候选人真实履历、学历、工龄、跳槽时序与主导项目，重新执行一次端到端的交叉尽调与反思推理，"
-        "输出其四大阶段轨迹（感知 Perceive → 规划 Plan → 行动 Act → 反思 Reflect）与大模型推导思维链。\n"
-        "【严格输出合法 JSON 格式】：\n"
-        "{\n"
-        "  \"reasoning_chain\": \"在此输出大模型实时推导思维链（120~250字）：从其毕业学校、跳槽时间线衔接、大厂核心业务含金量、是否存在量化指标造假水分、以及与岗位的真实匹配风险进行层层拆解。\",\n"
-        "  \"investigation_trace\": [\n"
-        "    \"【阶段 1: 感知 (Perceive)】...\",\n"
-        "    \"【阶段 2: 规划 (Plan)】...\",\n"
-        "    \"【阶段 3: 行动 (Act)】...\",\n"
-        "    \"【阶段 4: 反思 (Reflect)】...\"\n"
-        "  ],\n"
-        "  \"targeted_interview_focus\": [\n"
-        "    \"面试官重点防线1...\",\n"
-        "    \"面试官重点防线2...\"\n"
-        "  ]\n"
-        "}"
+        "你是资深技术尽调专家，负责对候选人履历执行端到端交叉尽调与反思推导（ReAct 架构）。\n"
+        "【输出要求】：严格输出合法 JSON，包含 investigation_trace（感知/规划/行动/反思四个阶段）与 targeted_interview_focus（2条面试防线）。\n"
+        "【深度思考核心规则】：严禁在思考（Reasoning）中复述任何任务要求、身份人设、JSON输出格式或字段名！严禁出现「用户要求我...」「作为智能体...」「需要输出...」等任何套话！第一句话必须直接对候选人履历、学历真伪、跳槽时序与项目含金量展开实质性审查。"
     )
 
     prompt = f"""【应聘岗位】: {job_title}
@@ -692,24 +763,46 @@ async def rededuce_trace(candidate_id: str):
 【核心项目履历细节】:
 {concise_exp}
 
-请针对上述履历执行 ReAct 重新推导，严格输出合法 JSON 格式。"""
+请直接从分析【{name}】的真实履历背景与项目指标切入开始思考，并严格输出以下合法 JSON 结构：
+{{
+  "investigation_trace": [
+    "【阶段 1: 感知 (Perceive)】...",
+    "【阶段 2: 规划 (Plan)】...",
+    "【阶段 3: 行动 (Act)】...",
+    "【阶段 4: 反思 (Reflect)】..."
+  ],
+  "targeted_interview_focus": [
+    "面试官重点防线1...",
+    "面试官重点防线2..."
+  ]
+}}"""
 
     async def event_generator():
         accumulated_reasoning = ""
         accumulated_content = ""
         has_streamed_reasoning = False
+        flt = ReasoningStreamFilter(candidate_name=name)
 
         try:
             async for item in stream_chat(prompt, system_prompt=system_prompt, cfg=cfg, json_mode=True):
                 itype = item.get("type")
                 delta = item.get("delta", "")
                 if itype == "reasoning" and delta:
-                    has_streamed_reasoning = True
-                    accumulated_reasoning += delta
-                    # 模型生成一个字，前端实时输出一个字
-                    yield f"data: {json.dumps({'type': 'reasoning', 'delta': delta}, ensure_ascii=False)}\n\n"
+                    filtered_delta = flt.filter_chunk(delta)
+                    if filtered_delta:
+                        has_streamed_reasoning = True
+                        accumulated_reasoning += filtered_delta
+                        # 模型生成一个字，前端实时输出一个字
+                        yield f"data: {json.dumps({'type': 'reasoning', 'delta': filtered_delta}, ensure_ascii=False)}\n\n"
                 elif itype == "content" and delta:
                     accumulated_content += delta
+
+            # 若流结束还有未冲刷的字符
+            flushed = flt.flush()
+            if flushed:
+                has_streamed_reasoning = True
+                accumulated_reasoning += flushed
+                yield f"data: {json.dumps({'type': 'reasoning', 'delta': flushed}, ensure_ascii=False)}\n\n"
         except Exception as e:
             logger.error(f"重新推导时间线轨迹流式调用异常: {e}", exc_info=True)
 
@@ -731,7 +824,7 @@ async def rededuce_trace(candidate_id: str):
 
         # 兜底保障：若模型未输出流式思考（例如普通模型）或处于离线断网环境
         # 依候选人真实画像，逐字流式打字机推送到前端
-        if not has_streamed_reasoning:
+        if not has_streamed_reasoning or not reasoning_chain:
             if not reasoning_chain:
                 reasoning_chain = (
                     f"针对候选人【{name}】的履历重新推断：\n"
