@@ -25,7 +25,7 @@ from sample_contract import (
 from contract.precedents import PRECEDENTS_DATABASE, search_precedents
 from contract.parser import parse_uploaded_file, detect_contract_type
 from contract.engine import engine
-from config import config   # /sample/list 里用到 config.AGENT_ENABLED，此前漏了这行 import
+from config import config
 
 logger = logging.getLogger(__name__)
 router = APIRouter()

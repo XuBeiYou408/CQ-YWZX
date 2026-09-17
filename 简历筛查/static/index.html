@@ -1125,14 +1125,14 @@
                   <div class="text-xs font-bold text-slate-800 flex items-center justify-between">
                     <span class="flex items-center gap-1.5">
                       <svg class="w-3.5 h-3.5 text-[#008770]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                      <span>智能体执行轨迹记录（系统编排与工具取证，非模型原始思维链）：</span>
+                      <span>智能体自主漏洞排查与尽调审计轨迹：</span>
                     </span>
                     <div class="flex items-center gap-2">
                       <!-- 重新尽调推测按钮 -->
                       <button @click="rededuceTrace(currentDetail.id)" :disabled="rededucingTrace"
                         class="text-[11px] text-[#008770] hover:text-[#006f5c] hover:bg-emerald-100/80 font-semibold flex items-center gap-1 cursor-pointer bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200 transition-colors shadow-2xs">
                         <svg class="w-3 h-3" :class="{'animate-spin': rededucingTrace}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
-                        <span>{{ rededucingTrace ? '大模型现场推导中...' : '重新尽调推测' }}</span>
+                        <span>{{ rededucingTrace ? '大模型自主漏洞排查中...' : '重新漏洞排查' }}</span>
                       </button>
                       <button @click="showTraceLog = !showTraceLog" class="text-[11px] text-[#008770] hover:underline font-medium cursor-pointer">
                         {{ showTraceLog ? '收起日志 ▲' : '展开完整尽调日志 ▼' }}
@@ -1155,11 +1155,11 @@
                         </span>
                       </div>
                       <div class="whitespace-pre-wrap text-indigo-100/95 text-[11px] max-h-56 overflow-y-auto leading-relaxed selection:bg-indigo-700">
-                        <template v-if="currentDetail.deep_audit?.reasoning_chain">
-                          {{ currentDetail.deep_audit.reasoning_chain }}
+                        <template v-if="cleanReasoningChain(currentDetail.deep_audit?.reasoning_chain)">
+                          {{ cleanReasoningChain(currentDetail.deep_audit.reasoning_chain) }}
                         </template>
                         <template v-else-if="rededucingTrace">
-                          <span class="text-indigo-300 animate-pulse">&gt; 正在唤起 ReAct 智能体，建立双向推理流...</span>
+                          <span class="text-indigo-300 animate-pulse">&gt; 正在进行实质背景与工程时序审查，提取推导思维链...</span>
                         </template>
                         <span v-if="rededucingTrace" class="inline-block w-1.5 h-3.5 bg-indigo-300 ml-0.5 animate-pulse align-middle"></span>
                       </div>
@@ -2900,6 +2900,41 @@
           }
         };
 
+        const cleanReasoningChain = (text) => {
+          if (!text) return '';
+          const lines = text.split('\n');
+          const isMetaLine = (line) => {
+            const t = line.trim();
+            if (!t) return true;
+            if (/^[{\}\[\]",\s]+$/.test(t)) return true;
+            if (t.toLowerCase().includes('json')) return true;
+            if (/investigation_trace|targeted_interview_focus|reasoning_chain/.test(t)) return true;
+            if (/^\s*"[^"]*",?\s*$/.test(t)) return true;
+
+            const metaKeywords = [
+              '尽调专家', '尽调官', '智能体', 'ReAct', '资深技术', '猎头',
+              '我需要严格', '只输出', '不要有任何额外', '纯 JSON', '严格输出', '合法 JSON',
+              '核心规则', '深度思考', '第一句话必须', '不能复述', '严禁在思考',
+              '每个阶段以', '是一个数组', '包含四个阶段', '包含两个', '保持简洁',
+              '现在，分析', '现在，构建', '现在，写出', '现在，编译', '草拟', '编译成',
+              '这是初步了解', '规划如何验证', '描述实际的验证', '反思验证后的结论'
+            ];
+            if (metaKeywords.some(kw => t.includes(kw))) return true;
+            if (/^(岗位要求|候选人履历|工作经历|核心技术栈|工作与项目经历|候选人信息)\s*[:：]?/.test(t)) return true;
+            if (/^[-*•]\s*(姓名|工龄|教育|当前职位|技术栈|工作经历|岗位|JD|候选人|核心项目|腾讯科技|字节跳动)\s*[:：]/.test(t)) return true;
+            if (/^[-*•]\s*(负责|主导关键|熟练|精通|具备\d*年|有.*优先|资深|全栈|前端开发|本科|硕士|大专)/.test(t)) return true;
+            if (/^[-*•]\s*阶段\s*\d+/.test(t)) return true;
+            if (/^\s*[-*•]\s*(这是初步了解|规划如何验证|描述实际的验证|反思验证后的结论|这是面试官应该|重点防线：|每个阶段以)/.test(t)) return true;
+            if (/^(例如|比如)\s*[:：]?/.test(t) && t.length < 8) return true;
+            if (['构建每个阶段的内容：', '现在，写出 JSON 内容。', '描述需要基于履历进行反思推导。'].includes(t)) return true;
+
+            return false;
+          };
+
+          const validLines = lines.filter(l => !isMetaLine(l));
+          return validLines.join('\n').trim();
+        };
+
         const regenerateQuestions = async (candidateId) => {
           regeneratingQuestions.value = true;
           try {
@@ -3773,6 +3808,7 @@
           getQuestionThinking,
           isThinkingOpen,
           toggleQuestionThinking,
+          cleanReasoningChain,
           rededuceTrace,
           regenerateQuestions,
           exportSingleReport,

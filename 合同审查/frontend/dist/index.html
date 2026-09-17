@@ -1477,6 +1477,10 @@
           if (sampleMenuOpen.value && !sampleListLoaded.value) {
             try {
               const res = await fetch('/api/contract/sample/list');
+              if (!res.ok) {
+                const errText = await res.text();
+                throw new Error(`服务响应异常(${res.status}): ${errText.slice(0, 100)}`);
+              }
               const data = await res.json();
               if (Array.isArray(data.data)) {
                 sampleList.value = data.data;
@@ -1498,6 +1502,10 @@
           sampleMenuOpen.value = false;
           try {
             const res = await fetch('/api/contract/sample?id=' + encodeURIComponent(id));
+            if (!res.ok) {
+              const errText = await res.text();
+              throw new Error(`服务响应异常(${res.status}): ${errText.slice(0, 100)}`);
+            }
             const data = await res.json();
             if (!data.data) throw new Error(data.message || '响应为空');
             const d = data.data;

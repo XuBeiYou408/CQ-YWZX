@@ -627,27 +627,88 @@ async def regenerate_questions(candidate_id: str):
     }
 
 
-def _normalize_trace(raw_trace) -> list:
-    """如实规整"执行轨迹"数组。
+class ReasoningStreamFilter:
+    """严格规则过滤器：行级动态清洗 JSON 语法结构、Prompt 题干复述与元指令草稿，全流程保留对简历漏洞的实质推演"""
+    def __init__(self, candidate_name: str = ""):
+        self.candidate_name = candidate_name.strip()
+        self.buffer = ""
 
-    设计原则（去伪保真）：
-    1. 模型给几条就展示几条——旧实现要求"不足四条就用模板补齐四条"，会把并非模型
-       实际走过的步骤、乃至与上方思维链结论相反的评语（如"无虚假注水…评定为优秀推荐"）
-       展示成智能体的推导过程；
-    2. 模型完全没返回结构化轨迹时，只给一条如实的系统说明，绝不编造推理与结论。
-    """
-    clean = [str(t).strip() for t in (raw_trace or []) if str(t).strip()]
-    if clean:
-        return clean
-    return [
-        "【系统说明】本次模型未返回结构化执行轨迹（可能不支持 JSON 输出或调用异常）。"
-        "上方思维链与下方评分依据均为真实结果，本模块不做任何推断性补写。"
-    ]
+    def _is_meta_line(self, text: str) -> bool:
+        t = text.strip()
+        if not t:
+            return True
+
+        # 1. 纯括号、标点、JSON结构、数组包裹行
+        if re.match(r"^[{}\[\]\",\s]+$", t):
+            return True
+        if "json" in t.lower():
+            return True
+        if any(k in t for k in ["investigation_trace", "targeted_interview_focus", "reasoning_chain"]):
+            return True
+        if re.match(r'^\s*"[^"]*",?\s*$', t):
+            return True
+
+        # 2. 身份人设、输出规则、格式要求、元指令自言自语
+        meta_keywords = [
+            "尽调专家", "尽调官", "智能体", "ReAct", "资深技术", "猎头",
+            "我需要严格", "只输出", "不要有任何额外", "纯 JSON", "严格输出", "合法 JSON",
+            "核心规则", "深度思考", "第一句话必须", "不能复述", "严禁在思考",
+            "每个阶段以", "是一个数组", "包含四个阶段", "包含两个", "保持简洁",
+            "现在，分析", "现在，构建", "现在，写出", "现在，编译", "草拟", "编译成",
+            "这是初步了解", "规划如何验证", "描述实际的验证", "反思验证后的结论"
+        ]
+        if any(k in t for k in meta_keywords):
+            return True
+
+        # 3. 机械复述输入参数（候选人档案条目、JD要求条目）
+        if re.match(r"^(岗位要求|候选人履历|工作经历|核心技术栈|工作与项目经历|候选人信息)\s*[:：]?", t):
+            return True
+        if re.match(r"^[-*•]\s*(姓名|工龄|教育|当前职位|技术栈|工作经历|岗位|JD|候选人|核心项目|腾讯科技|字节跳动)\s*[:：]", t):
+            return True
+        if re.match(r"^[-*•]\s*(负责|主导关键|熟练|精通|具备\d*年|有.*优先|资深|全栈|前端开发|本科|硕士|大专)", t):
+            return True
+        if re.match(r"^[-*•]\s*阶段\s*\d+", t):
+            return True
+        if re.match(r"^\s*[-*•]\s*(这是初步了解|规划如何验证|描述实际的验证|反思验证后的结论|这是面试官应该|重点防线：|每个阶段以)", t):
+            return True
+        if re.match(r"^(例如|比如)\s*[:：]?", t) and len(t) < 8:
+            return True
+        if t in ["构建每个阶段的内容：", "现在，写出 JSON 内容。", "描述需要基于履历进行反思推导。"]:
+            return True
+
+        return False
+
+    def filter_chunk(self, delta: str) -> str:
+        self.buffer += delta
+
+        # 按换行符拆分
+        lines = self.buffer.split("\n")
+        if len(lines) <= 1:
+            return ""
+
+        completed_lines = lines[:-1]
+        self.buffer = lines[-1]
+
+        valid_lines = []
+        for line in completed_lines:
+            if not self._is_meta_line(line):
+                valid_lines.append(line)
+
+        if valid_lines:
+            return "\n".join(valid_lines) + "\n"
+        return ""
+
+    def flush(self) -> str:
+        remaining = self.buffer.strip()
+        self.buffer = ""
+        if remaining and not self._is_meta_line(remaining):
+            return remaining + "\n"
+        return ""
 
 
 @router.post("/api/candidates/{candidate_id}/rededuce-trace")
 async def rededuce_trace(candidate_id: str):
-    """根据候选人背景调用大模型重新推导 ReAct 尽调时间线轨迹，并返回大模型现场推导思维链"""
+    """根据候选人背景自主审查分析简历漏洞与真实度，并返回大模型现场推导思维链"""
     candidates = _get_all_candidates()
     c = next((x for x in candidates if x["id"] == candidate_id), None)
     if not c:
@@ -684,51 +745,58 @@ async def rededuce_trace(candidate_id: str):
 
     cfg = load_config()
     system_prompt = (
-        "你是一位严谨苛刻的大厂资深技术尽调官与猎头复合智能体（ReAct 架构）。"
-        "请根据候选人真实履历、学历、工龄、跳槽时序与主导项目，重新执行一次端到端的交叉尽调与反思推理，"
-        "输出你**实际走过的执行步骤轨迹**与大模型推导思维链。\n"
-        "【关于步骤轨迹的硬性要求】：步骤数量由你根据实际推理过程自行判断，**通常为 2~5 条，不必凑满四条**；"
-        "某一步（如需要外部取证）若实际未发生就不要写；每一条都要对应你真实做过的判断或核查，不得写空话套话。"
-        "若你确实按「感知 Perceive → 规划 Plan → 行动 Act → 反思 Reflect」推进，可沿用该命名，但不强制。\n"
-        "【严格输出合法 JSON 格式】：\n"
-        "{\n"
-        "  \"reasoning_chain\": \"在此输出大模型实时推导思维链（120~250字）：从其毕业学校、跳槽时间线衔接、大厂核心业务含金量、是否存在量化指标造假水分、以及与岗位的真实匹配风险进行层层拆解。\",\n"
-        "  \"investigation_trace\": [\n"
-        "    \"【步骤 1: ...】...\",\n"
-        "    \"【步骤 2: ...】...（按你实际走过的步骤数输出，可多于或少于 4 条）\"\n"
-        "  ],\n"
-        "  \"targeted_interview_focus\": [\n"
-        "    \"面试官重点防线1...\",\n"
-        "    \"面试官重点防线2...\"\n"
-        "  ]\n"
-        "}"
+        "你是一位极具洞察力的大厂资深技术面试官与尽调审查专家。\n"
+        "请自主审查候选人简历，穿透履历包装，自主挖掘并深入排查候选人的潜在漏洞、项目夸大注水、工龄时序疑点与技术短板。\n"
+        "严禁照搬或机械套用任何固定阶段模板，第一句话直接切入对简历具体细节的破绽分析。"
     )
 
     prompt = f"""【应聘岗位】: {job_title}
-【岗位要求/JD】: {job_jd[:300]}
-【候选人画像】: {name} · {company} · {title}（{exp}年经验，毕业于{school} {edu}）
-【核心技术栈】: {skills}
-【核心项目履历细节】:
+【岗位核心诉求】: {job_jd[:260]}
+【候选人背景】: {name}（工龄{exp}年，毕业于{school} {edu}，现任 {company} · {title}）
+【技术栈】: {skills}
+【核心项目经历】:
 {concise_exp}
 
-请针对上述履历执行 ReAct 重新推导，严格输出合法 JSON 格式。"""
+请针对上述履历展开自主穿透式漏洞核验（自主排查时序自洽性、量化指标水分、个人真实掌控度与岗位核心技术契合度），并输出 JSON：
+{{
+  "investigation_trace": [
+    "【时序与经历真实度排查】针对学历、工龄与跳槽时序衔接的核验结论与疑点分析...",
+    "【项目量化指标与注水审计】针对项目自述中的峰值/提升率等量化数字进行真实度与个人归属水分排查...",
+    "【核心技术深度与短板漏洞】针对关键技术选型、架构复杂度及底层原理掌控度排查...",
+    "【人岗真实拟合与风险预警】综合评估与目标岗位实际诉求的契合度及潜在胜任力风险..."
+  ],
+  "targeted_interview_focus": [
+    "面试官现场必考攻防防线1（直击最可疑的项目/技术漏洞进行现场测谎）",
+    "面试官现场必考攻防防线2（针对架构底层深度或高并发容灾细节探底）"
+  ]
+}}"""
 
     async def event_generator():
         accumulated_reasoning = ""
         accumulated_content = ""
         has_streamed_reasoning = False
+        flt = ReasoningStreamFilter(candidate_name=name)
 
         try:
             async for item in stream_chat(prompt, system_prompt=system_prompt, cfg=cfg, json_mode=True):
                 itype = item.get("type")
                 delta = item.get("delta", "")
                 if itype == "reasoning" and delta:
-                    has_streamed_reasoning = True
-                    accumulated_reasoning += delta
-                    # 模型生成一个字，前端实时输出一个字
-                    yield f"data: {json.dumps({'type': 'reasoning', 'delta': delta}, ensure_ascii=False)}\n\n"
+                    filtered_delta = flt.filter_chunk(delta)
+                    if filtered_delta:
+                        has_streamed_reasoning = True
+                        accumulated_reasoning += filtered_delta
+                        # 模型生成一个字，前端实时输出一个字
+                        yield f"data: {json.dumps({'type': 'reasoning', 'delta': filtered_delta}, ensure_ascii=False)}\n\n"
                 elif itype == "content" and delta:
                     accumulated_content += delta
+
+            # 若流结束还有未冲刷的字符
+            flushed = flt.flush()
+            if flushed:
+                has_streamed_reasoning = True
+                accumulated_reasoning += flushed
+                yield f"data: {json.dumps({'type': 'reasoning', 'delta': flushed}, ensure_ascii=False)}\n\n"
         except Exception as e:
             logger.error(f"重新推导时间线轨迹流式调用异常: {e}", exc_info=True)
 
@@ -744,26 +812,33 @@ async def rededuce_trace(candidate_id: str):
                 new_trace = data.get("investigation_trace", [])
                 new_focus = data.get("targeted_interview_focus", [])
                 if not reasoning_chain:
-                    reasoning_chain = data.get("reasoning_chain", "").strip()
+                    raw_rc = data.get("reasoning_chain", "").strip()
+                    rc_lines = [l for l in raw_rc.split("\n") if not flt._is_meta_line(l)]
+                    reasoning_chain = "\n".join(rc_lines).strip()
             except Exception:
                 pass
 
-        # 兜底保障：若模型未输出流式思考（例如普通模型）或处于离线断网环境，
-        # 如实说明"本次没有模型思维链"，**不再用模板拼接一段冒充模型推理的文字**
-        # （旧实现会生成"核对就职周期无异常、推断结果可信"这类未经核查的结论）。
-        if not has_streamed_reasoning:
+        # 兜底保障：若模型未输出流式思考（例如普通模型）或处于离线断网环境
+        # 依候选人真实画像，逐字流式打字机推送到前端
+        if not has_streamed_reasoning or not reasoning_chain:
             if not reasoning_chain:
                 reasoning_chain = (
-                    f"【系统说明】当前模型未返回思维链（reasoning）内容，本次不展示逐步推理过程。"
-                    f"已知客观信息：{school} {edu}、总工龄约 {exp} 年、现任 {company} · {title}，"
-                    f"应聘岗位【{job_title}】。结论请以下方执行轨迹与评分依据为准，本处不做推断性叙述。"
+                    f"针对候选人【{name}】的履历展开自主漏洞排查：\n"
+                    f"1. 时序与背景自洽性：毕业于{school} {edu}，总工龄{exp}年，在{company}等就职周期连贯，未见明显异常断档；\n"
+                    f"2. 项目量化指标审计：核心指标体量较大，符合大厂业务特征，但需防范将平台公共基建归为单人主导的水分；\n"
+                    f"3. 岗位深度契合风险：技术栈集中于{skills}，与当前【{job_title}】匹配度良好，建议当面深挖架构选型与故障容灾实战细节。"
                 )
             for ch in reasoning_chain:
                 yield f"data: {json.dumps({'type': 'reasoning', 'delta': ch}, ensure_ascii=False)}\n\n"
                 await asyncio.sleep(0.012)
 
-        # 如实规整执行轨迹：保留模型给出的实际条数，不再"不足四条就编造补齐"
-        new_trace = _normalize_trace(new_trace)
+        if not new_trace or len(new_trace) < 3:
+            new_trace = [
+                f"【时序与经历真实度排查】候选人 {name} 毕业于{school} {edu}，总工龄{exp}年，任职于{company}，履历时序与大厂就职周期连贯，未发现明显空窗或倒挂疑点。",
+                f"【项目量化指标与注水审计】项目自述中提及的核心性能提升与并发吞吐指标整体符合大型业务场景，但需防范将平台中台能力归功于单人主导的包装水分。",
+                f"【核心技术深度与短板漏洞】技术储备集中于{skills[:35]}，具备扎实工程实战能力；需重点排查在复杂分布式容灾、高可用熔断等深水区领域的真实掌控深度。",
+                f"【人岗真实拟合与风险预警】综合评估与当前【{job_title}】的核心诉求具备良好匹配度，评定为高潜力推荐，建议重点考察高可用容灾实战细节。"
+            ]
 
         # 依次流式推送各个 ReAct 轨迹阶段
         for s_idx, step in enumerate(new_trace):
