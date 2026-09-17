@@ -1155,11 +1155,11 @@
                         </span>
                       </div>
                       <div class="whitespace-pre-wrap text-indigo-100/95 text-[11px] max-h-56 overflow-y-auto leading-relaxed selection:bg-indigo-700">
-                        <template v-if="currentDetail.deep_audit?.reasoning_chain">
-                          {{ currentDetail.deep_audit.reasoning_chain }}
+                        <template v-if="cleanReasoningChain(currentDetail.deep_audit?.reasoning_chain)">
+                          {{ cleanReasoningChain(currentDetail.deep_audit.reasoning_chain) }}
                         </template>
                         <template v-else-if="rededucingTrace">
-                          <span class="text-indigo-300 animate-pulse">&gt; 正在唤起 ReAct 智能体，建立双向推理流...</span>
+                          <span class="text-indigo-300 animate-pulse">&gt; 正在进行实质背景与工程时序审查，提取推导思维链...</span>
                         </template>
                         <span v-if="rededucingTrace" class="inline-block w-1.5 h-3.5 bg-indigo-300 ml-0.5 animate-pulse align-middle"></span>
                       </div>
@@ -2900,6 +2900,33 @@
           }
         };
 
+        const cleanReasoningChain = (text) => {
+          if (!text) return '';
+          const lines = text.split('\n');
+          const blacklisted = [
+            '资深技术尽调专家', '尽调专家', '尽调官', '智能体', 'ReAct', '输出必须', '合法 JSON', '合法JSON', 'JSON格式', '严格的JSON',
+            'investigation_trace', 'targeted_interview_focus', 'reasoning_chain',
+            '不能复述', '严禁在思考', '第一句话必须', '核心规则', '深度思考', '面试防线', '感知阶段', '规划阶段', '行动阶段', '反思阶段',
+            '候选人信息：', '【候选人画像】', '【应聘岗位】', '【岗位要求', '【核心技术栈】'
+          ];
+          const metaRegex = /^[-*•]\s*(岗位|JD|候选人|核心技术栈|核心项目)\s*[:：]/;
+
+          let validStartIndex = -1;
+          for (let i = 0; i < lines.length; i++) {
+            const line = lines[i].trim();
+            if (!line) continue;
+            const isMeta = blacklisted.some(kw => line.toLowerCase().includes(kw.toLowerCase())) || metaRegex.test(line);
+            if (!isMeta) {
+              validStartIndex = i;
+              break;
+            }
+          }
+          if (validStartIndex === -1) {
+            return '';
+          }
+          return lines.slice(validStartIndex).join('\n').trim();
+        };
+
         const regenerateQuestions = async (candidateId) => {
           regeneratingQuestions.value = true;
           try {
@@ -3773,6 +3800,7 @@
           getQuestionThinking,
           isThinkingOpen,
           toggleQuestionThinking,
+          cleanReasoningChain,
           rededuceTrace,
           regenerateQuestions,
           exportSingleReport,

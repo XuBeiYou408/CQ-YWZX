@@ -628,22 +628,47 @@ async def regenerate_questions(candidate_id: str):
 
 
 class ReasoningStreamFilter:
-    """过滤大模型思维链开头的元指令、人设复读与输出格式套话，确保首字即进入实质分析"""
+    """严格规则过滤器：过滤思维链开头的人设宣称、JSON规范拆解、规则念经与候选人信息机械罗列"""
     def __init__(self, candidate_name: str = ""):
         self.candidate_name = candidate_name.strip()
         self.started = False
         self.buffer = ""
-        self.meta_patterns = [
-            r"^(首先|现在|好的)?[，, ]*(用户|指令|题目)?(要求|让我|需要我|希望我|设定我).*",
-            r"^作为(一位|一名|严谨|大厂|资深|猎头|智能体|尽调官).*",
-            r"^输出(必须|需要|格式|包含).*",
-            r"^(reasoning_chain|investigation_trace|targeted_interview_focus)[\s\S]*",
-            r"^包含(三个|四个|以下)部分.*",
-            r"^(这是一个|这是|包括)数组.*",
-            r"^每个阶段(都|需要|必须).*",
-            r"^现在[，, ]*(开始)?分析.*",
-            r"^我们(来|先)?看(一下|下)?(候选人|需求|信息).*",
+        
+        # 1. 黑名单词库：行内只要包含这些元指令关键词，在未进入实质分析前直接过滤丢弃
+        self.blacklisted_keywords = [
+            "资深技术尽调专家", "尽调专家", "尽调官", "智能体", "ReAct",
+            "输出必须", "合法 JSON", "合法JSON", "JSON 格式", "JSON格式", "严格的JSON",
+            "investigation_trace", "targeted_interview_focus", "reasoning_chain",
+            "不能复述", "严禁在思考", "第一句话必须", "核心规则", "深度思考",
+            "面试防线", "感知阶段", "规划阶段", "行动阶段", "反思阶段",
+            "候选人信息：", "【候选人画像】", "【岗位要求", "【核心技术栈】", "【应聘岗位】",
+            "任务要求", "身份人设", "JSON输出格式", "字段名"
         ]
+        
+        # 2. 结构行正则：如列表项 - 岗位：、- JD：、- 候选人：等纯信息复述
+        self.meta_line_patterns = [
+            r"^(首先|现在|好的)?[，, ]*(我是|你是|作为|用户要求|设定我).*",
+            r"^.*(输出必须|严格输出|合法\s*JSON|JSON\s*格式|严格遵守).*",
+            r"^.*(investigation_trace|targeted_interview_focus|reasoning_chain).*",
+            r"^.*(核心规则|深度思考|第一句话必须|不能复述|严禁).*",
+            r"^.*(要有\d+条面试防线|这是面试官需要重点考察).*",
+            r"^.*(应该(是|在)感知阶段|直接审查履历).*",
+            r"^候选人信息\s*[:：]?",
+            r"^[-*•]\s*(岗位|JD|候选人|核心技术栈|核心项目)\s*[:：].*",
+            r"^[【\[](应聘岗位|岗位要求|候选人画像|核心技术栈|核心项目)[】\]].*"
+        ]
+
+    def _is_meta_line(self, text: str) -> bool:
+        t = text.strip()
+        if not t:
+            return True
+        for kw in self.blacklisted_keywords:
+            if kw.lower() in t.lower():
+                return True
+        for pat in self.meta_line_patterns:
+            if re.match(pat, t, re.IGNORECASE):
+                return True
+        return False
 
     def filter_chunk(self, delta: str) -> str:
         if self.started:
@@ -651,53 +676,39 @@ class ReasoningStreamFilter:
 
         self.buffer += delta
 
-        # 1. 检测到候选人姓名，直接从候选人姓名（或其前置短语）切入
-        if self.candidate_name and self.candidate_name in self.buffer:
-            idx = self.buffer.find(self.candidate_name)
-            for p in ["针对候选人【", "针对候选人", "候选人【", "候选人", "关于候选人", "针对"]:
-                if idx >= len(p) and self.buffer[idx - len(p) : idx] == p:
-                    idx -= len(p)
-                    break
-            self.started = True
-            output = self.buffer[idx:]
-            self.buffer = ""
-            return output
-
-        # 2. 检测到通用实质性分析标志短语
-        general_markers = ["从履历来看", "从候选人的", "候选人的履历", "时序自洽性", "工程硬核度", "岗位匹配度", "学历背景真实"]
-        for marker in general_markers:
-            idx = self.buffer.find(marker)
-            if idx != -1:
-                self.started = True
-                output = self.buffer[idx:]
-                self.buffer = ""
-                return output
-
-        # 3. 若换行较多，逐行检测并剥离元话术
+        # 按换行符拆分
         lines = self.buffer.split("\n")
-        if len(lines) > 1:
-            for i, line in enumerate(lines[:-1]):
-                stripped = line.strip()
-                if not stripped:
-                    continue
-                is_meta = any(re.match(p, stripped, re.IGNORECASE) for p in self.meta_patterns)
-                if any(w in stripped for w in ["JSON格式", "字段", "数组", "智能体", "用户要求", "prompt", "输出必须"]):
-                    is_meta = True
+        
+        # 若尚未换行，尝试按主要标点句号分句判定
+        if len(lines) == 1:
+            parts = re.split(r"([。！？\n])", self.buffer)
+            if len(parts) >= 3:
+                sentences = []
+                for i in range(0, len(parts) - 1, 2):
+                    sentences.append(parts[i] + parts[i+1])
+                remaining = parts[-1]
+                
+                for s in sentences:
+                    if not self._is_meta_line(s):
+                        self.started = True
+                        self.buffer = ""
+                        return s + remaining
+                self.buffer = remaining
+            return ""
 
-                if not is_meta and len(stripped) > 6:
-                    self.started = True
-                    output = "\n".join(lines[i:])
+        # 多行情况：保留最后一行未完整的行片段
+        completed_lines = lines[:-1]
+        self.buffer = lines[-1]
+
+        for i, line in enumerate(completed_lines):
+            if not self._is_meta_line(line):
+                # 命中第一条真正的实质分析行！
+                self.started = True
+                valid_content = "\n".join(completed_lines[i:])
+                if self.buffer:
+                    valid_content += "\n" + self.buffer
                     self.buffer = ""
-                    return output
-
-        # 4. 兜底保护：缓冲区过长仍未命中候选人姓名时强制清洗元正则
-        if len(self.buffer) > 200:
-            self.started = True
-            output = self.buffer
-            self.buffer = ""
-            for p in self.meta_patterns:
-                output = re.sub(p, "", output, flags=re.MULTILINE).strip()
-            return output
+                return valid_content
 
         return ""
 
@@ -705,11 +716,11 @@ class ReasoningStreamFilter:
         if self.started:
             return ""
         self.started = True
-        output = self.buffer
+        remaining = self.buffer
         self.buffer = ""
-        for p in self.meta_patterns:
-            output = re.sub(p, "", output, flags=re.MULTILINE).strip()
-        return output
+        lines = remaining.split("\n")
+        valid_lines = [l for l in lines if not self._is_meta_line(l)]
+        return "\n".join(valid_lines)
 
 
 @router.post("/api/candidates/{candidate_id}/rededuce-trace")
@@ -751,19 +762,17 @@ async def rededuce_trace(candidate_id: str):
 
     cfg = load_config()
     system_prompt = (
-        "你是资深技术尽调专家，负责对候选人履历执行端到端交叉尽调与反思推导（ReAct 架构）。\n"
-        "【输出要求】：严格输出合法 JSON，包含 investigation_trace（感知/规划/行动/反思四个阶段）与 targeted_interview_focus（2条面试防线）。\n"
-        "【深度思考核心规则】：严禁在思考（Reasoning）中复述任何任务要求、身份人设、JSON输出格式或字段名！严禁出现「用户要求我...」「作为智能体...」「需要输出...」等任何套话！第一句话必须直接对候选人履历、学历真伪、跳槽时序与项目含金量展开实质性审查。"
+        "你是技术招聘尽调系统后台，负责对候选人真实经历进行背景调查与逻辑验证。"
+        "严格输出合法 JSON，包含 investigation_trace 与 targeted_interview_focus。"
     )
 
-    prompt = f"""【应聘岗位】: {job_title}
-【岗位要求/JD】: {job_jd[:300]}
-【候选人画像】: {name} · {company} · {title}（{exp}年经验，毕业于{school} {edu}）
-【核心技术栈】: {skills}
-【核心项目履历细节】:
+    prompt = f"""岗位要求：{job_title}（{job_jd[:260]}）
+候选人履历：{name}，工龄{exp}年，毕业于{school} {edu}，现任 {company} · {title}
+技术栈：{skills}
+工作与项目经历：
 {concise_exp}
 
-请直接从分析【{name}】的真实履历背景与项目指标切入开始思考，并严格输出以下合法 JSON 结构：
+请针对上述经历进行技术尽调与反思推导，并严格输出以下合法 JSON 结构：
 {{
   "investigation_trace": [
     "【阶段 1: 感知 (Perceive)】...",
