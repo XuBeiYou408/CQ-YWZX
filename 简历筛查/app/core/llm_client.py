@@ -1,7 +1,8 @@
 import asyncio
+import json
 import re
 import time
-from typing import Any, Dict, TypedDict
+from typing import Any, AsyncGenerator, Dict, TypedDict
 
 import httpx
 
@@ -257,7 +258,8 @@ async def generate_chat(
     }
 
     url = f"{base_url.rstrip('/')}/chat/completions"
-    req_timeout = httpx.Timeout(120.0, connect=20.0, read=120.0, write=30.0)
+    conn_timeout = 3.0 if active_provider == "local" else 15.0
+    req_timeout = httpx.Timeout(120.0, connect=conn_timeout, read=120.0, write=30.0)
 
     try:
         async with httpx.AsyncClient(timeout=req_timeout) as client:
@@ -295,3 +297,123 @@ async def generate_chat(
         if isinstance(e, RuntimeError):
             raise
         raise RuntimeError(f"LLM chat generation failed: {e}") from e
+
+
+async def stream_chat(
+    prompt: str,
+    system_prompt: str,
+    cfg: Dict[str, Any],
+    json_mode: bool = False,
+) -> AsyncGenerator[Dict[str, str], None]:
+    """
+    流式调用大模型：
+    逐步 yield {"type": "reasoning", "delta": str} 或 {"type": "content", "delta": str}
+    同时兼容原生 reasoning_content (DeepSeek-R1) 与 <think> 标签 (本地端侧模型)。
+    """
+    active_provider = cfg.get("active_provider", "local")
+
+    if active_provider == "local":
+        local_cfg = cfg.get("local_model", {})
+        lm_url = local_cfg.get("lm_studio_url", "http://127.0.0.1:1234/v1")
+        ollama_url = local_cfg.get("ollama_url", "http://127.0.0.1:11434/v1")
+
+        probe = await probe_local_models(lm_url=lm_url, ollama_url=ollama_url)
+        cloud_cfg = cfg.get("cloud_model", {})
+        has_cloud_key = bool(str(cloud_cfg.get("api_key", "")).strip())
+
+        if not probe.get("available") and has_cloud_key:
+            active_provider = "cloud"
+        else:
+            if probe.get("provider") == "ollama":
+                base_url = ollama_url
+            else:
+                base_url = lm_url
+
+            model = local_cfg.get("model_name", "qwen3.8-27b")
+            model = await _resolve_local_model(base_url, model)
+            headers = {"Content-Type": "application/json"}
+
+    if active_provider != "local":
+        cloud_cfg = cfg.get("cloud_model", {})
+        base_url = cloud_cfg.get("base_url", "https://api.deepseek.com/v1")
+        api_key = cloud_cfg.get("api_key", "")
+        model = cloud_cfg.get("model_name", "deepseek-chat")
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        }
+
+    messages = []
+    if system_prompt:
+        messages.append({"role": "system", "content": system_prompt})
+
+    user_content = prompt
+    if json_mode:
+        user_content = f"{prompt}\n\n请严格只输出合法 JSON 格式，不要输出任何解释、前后缀或 Markdown 代码块标记。"
+    messages.append({"role": "user", "content": user_content})
+
+    payload = {
+        "model": model,
+        "messages": messages,
+        "temperature": 0.6,
+        "max_tokens": 1000,
+        "stream": True,
+    }
+
+    url = f"{base_url.rstrip('/')}/chat/completions"
+    conn_timeout = 3.0 if active_provider == "local" else 15.0
+    req_timeout = httpx.Timeout(120.0, connect=conn_timeout, read=120.0, write=30.0)
+
+    in_think_tag = False
+
+    async with httpx.AsyncClient(timeout=req_timeout) as client:
+        async with client.stream("POST", url, headers=headers, json=payload) as resp:
+            if resp.status_code != 200:
+                body = await resp.aread()
+                raise RuntimeError(
+                    f"LLM streaming failed with status {resp.status_code}: {body.decode('utf-8', errors='ignore')}"
+                )
+
+            async for line in resp.aiter_lines():
+                line = line.strip()
+                if not line or not line.startswith("data: "):
+                    continue
+                raw = line[6:].strip()
+                if raw == "[DONE]":
+                    break
+                try:
+                    chunk = json.loads(raw)
+                    choices = chunk.get("choices", [])
+                    if not choices:
+                        continue
+                    delta = choices[0].get("delta", {})
+                    r_delta = delta.get("reasoning_content") or ""
+                    c_delta = delta.get("content") or ""
+
+                    # 1. 原生 reasoning_content（如 SiliconFlow / DeepSeek-R1）
+                    if r_delta:
+                        yield {"type": "reasoning", "delta": r_delta}
+
+                    # 2. 如果在 content 中包含 <think> 标签（如部分本地模型）
+                    if c_delta:
+                        if "<think>" in c_delta:
+                            in_think_tag = True
+                            parts = c_delta.split("<think>", 1)
+                            if parts[0]:
+                                yield {"type": "content", "delta": parts[0]}
+                            c_delta = parts[1]
+
+                        if in_think_tag:
+                            if "</think>" in c_delta:
+                                in_think_tag = False
+                                parts = c_delta.split("</think>", 1)
+                                if parts[0]:
+                                    yield {"type": "reasoning", "delta": parts[0]}
+                                if parts[1]:
+                                    yield {"type": "content", "delta": parts[1]}
+                            else:
+                                yield {"type": "reasoning", "delta": c_delta}
+                        else:
+                            yield {"type": "content", "delta": c_delta}
+                except Exception:
+                    continue

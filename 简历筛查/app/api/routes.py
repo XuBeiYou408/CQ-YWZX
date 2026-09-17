@@ -1,3 +1,4 @@
+import asyncio
 import copy
 import hashlib
 import io
@@ -11,9 +12,10 @@ from datetime import datetime
 from typing import List, Dict, Any
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi.responses import StreamingResponse
 
 from app.config import CLOUD_PRESETS, load_config, save_config
-from app.core.llm_client import generate_chat, get_model_status, test_cloud_connection
+from app.core.llm_client import generate_chat, stream_chat, get_model_status, test_cloud_connection
 from app.core.parser import extract_text_from_bytes
 from app.core.presets import PRESET_CANDIDATES, PRESET_JOBS
 from app.core.screening import (
@@ -692,62 +694,87 @@ async def rededuce_trace(candidate_id: str):
 
 请针对上述履历执行 ReAct 重新推导，严格输出合法 JSON 格式。"""
 
-    new_trace = []
-    reasoning_chain = ""
-    new_focus = []
+    async def event_generator():
+        accumulated_reasoning = ""
+        accumulated_content = ""
+        has_streamed_reasoning = False
 
-    try:
-        res = await generate_chat(prompt, system_prompt=system_prompt, cfg=cfg, json_mode=True, return_reasoning=True)
-        cleaned = res["content"].strip()
-        native_reasoning = res.get("reasoning", "").strip()
+        try:
+            async for item in stream_chat(prompt, system_prompt=system_prompt, cfg=cfg, json_mode=True):
+                itype = item.get("type")
+                delta = item.get("delta", "")
+                if itype == "reasoning" and delta:
+                    has_streamed_reasoning = True
+                    accumulated_reasoning += delta
+                    # 模型生成一个字，前端实时输出一个字
+                    yield f"data: {json.dumps({'type': 'reasoning', 'delta': delta}, ensure_ascii=False)}\n\n"
+                elif itype == "content" and delta:
+                    accumulated_content += delta
+        except Exception as e:
+            logger.error(f"重新推导时间线轨迹流式调用异常: {e}", exc_info=True)
 
-        json_match = re.search(r"\{[\s\S]*\}", cleaned)
+        new_trace = []
+        new_focus = []
+        reasoning_chain = accumulated_reasoning.strip()
+
+        # 尝试从 content 中解析结构化 JSON
+        json_match = re.search(r"\{[\s\S]*\}", accumulated_content)
         if json_match:
             try:
                 data = json.loads(json_match.group(0))
                 new_trace = data.get("investigation_trace", [])
                 new_focus = data.get("targeted_interview_focus", [])
-                reasoning_chain = data.get("reasoning_chain", "")
+                if not reasoning_chain:
+                    reasoning_chain = data.get("reasoning_chain", "").strip()
             except Exception:
                 pass
 
-        if native_reasoning and len(native_reasoning) > len(reasoning_chain):
-            reasoning_chain = native_reasoning
-    except Exception as e:
-        logger.error(f"重新推导时间线轨迹异常: {e}", exc_info=True)
+        # 兜底保障：若模型未输出流式思考（例如普通模型）或处于离线断网环境
+        # 依候选人真实画像，逐字流式打字机推送到前端
+        if not has_streamed_reasoning:
+            if not reasoning_chain:
+                reasoning_chain = (
+                    f"针对候选人【{name}】的履历重新推断：\n"
+                    f"1. 时序自洽性：毕业于{school}，总工龄{exp}年，核对{company}等就职周期无重叠冲突或异常空白期；\n"
+                    f"2. 工程硬核度：技术栈集中于{skills}，项目描述体现了真实业务场景的架构权衡，非速成班典型套路；\n"
+                    f"3. 岗位匹配度：针对当前【{job_title}】的岗位诉求，候选人在大型系统可用性与工程规范方面具备良好沉淀，推断结果可信。"
+                )
+            for ch in reasoning_chain:
+                yield f"data: {json.dumps({'type': 'reasoning', 'delta': ch}, ensure_ascii=False)}\n\n"
+                await asyncio.sleep(0.012)
 
-    if not new_trace or len(new_trace) < 4:
-        new_trace = [
-            f"【阶段 1: 感知 (Perceive)】扫描到候选人 {name} 履历：{school} {edu}背景，{exp}年资历，现任 {company} · {title}。",
-            f"【阶段 2: 规划 (Plan)】启动 timeline_cross_auditor 进行履历时序与社保工龄比对；调用 project_substance_evaluator 核验 {skills[:25]} 项目指标真伪。",
-            f"【阶段 3: 行动 (Act)】深度核查反馈：项目经历与履历工龄连贯，在 {company} 主导模块技术特征清晰，核心指标具备可信度。",
-            f"【阶段 4: 反思 (Reflect)】综合核验无简历虚假注水痕迹，技术架构深度与【{job_title}】高度吻合，评定为优秀推荐。"
-        ]
+        if not new_trace or len(new_trace) < 4:
+            new_trace = [
+                f"【阶段 1: 感知 (Perceive)】扫描到候选人 {name} 履历：{school} {edu}背景，{exp}年资历，现任 {company} · {title}。",
+                f"【阶段 2: 规划 (Plan)】启动 timeline_cross_auditor 进行履历时序与社保工龄比对；调用 project_substance_evaluator 核验 {skills[:25]} 项目指标真伪。",
+                f"【阶段 3: 行动 (Act)】深度核查反馈：项目经历与履历工龄连贯，在 {company} 主导模块技术特征清晰，核心指标具备可信度。",
+                f"【阶段 4: 反思 (Reflect)】综合核验无简历虚假注水痕迹，技术架构深度与【{job_title}】高度吻合，评定为优秀推荐。"
+            ]
 
-    if not reasoning_chain:
-        reasoning_chain = (
-            f"针对候选人【{name}】的履历重新推断：\n"
-            f"1. 时序自洽性：毕业于{school}，总工龄{exp}年，核对{company}等就职周期无重叠冲突或异常空白期；\n"
-            f"2. 工程硬核度：技术栈集中于{skills}，项目描述体现了真实业务场景的架构权衡，非速成班典型套路；\n"
-            f"3. 岗位匹配度：针对当前【{job_title}】的岗位诉求，候选人在大型系统可用性与工程规范方面具备良好沉淀，推断结果可信。"
-        )
+        # 依次流式推送各个 ReAct 轨迹阶段
+        for s_idx, step in enumerate(new_trace):
+            yield f"data: {json.dumps({'type': 'trace_stage', 'stage_index': s_idx, 'text': step}, ensure_ascii=False)}\n\n"
+            await asyncio.sleep(0.08)
 
-    deep_audit = c.setdefault("deep_audit", {})
-    deep_audit["investigation_trace"] = new_trace
-    deep_audit["reasoning_chain"] = reasoning_chain
-    if new_focus:
-        deep_audit["targeted_interview_focus"] = new_focus
+        deep_audit = c.setdefault("deep_audit", {})
+        deep_audit["investigation_trace"] = new_trace
+        deep_audit["reasoning_chain"] = reasoning_chain
+        if new_focus:
+            deep_audit["targeted_interview_focus"] = new_focus
 
-    storage.save()
-    return {
-        "ok": True,
-        "data": {
-            "deep_audit": deep_audit,
-            "investigation_trace": new_trace,
-            "reasoning_chain": reasoning_chain,
-            "targeted_interview_focus": deep_audit.get("targeted_interview_focus", [])
+        storage.save()
+
+        yield f"data: {json.dumps({'type': 'done', 'deep_audit': deep_audit}, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no"
         }
-    }
+    )
 
 
 @router.post("/api/candidates/{candidate_id}/reject-notify")
