@@ -1,7 +1,11 @@
 import copy
 import json
+import os
 from pathlib import Path
 from typing import Any, Dict
+from dotenv import load_dotenv
+
+load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 CONFIG_FILE = BASE_DIR / "config.json"
@@ -80,6 +84,28 @@ def load_config() -> Dict[str, Any]:
         custom_cfg = {}
 
     merged_cfg = _deep_merge(DEFAULT_CONFIG, custom_cfg)
+
+    # 支持从 .env 或系统环境变量读取模型配置作为弹性回退
+    env_provider = os.getenv("ACTIVE_PROVIDER")
+    if env_provider in ("local", "cloud"):
+        merged_cfg["active_provider"] = env_provider
+
+    env_key = os.getenv("DEEPSEEK_API_KEY") or os.getenv("LM_STUDIO_API_KEY")
+    if env_key and not str(merged_cfg.get("cloud_model", {}).get("api_key", "")).strip():
+        merged_cfg.setdefault("cloud_model", {})["api_key"] = env_key
+
+    env_url = os.getenv("DEEPSEEK_API_URL")
+    if env_url:
+        merged_cfg.setdefault("cloud_model", {})["base_url"] = env_url
+
+    env_model = os.getenv("AGENT_MODEL") or os.getenv("DEFAULT_MODEL")
+    if env_model:
+        merged_cfg.setdefault("cloud_model", {})["model_name"] = env_model
+
+    local_url = os.getenv("LOCAL_LLM_URL")
+    if local_url:
+        merged_cfg.setdefault("local_model", {})["lm_studio_url"] = local_url
+
     return merged_cfg
 
 

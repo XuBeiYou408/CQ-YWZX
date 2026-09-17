@@ -2,6 +2,7 @@ import copy
 import hashlib
 import io
 import json
+import logging
 import os
 import re
 import uuid
@@ -23,6 +24,7 @@ from app.core.screening import (
     recall_talent_to_candidates
 )
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 from app.core.storage import storage
@@ -394,20 +396,94 @@ def update_candidate_state(candidate_id: str, body: dict):
 
 
 @router.post("/api/candidates/{candidate_id}/generate-questions")
-def regenerate_questions(candidate_id: str):
-    """根据候选人背景重新生成 3 道个性化针对性面试问题"""
+async def regenerate_questions(candidate_id: str):
+    """根据候选人背景调用大模型重新生成 3 道个性化、具备大厂深度的针对性面试问题"""
     candidates = _get_all_candidates()
     c = next((x for x in candidates if x["id"] == candidate_id), None)
     if not c:
         raise HTTPException(status_code=404, detail="候选人不存在")
     
     name = c.get("name", "候选人")
-    skills = " / ".join(c.get("skills", ["核心技术栈"]))
-    new_questions = [
-        f"结合你在【{c.get('current_company','过往企业')}】的经历，请详述如何保证【{skills}】在千万级并发下的可靠性与可用性？",
-        f"你在过往技术沉淀中，做过的最具技术挑战性的性能优化指标（如首屏渲染、网络吞吐）是如何量化衡量的？",
-        f"如果业务线需要你主导跨端技术方案选型与研发团队技术培训，你将如何制定前30天的技术落地里程碑？"
-    ]
+    company = c.get("current_company", "互联网企业")
+    title = c.get("current_title", "工程师")
+    exp = c.get("experience_years", 3)
+    skills = ", ".join(c.get("skills", ["核心技术栈"]))
+    
+    # 获取关联的目标岗位信息
+    jobs = _get_all_jobs()
+    job = next((j for j in jobs if j["id"] == c.get("job_id")), None)
+    job_title = job.get("title", "技术岗位") if job else "技术架构师"
+    job_jd = (job.get("jd", "") if job else "")[:400]
+    
+    # 提取候选人真实履历战绩与项目细节
+    work_highlights = []
+    full_res = c.get("full_resume", {})
+    for w in full_res.get("work_experience", [])[:2]:
+        co = w.get("company", "")
+        ach = w.get("achievements") or w.get("responsibilities", "")
+        if ach:
+            work_highlights.append(f"{co}工作重点：{ach}")
+    for p in full_res.get("project_experience", [])[:2]:
+        pname = p.get("name", "")
+        resp = p.get("responsibilities") or p.get("technologies", "")
+        if resp:
+            work_highlights.append(f"项目【{pname}】：{resp}")
+    
+    exp_summary = "\n".join(work_highlights) if work_highlights else c.get("ai_reason", "具备相关大厂技术研发资历")
+    
+    cfg = load_config()
+    system_prompt = (
+        "你是一位严谨苛刻、具备深厚大厂技术背景的资深技术面试专家与架构师。"
+        "请根据候选人的真实履历背景与应聘岗位需求，量身定制 3 道具有深度、针对性强、直击技术痛点的实战面试追问。\n"
+        "【设计要求】：\n"
+        "1. 绝不要使用生硬死板的填空模板（严禁使用【】中括号或斜杠罗列技能），语言必须自然、犀利、符合现场真人技术面试官发问风格；\n"
+        "2. 紧扣候选人真实主导的项目难点、高并发/微前端/稳定性瓶颈与关键架构权衡；\n"
+        "3. 严格输出合法 JSON 格式，包含 interview_questions 数组（恰好3道字符串）。"
+    )
+    prompt = f"""【应聘岗位】: {job_title}
+【岗位要求/JD】: {job_jd}
+
+【候选人背景画像】:
+- 姓名: {name}
+- 当前职位: {company} · {title}（{exp}年经验）
+- 核心技术栈: {skills}
+- 核心履历与实战细节:
+{exp_summary}
+
+请生成 3 道全新的针对性技术面试追问，严格以 JSON 格式输出：
+{{
+  "interview_questions": [
+    "针对其核心架构设计或技术难点的深度实战追问1",
+    "针对其生产环境性能瓶颈或攻防测谎的场景追问2",
+    "针对其技术选型权衡或团队落地的工程追问3"
+  ]
+}}"""
+
+    new_questions = []
+    try:
+        raw = await generate_chat(prompt, system_prompt=system_prompt, cfg=cfg, json_mode=True)
+        cleaned = raw.strip()
+        if cleaned.startswith("```"):
+            cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned, flags=re.IGNORECASE)
+            cleaned = re.sub(r"\s*```$", "", cleaned)
+        data = json.loads(cleaned)
+        qs = data.get("interview_questions", [])
+        if isinstance(qs, list) and len(qs) >= 1:
+            new_questions = [str(q).strip() for q in qs if str(q).strip()][:3]
+    except Exception as e:
+        logger.warning(f"大模型生成追问失败，启用高保真规则引擎降级: {e}")
+
+    # 若模型输出不满足 3 道，用无模板痕迹的高质量专业问题补齐
+    if len(new_questions) < 3:
+        fallback_pool = [
+            f"请结合你在{company}主导核心系统的经历，详细谈谈在面对突发高并发流量或突发故障时，你们是如何做系统解耦与容灾降级的？",
+            f"针对你技术栈中的核心领域，在过往生产环境中遇到的最棘手性能瓶颈是什么，具体是如何定位排障并量化验证收益的？",
+            f"如果要将你过往最成功的一套技术架构方案迁移到我们{job_title}所负责的业务场景中，你认为最大的落地风险和前30天的实施里程碑是什么？"
+        ]
+        for q in fallback_pool:
+            if len(new_questions) < 3 and q not in new_questions:
+                new_questions.append(q)
+
     c["interview_questions"] = new_questions
     storage.save()
     return {"ok": True, "data": {"interview_questions": new_questions}}
@@ -571,7 +647,7 @@ def get_chat_history(candidate_id: str):
 
 
 @router.post("/api/candidates/{candidate_id}/chat")
-def send_chat_message(candidate_id: str, body: dict):
+async def send_chat_message(candidate_id: str, body: dict):
     _ensure_init()
     msg_text = body.get("message", "").strip()
     if not msg_text:
@@ -592,15 +668,40 @@ def send_chat_message(candidate_id: str, body: dict):
     c = next((x for x in _get_all_candidates() if x["id"] == candidate_id), None)
     cname = c["name"] if c else "候选人"
     
+    # 兜底默认回复
     reply = f"好的，感谢HR老师的认可！我工作日随时可配合线上面试。若有技术笔试或作品集要求，我也能立即提交！"
     if "到岗" in msg_text:
         reply = f"关于到岗时间：我目前状态为{c.get('available_time','随时到岗')}，如果聊得顺利，一周内即可正式入职！"
     elif "薪资" in msg_text or "期望" in msg_text:
         reply = f"关于薪资期望：我的预期范围是 {c.get('salary_expect','25-35K')}，可以根据公司具体的职级和福利结构综合沟通！"
     elif "并发" in msg_text or "架构" in msg_text or "微前端" in msg_text:
-        reply = f"关于技术经验：我在过往经历中主导过微前端子应用架构与千万级并发优化，线上面试中我很乐意分享具体的落地方案与指标！"
+        reply = f"关于技术经验：我在过往经历中主导过微前端子应用架构与高并发系统优化，线上面试中我很乐意分享具体的落地方案与指标！"
     elif "面试" in msg_text or "时间" in msg_text:
-        reply = f"太好了！我这周三下午或周五上午时间都很充裕，可以直接安排腾讯会议/飞书视频面试，静候您的日历邀约！"
+        reply = f"太好了！我近期工作日时间较为充裕，可以直接安排腾讯会议/飞书视频面试，静候您的日历邀约！"
+
+    # 优先调用大模型模拟候选人真实沉浸式回复
+    try:
+        cfg = load_config()
+        system_prompt = (
+            f"你现在正在扮演求职候选人【{cname}】与用人单位的HR主管进行在线微聊沟通。\n"
+            f"【你的真实背景画像】：\n"
+            f"- 从业资历：{c.get('experience_years', 3)}年经验，毕业于{c.get('school', '高校')} ({c.get('education', '本科')})\n"
+            f"- 当前职位：{c.get('current_company', '互联网企业')} · {c.get('current_title', '技术专家')}\n"
+            f"- 期望薪资：{c.get('salary_expect', '面议')}\n"
+            f"- 到岗时间：{c.get('available_time', '两周内到岗')}\n"
+            f"- 核心擅长：{', '.join(c.get('skills', ['全栈研发']))}\n"
+            f"【回复准则】：\n"
+            f"1. 态度谦逊得体但展现出扎实的技术底气与专业度；\n"
+            f"2. 紧扣 HR 发来的消息进行真诚、有理有据的回复，字数控制在 50~120 字；\n"
+            f"3. 直接以候选人第一人称输出回复文本，严禁输出任何括号、前缀或旁白。"
+        )
+        prompt = f"HR 发来消息：\"{msg_text}\"\n\n请直接输出你作为候选人的回复："
+        ai_reply = await generate_chat(prompt, system_prompt=system_prompt, cfg=cfg, json_mode=False)
+        ai_reply = ai_reply.strip().strip('"').strip("'")
+        if ai_reply and len(ai_reply) >= 5:
+            reply = ai_reply
+    except Exception as e:
+        logger.warning(f"大模型模拟候选人回复失败，降级为内置模版: {e}")
 
     history.append({
         "sender": "candidate",

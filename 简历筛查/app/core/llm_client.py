@@ -1,4 +1,5 @@
 import asyncio
+import re
 import time
 from typing import Any, Dict, TypedDict
 
@@ -219,7 +220,7 @@ async def generate_chat(
         base_url = cloud_cfg.get("base_url", "https://api.deepseek.com/v1")
         api_key = cloud_cfg.get("api_key", "")
         model = cloud_cfg.get("model_name", "deepseek-chat")
-        timeout = float(cloud_cfg.get("timeout", 45))
+        timeout = float(cloud_cfg.get("timeout", 60))
         headers = {
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
@@ -231,9 +232,7 @@ async def generate_chat(
 
     user_content = prompt
     if json_mode:
-        # 注意：本行原有中文因编码事故变成了 "????"，指令已失效（模型可能返回解释性文字导致 JSON 解析失败）；
-        # 这里恢复为明确的中文指令。
-        user_content = f"{prompt}\n\n请严格只输出 JSON，不要输出任何解释、前后缀或 Markdown 代码块标记。"
+        user_content = f"{prompt}\n\n请严格只输出合法 JSON 格式，不要输出任何解释、前后缀或 Markdown 代码块标记。"
     messages.append({"role": "user", "content": user_content})
 
     payload = {
@@ -254,7 +253,14 @@ async def generate_chat(
             choices = data.get("choices", [])
             if not choices:
                 raise RuntimeError(f"LLM returned no choices: {data}")
-            content = choices[0].get("message", {}).get("content", "")
+            msg = choices[0].get("message", {})
+            content = msg.get("content", "") or ""
+            reasoning = msg.get("reasoning_content", "") or ""
+            if not content.strip() and reasoning.strip():
+                content = reasoning.strip()
+            if content:
+                content = re.sub(r"<think>[\s\S]*?</think>", "", content, flags=re.IGNORECASE).strip()
+                content = re.sub(r"</?think>", "", content).strip()
             return content if content is not None else ""
     except Exception as e:
         if isinstance(e, RuntimeError):
