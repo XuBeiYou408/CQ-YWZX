@@ -25,6 +25,7 @@ from sample_contract import (
 from contract.precedents import PRECEDENTS_DATABASE, search_precedents
 from contract.parser import parse_uploaded_file, detect_contract_type
 from contract.engine import engine
+from config import config
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
