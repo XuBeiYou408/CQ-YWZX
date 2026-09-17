@@ -22,6 +22,7 @@ import logging
 import os
 import threading
 from typing import Any, Dict, Optional
+from urllib.parse import urlparse
 
 from config import config
 
@@ -77,22 +78,73 @@ CLOUD_PRESETS: Dict[str, Dict[str, Any]] = {
 # 若用普通 Lock 会自锁死（本模块曾被这个 bug 卡住整个进程，务必保持 RLock）。
 _lock = threading.RLock()
 
+# ==================== 地址归类：本地（本机回环） vs 云端/远程 ====================
+# 归类必须看**实际地址**，而不是用户声明的 provider：
+# 本项目历史上用 LM_STUDIO_BASE_URL 这个"变量位"接云端（把它指到 /v1 云端点），
+# 若只按 provider 字段判定，就会出现"明明调的是云端，界面却标成本地"的错误分类。
+_LOOPBACK_HOSTS = {"127.0.0.1", "localhost", "::1", "0.0.0.0", "[::1]", "host.docker.internal"}
+
+
+def host_of(url: str) -> str:
+    try:
+        return (urlparse(str(url or "")).hostname or "").lower()
+    except Exception:
+        return ""
+
+
+def is_loopback_url(url: str) -> bool:
+    """地址是否指向本机回环（= 数据不出本机）。空地址按本机处理。"""
+    host = host_of(url)
+    if not host:
+        return True
+    return host in _LOOPBACK_HOSTS
+
+
+def guess_preset(url: str) -> str:
+    """根据地址猜测云端预设（用于把环境变量接入的云端地址映射到面板预设）"""
+    host = host_of(url)
+    if not host:
+        return "custom"
+    for pid, preset in CLOUD_PRESETS.items():
+        if pid == "custom":
+            continue
+        if host_of(preset.get("base_url", "")) == host:
+            return pid
+    return "custom"
+
 
 def _defaults() -> Dict[str, Any]:
-    """内置默认：本地 LM Studio + 端侧主力模型（保持开箱即用行为不变）"""
-    local_model = config.AGENT_MODEL or config.DEFAULT_MODEL or "google/gemma-4-e4b"
+    """内置默认配置。
+
+    · 环境变量 `LM_STUDIO_BASE_URL` 指向**本机回环** → 本地 LM Studio（开箱默认）
+    · 指向**非本机地址**（如 https://api.deepseek.com/v1）→ 说明部署方是用该变量位接了云端，
+      此时默认 provider 直接判为 cloud，避免把云端模型误标成"本地"。
+    """
+    env_base = (config.LM_STUDIO_BASE_URL or "http://127.0.0.1:1234/v1").strip()
+    env_key = (config.LM_STUDIO_API_KEY or "").strip()
+    env_model = (config.AGENT_MODEL or config.DEFAULT_MODEL or "google/gemma-4-e4b").strip()
+    env_is_local = is_loopback_url(env_base)
+
+    if env_is_local:
+        return {
+            "provider": PROVIDER_LOCAL,
+            "local": {"base_url": env_base, "api_key": env_key or "lm-studio", "model": env_model},
+            "cloud": {
+                "preset": "deepseek",
+                "base_url": CLOUD_PRESETS["deepseek"]["base_url"],
+                "api_key": "",
+                "model": CLOUD_PRESETS["deepseek"]["models"][0],
+            },
+        }
+
     return {
-        "provider": PROVIDER_LOCAL,
-        "local": {
-            "base_url": config.LM_STUDIO_BASE_URL or "http://127.0.0.1:1234/v1",
-            "api_key": config.LM_STUDIO_API_KEY or "lm-studio",
-            "model": local_model,
-        },
+        "provider": PROVIDER_CLOUD,
+        "local": {"base_url": "http://127.0.0.1:1234/v1", "api_key": env_key or "lm-studio", "model": ""},
         "cloud": {
-            "preset": "deepseek",
-            "base_url": CLOUD_PRESETS["deepseek"]["base_url"],
-            "api_key": "",
-            "model": CLOUD_PRESETS["deepseek"]["models"][0],
+            "preset": guess_preset(env_base),
+            "base_url": env_base,
+            "api_key": env_key,
+            "model": env_model,
         },
     }
 
@@ -189,25 +241,48 @@ _resolve_cloud_key = resolve_cloud_key
 
 
 def get_effective() -> Dict[str, Any]:
-    """返回**当前生效**的连接参数：{provider, base_url, api_key, model, is_local}"""
+    """返回**当前生效**的连接参数。
+
+    返回字段：
+      · provider / base_url / api_key / model —— 实际使用的连接与模型
+      · is_local —— **按实际地址判定**：base_url 指向本机回环才为 True（决定"数据是否出本机"）
+      · provider_declared / provider_matches / note —— 声明值与真实归类是否一致，供界面提示
+        （例如环境变量把 LM_STUDIO_BASE_URL 指到云端时：声明是 local，真实是云端）
+    """
     cfg = load()
     provider = cfg["provider"]
     if provider == PROVIDER_CLOUD:
         cloud = cfg["cloud"]
-        return {
-            "provider": PROVIDER_CLOUD,
-            "base_url": cloud.get("base_url") or CLOUD_PRESETS["deepseek"]["base_url"],
-            "api_key": _resolve_cloud_key(cloud) or "sk-missing",
-            "model": cloud.get("model") or "deepseek-chat",
-            "is_local": False,
-        }
-    local = cfg["local"]
+        base_url = (cloud.get("base_url") or CLOUD_PRESETS["deepseek"]["base_url"]).strip()
+        api_key = _resolve_cloud_key(cloud) or "sk-missing"
+        model = (cloud.get("model") or "deepseek-chat").strip()
+    else:
+        local = cfg["local"]
+        base_url = (local.get("base_url") or "http://127.0.0.1:1234/v1").strip()
+        api_key = (local.get("api_key") or "lm-studio").strip()
+        model = (local.get("model") or (config.AGENT_MODEL or config.DEFAULT_MODEL) or "").strip()
+
+    real_local = is_loopback_url(base_url)
+    matches = (provider == PROVIDER_LOCAL) == real_local
+    note = ""
+    if not matches:
+        if provider == PROVIDER_LOCAL and not real_local:
+            note = (
+                f"地址 {base_url} 并非本机回环地址 —— 已按【云端/远程】归类与处理"
+                "（多半是通过环境变量 LM_STUDIO_BASE_URL 接入了云端；建议在「模型管理」里改选「云端模型」并核对密钥）"
+            )
+        else:
+            note = f"当前声明为云端，但地址 {base_url} 指向本机回环 —— 已按【本地】归类（数据不出本机）"
+
     return {
-        "provider": PROVIDER_LOCAL,
-        "base_url": local.get("base_url") or "http://127.0.0.1:1234/v1",
-        "api_key": local.get("api_key") or "lm-studio",
-        "model": local.get("model") or (config.AGENT_MODEL or config.DEFAULT_MODEL),
-        "is_local": True,
+        "provider": PROVIDER_CLOUD if not real_local else PROVIDER_LOCAL,
+        "provider_declared": provider,
+        "provider_matches": matches,
+        "is_local": real_local,
+        "base_url": base_url,
+        "api_key": api_key,
+        "model": model,
+        "note": note,
     }
 
 
@@ -246,9 +321,12 @@ def masked_view() -> Dict[str, Any]:
         },
         "effective": {
             "provider": eff["provider"],
+            "provider_declared": eff["provider_declared"],
+            "provider_matches": eff["provider_matches"],
             "base_url": eff["base_url"],
             "model": eff["model"],
             "is_local": eff["is_local"],
+            "note": eff["note"],
         },
         "presets": [
             {

@@ -1162,6 +1162,12 @@
           </div>
         </div>
 
+        <!-- 归类提示：声明与实际地址不一致时如实说明（如 env 里把 LM Studio 地址指向云端） -->
+        <div v-if="modelConfig.effective.note" class="text-[11px] px-3 py-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-800">
+          <div class="font-semibold">⚠️ 模型归类提示：当前按【{{ modelConfig.effective.is_local ? '本地' : '云端/远程' }}】处理</div>
+          <div class="mt-0.5 leading-relaxed">{{ modelConfig.effective.note }}</div>
+        </div>
+
         <!-- 测试结果 -->
         <div v-if="modelTestResult" class="text-[11px] px-3 py-2 rounded-lg border"
           :class="modelTestResult.ok ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-rose-50 border-rose-200 text-rose-700'">
@@ -1254,7 +1260,12 @@
             if (j.code === 200 && j.data) {
               const d = j.data;
               modelConfig.value = d;
-              modelForm.provider = d.provider || 'local';
+              // 若声明的 provider 与真实地址不符（例如环境变量把 LM Studio 地址指向云端），
+              // 面板默认按**真实归类**展示，避免把云端模型当成"本地"来配置
+              const eff = d.effective || {};
+              modelForm.provider = (eff.provider_matches === false)
+                ? (eff.is_local ? 'local' : 'cloud')
+                : (d.provider || 'local');
               modelForm.localBaseUrl = d.local.base_url || 'http://127.0.0.1:1234/v1';
               modelForm.localModel = d.local.model || '';
               modelForm.cloudPreset = d.cloud.preset || 'deepseek';
@@ -1296,7 +1307,8 @@
           modelTestResult.value = null;
           await loadModelConfig();
           modelPanelOpen.value = true;
-          if (modelForm.provider === 'local') loadLocalModels();
+          // 只有真实归类为"本地"时才去枚举 LM Studio 模型，避免拿云端地址去探测本地模型
+          if (modelForm.provider === 'local' && modelConfig.value.effective.is_local) loadLocalModels();
         };
 
         const closeModelPanel = () => { modelPanelOpen.value = false; };
