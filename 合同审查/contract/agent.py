@@ -248,13 +248,21 @@ class ContractReviewAgent:
 
         # ================= Phase 1 感知 =================
         clauses, split_mode = await self._perceive(contract_text)
-        if len(clauses) < 2:
-            yield {
-                "type": "agent_fallback_mode",
-                "reason": "clause_split_failed",
-                "message": "条款切分失败（正则与模型兜底均未产出有效条款），自动降级为全量单次审查模式",
-            }
-            return
+        if len(clauses) < 1:
+            # 极限兜底：无任何条款标记时将全文包装为单条款 C01，确保 Agent 闭环与轨迹思维链永不落空
+            from contract.clause_splitter import _extract_signals, _candidate_labels
+            head = "合同全文核心条款"
+            sig = _extract_signals(head, contract_text)
+            clauses = [{
+                "clause_id": "C01",
+                "index": 1,
+                "heading": head,
+                "text": contract_text,
+                "char_range": [0, len(contract_text)],
+                "signals": sig,
+                "candidate_labels": _candidate_labels(head, contract_text, sig),
+            }]
+            split_mode = "whole_doc"
 
         kw_type = contract_type_hint
         if not kw_type or kw_type in ("auto", "通用商业民商事经济合同"):
@@ -575,9 +583,9 @@ class ContractReviewAgent:
     # Phase 1: 感知
     # ------------------------------------------------------------------
     async def _perceive(self, contract_text: str):
-        """混合拆条：正则优先，失败时 LLM 兜底"""
+        """混合拆条：正则优先，失败时 LLM 兜底，再失败按段落自适应切分"""
         clauses = split_clauses(contract_text)
-        if len(clauses) >= 3:
+        if len(clauses) >= 1:
             return clauses, "regex"
 
         try:
@@ -591,14 +599,38 @@ class ContractReviewAgent:
                 want_json=True,
             )
             items = parse_json_lenient(raw)
-            if isinstance(items, list) and len(items) >= 3:
+            if isinstance(items, list) and len(items) >= 1:
                 llm_clauses = clauses_from_llm_output(items, contract_text)
-                if len(llm_clauses) >= 3:
+                if len(llm_clauses) >= 1:
                     return llm_clauses, "llm_fallback"
         except BudgetExceededError:
             raise
         except Exception as e:
             logger.warning(f"LLM 兜底拆条失败: {e}")
+
+        # 若均未切出，尝试按双换行段落自适应切分
+        paras = [p.strip() for p in contract_text.split("\n\n") if p.strip()]
+        if len(paras) >= 2:
+            from contract.clause_splitter import _extract_signals, _candidate_labels
+            p_clauses = []
+            pos = 0
+            for i, p in enumerate(paras, start=1):
+                p_start = contract_text.find(p, pos)
+                p_end = p_start + len(p) if p_start >= 0 else pos + len(p)
+                pos = max(pos, p_end)
+                first_line = p.splitlines()[0].strip()
+                head = first_line[:30] if first_line else f"第{i}部分"
+                sig = _extract_signals(head, p)
+                p_clauses.append({
+                    "clause_id": f"C{i:02d}",
+                    "index": i,
+                    "heading": head,
+                    "text": p,
+                    "char_range": [p_start, p_end] if p_start >= 0 else None,
+                    "signals": sig,
+                    "candidate_labels": _candidate_labels(head, p, sig),
+                })
+            return p_clauses, "paragraph_fallback"
 
         return clauses, "regex"
 

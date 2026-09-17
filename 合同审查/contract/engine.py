@@ -172,18 +172,8 @@ class ContractReviewEngine:
             "review_stance": review_stance
         }
 
-        # 3. 路由决策：Agent 主循环 or 旧管道
-        #    小合同豁免（融合终版计划书 §3.2）：条款 < 8 或字数 < 2000 → 全量单次审查
-        use_agent = (
-            config.AGENT_ENABLED
-            and char_count >= config.AGENT_SMALL_CONTRACT_CHARS
-        )
-        if use_agent:
-            from contract.clause_splitter import split_clauses
-            n_clauses = len(split_clauses(contract_text))
-            use_agent = n_clauses >= config.AGENT_SMALL_CONTRACT_CLAUSES
-            if not use_agent:
-                logger.info(f"条款数 {n_clauses} < {config.AGENT_SMALL_CONTRACT_CLAUSES}，小合同豁免：走旧管道全量审查")
+        # 3. 路由决策：去除门槛要求，所有合同全量走 Agent 闭环（感知→规划→行动→反思 + 全程思维链透传）
+        use_agent = config.AGENT_ENABLED
 
         if use_agent:
             agent_report = None
@@ -356,11 +346,9 @@ class ContractReviewEngine:
         )
 
         try:
-            prefill_header = "### 📊 一、合同全景审计概览\n"
             messages = [
                 {"role": "system", "content": sys_prompt},
                 {"role": "user", "content": user_prompt},
-                {"role": "assistant", "content": f"</think>{prefill_header}"}
             ]
 
             response = await self.client.chat.completions.create(
@@ -371,12 +359,7 @@ class ContractReviewEngine:
                 stream=True
             )
 
-            collected_content = [prefill_header]
-            yield {
-                "type": "content",
-                "delta": prefill_header
-            }
-
+            collected_content = []
             in_think_tag = False
             content_buffer = ""
 
@@ -386,12 +369,22 @@ class ContractReviewEngine:
                     if not delta:
                         continue
 
-                    # 1. 若有残余 reasoning_content 记录并忽略（绝不向用户展示思维链）
+                    # 1. 若有 reasoning_content，实时透传为 thinking 帧，确保思维链始终向用户展示
                     r_chunk = getattr(delta, "reasoning_content", None) or ""
                     if r_chunk:
+                        yield {
+                            "type": "thinking",
+                            "data": {
+                                "phase": "review",
+                                "clause_id": "",
+                                "text": r_chunk,
+                            },
+                            "message": "审查分析思考中...",
+                        }
                         continue
 
-                    # 2. 对 delta.content 进行实时 <think> 标签过滤清洗并流式吐字
+                    # 2. 对 delta.content 进行实时 <think> 标签流式分离：
+                    #    <think> 内内容作为 thinking 帧透传，正文作为 content 帧透传
                     raw_chunk = delta.content or ""
                     if not raw_chunk:
                         continue
@@ -401,9 +394,27 @@ class ContractReviewEngine:
                     while content_buffer:
                         if in_think_tag:
                             if "</think>" in content_buffer:
-                                _, content_buffer = content_buffer.split("</think>", 1)
+                                think_part, content_buffer = content_buffer.split("</think>", 1)
                                 in_think_tag = False
+                                if think_part:
+                                    yield {
+                                        "type": "thinking",
+                                        "data": {"phase": "review", "clause_id": "", "text": think_part},
+                                        "message": "审查分析思考中...",
+                                    }
                             else:
+                                partial_end = False
+                                for i in range(1, 8):
+                                    if content_buffer.endswith("</think>"[:i]):
+                                        partial_end = True
+                                        break
+                                if partial_end and len(content_buffer) <= 10:
+                                    break
+                                yield {
+                                    "type": "thinking",
+                                    "data": {"phase": "review", "clause_id": "", "text": content_buffer},
+                                    "message": "审查分析思考中...",
+                                }
                                 content_buffer = ""
                                 break
                         else:

@@ -1231,9 +1231,8 @@
             revisedContractText.value = '';
             resetAgentTrace();
 
-            const willAgent = (d.char_count >= 2000);
             ElementPlus.ElMessage.success(
-              `已载入【${d.title}】（${d.char_count} 字）` + (willAgent ? ' · 将走 Agent 智能审查' : ' · 将走快速审查')
+              `已载入【${d.title}】（${d.char_count} 字）· 将走 Agent 智能审查`
             );
           } catch (e) {
             ElementPlus.ElMessage.error('载入失败: ' + e.message);
@@ -2045,7 +2044,7 @@
                       if (frame.data && frame.data.text) {
                         const d = frame.data;
                         const label = d.phase === 'plan' ? '规划思路'
-                          : (d.clause_id ? `深查 [${d.clause_id}]` : '分析');
+                          : (d.clause_id ? `深查 [${d.clause_id}]` : (d.phase === 'review' ? '合规审查思考' : '分析'));
                         const item = { label, text: d.text, phase: d.phase || '', clause_id: d.clause_id || '' };
                         agentThinking.value.push(item);
                         agentStream.value.push({ kind: 'think', label, text: item.text, clause_id: item.clause_id });

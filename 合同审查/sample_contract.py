@@ -300,8 +300,8 @@ SAMPLE_CONTRACTS = [
     {
         "id": "dev_small",
         "name": "软件定制开发合同（精简版）",
-        "desc": "10 条 / 约 1,770 字 · 走快速单次审查",
-        "badge": "快速",
+        "desc": "10 条 / 约 1,770 字 · Agent 全景智能审查",
+        "badge": "Agent",
         "contract_type": "软件技术开发与外包采购合同",
         "client_role": "乙方 (供应/受托/承揽/承租方)",
         "review_stance": "对等平衡 (常规商业惯例)",
