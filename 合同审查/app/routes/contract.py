@@ -66,8 +66,8 @@ async def list_sample_contracts():
             "contract_type": c["contract_type"],
             "char_count": char_count,
             "clause_count": clause_count,
-            # 与后端 Agent 路由判定保持一致，前端可据此提示用户
-            "agent_triggered": clause_count >= 8 and char_count >= 2000,
+            # 去除门槛要求：只要 Agent 启用，全量合同均触发 Agent 审查
+            "agent_triggered": config.AGENT_ENABLED,
         })
     return APIResponse(data=items)
 

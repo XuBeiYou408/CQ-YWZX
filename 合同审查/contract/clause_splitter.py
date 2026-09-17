@@ -13,11 +13,11 @@
 import re
 from typing import Any, Dict, List, Optional
 
-# 条款起始行识别：第X条 / 一、 / 1.1 / （一）
-_HEAD_ARTICLE = re.compile(r"^\s*第[零〇一二三四五六七八九十百千两\d]+\s*条")
+# 条款起始行识别：第X条 / 一、 / 1.1 / （一） / （1）
+_HEAD_ARTICLE = re.compile(r"^\s*第[零〇一二三四五六七八九十百千两\d]+\s*[条章款篇部节]")
 _HEAD_CN_ENUM = re.compile(r"^\s*[一二三四五六七八九十]+\s*[、．.]")
-_HEAD_NUM_ENUM = re.compile(r"^\s*\d{1,2}(?:\.\d{1,2}){0,2}\s*[、．.\)]?\s*\S")
-_HEAD_PAREN_ENUM = re.compile(r"^\s*[（(][一二三四五六七八九十]+[）)]")
+_HEAD_NUM_ENUM = re.compile(r"^\s*\d{1,2}(?:\.\d{1,2}){0,2}\s*[、．.\)]\s*")
+_HEAD_PAREN_ENUM = re.compile(r"^\s*[（(](?:[零〇一二三四五六七八九十百千两\d]{1,3})[）)]")
 
 _BOILERPLATE_RE = re.compile(
     r"保密|通知|不可抗力|争议|管辖|附则|其他|未尽事宜|完整协议|签署|落款|生效"
@@ -38,18 +38,21 @@ _DURATION_RE = re.compile(r"\d+\s*(?:个)?\s*(?:日|天|月|年|工作日)")
 def _is_heading(line: str, level: str = "any") -> bool:
     """判断一行是否为条款起始标题行（level 指定标题层级）"""
     s = line.strip()
-    if not s or len(s) > 60:
+    if not s:
         return False
+    # 第X条 / 第X章 层级：即便标题与正文同行（整行很长），依然是坚实的条款起始标志
     if level in ("any", "article") and _HEAD_ARTICLE.match(s):
         return True
-    # 「一、」与「（一）」层级：仅当行较短（标题式）才认作条款起点
-    if level in ("any", "cn") and _HEAD_CN_ENUM.match(s) and len(s) <= 40:
-        return True
-    if level in ("any", "cn") and _HEAD_PAREN_ENUM.match(s) and len(s) <= 40:
-        return True
-    # 「1.1」数字层级：仅当行较短才认作条款起点（避免把正文里的数字列表全切开）
-    if level in ("any", "num") and _HEAD_NUM_ENUM.match(s) and len(s) <= 50:
-        return True
+    # 「一、」与「（一）/（1）」层级：若行在合理长度内（<= 80）或后跟标点/空格，认作条款起点
+    if level in ("any", "cn"):
+        if _HEAD_CN_ENUM.match(s) and (len(s) <= 80 or re.search(r"^[一二三四五六七八九十]+\s*[、．.][^\s。；:：\n]+[。；:：\s]", s)):
+            return True
+        if _HEAD_PAREN_ENUM.match(s) and (len(s) <= 80 or re.search(r"^[（(](?:[零〇一二三四五六七八九十百千两\d]{1,3})[）)][^\s。；:：\n]+[。；:：\s]", s)):
+            return True
+    # 「1.1」/「1、」数字层级：若行合理（<= 70）或有明确标题分隔，认作条款起点
+    if level in ("any", "num"):
+        if _HEAD_NUM_ENUM.match(s) and (len(s) <= 70 or re.search(r"^\d{1,2}(?:\.\d{1,2}){0,2}\s*[、．.\)]\s*[^\s。；:：\n]+[。；:：\s]", s)):
+            return True
     return False
 
 
@@ -98,9 +101,9 @@ def split_clauses(contract_text: str) -> List[Dict[str, Any]]:
     """
     正则条款切分（纯离线），层级优先级策略：
       1. 「第X条」层级优先（子编号 1.1/2.1 并入父条款，不碎片化）
-      2. 拆不出 3 条 → 回退「一、／（一）」层级
+      2. 拆不出 → 回退「一、／（一）／（1）」层级
       3. 仍拆不出 → 回退「1.1」数字层级
-      4. 全部失败 → 返回空/极少清单（调用方触发 LLM 兜底拆条）
+      4. 各层级取有效条款（>= 1 条）
     """
     if not contract_text or not contract_text.strip():
         return []
@@ -111,12 +114,19 @@ def split_clauses(contract_text: str) -> List[Dict[str, Any]]:
         starts: List[int] = [
             i for i, line in enumerate(lines) if _is_heading(line, level=level)
         ]
-        if len(starts) >= 3:
-            return _build_clauses(lines, starts)
+        if len(starts) >= 1:
+            built = _build_clauses(lines, starts)
+            if built:
+                return built
 
-    # 各层级均不足 3 条：取当前最长的一组（可能是短合同），交上层决策
+    # 各层级均未命中的混合/宽松判定：
     starts = [i for i, line in enumerate(lines) if _is_heading(line, level="any")]
-    return _build_clauses(lines, starts)
+    if starts:
+        built = _build_clauses(lines, starts)
+        if built:
+            return built
+
+    return []
 
 
 def _build_clauses(lines: List[str], starts: List[int]) -> List[Dict[str, Any]]:
@@ -126,7 +136,20 @@ def _build_clauses(lines: List[str], starts: List[int]) -> List[Dict[str, Any]]:
         end_idx = starts[idx + 1] if idx + 1 < len(starts) else n
 
         head_line = lines[start_idx].rstrip("\r\n")
-        heading = head_line.strip()
+        raw_head = head_line.strip()
+
+        # 提炼条款标题：如果标题行混有正文段落（长度超过 40 字），截取至首个断句标点或空格
+        heading = raw_head
+        if len(raw_head) > 40:
+            m = re.match(
+                r"^(\s*(?:第[零〇一二三四五六七八九十百千两\d]+\s*[条章款篇部节]|[一二三四五六七八九十]+\s*[、．.]|[（(][^）)]+[）)]|\d{1,2}(?:\.\d{1,2}){0,2}\s*[、．.\)])\s*[^。；;：:\t\n\r]+)",
+                raw_head
+            )
+            if m:
+                heading = m.group(1).strip()
+            else:
+                heading = raw_head[:40]
+        heading = heading.rstrip("。；;：:\t ").strip()
 
         # 第X条 标题行往往自带条款名（如「第七条 违约责任」）
         body_lines = lines[start_idx + 1:end_idx]
@@ -137,15 +160,15 @@ def _build_clauses(lines: List[str], starts: List[int]) -> List[Dict[str, Any]]:
         clause_len = sum(len(l) for l in lines[start_idx:end_idx])
         char_end = char_start + clause_len
 
-        full_text = (head_line + "\n" + body).strip() if body else heading
+        full_text = (head_line + "\n" + body).strip() if body else raw_head
         # 附加条款正文（把标题并入 text，保证 char_range 与 text 对齐）
         text = full_text
 
         signals = _extract_signals(heading, text)
         labels = _candidate_labels(heading, text, signals)
 
-        # 极短条款（如孤立标题行）且后面没有内容 → 合并跳过
-        if len(text) < 8 and idx + 1 < len(starts):
+        # 极短条款（如孤立标题行）且后面没有内容 → 合并跳过（除非只有这一条）
+        if len(text) < 8 and len(starts) > 1 and idx + 1 < len(starts):
             continue
 
         clauses.append({
