@@ -1142,7 +1142,23 @@
 
                   <div v-show="showTraceLog" class="space-y-2">
                     <!-- 大模型实时推导思维链卡片 (Reasoning Process) -->
-                    <div v-if="currentDetail.deep_audit?.reasoning_chain" 
+                    <!-- 1. 现场推导时的动画卡片 -->
+                    <div v-if="rededucingTrace" 
+                         class="bg-indigo-950/95 text-indigo-100 rounded-xl p-3.5 font-mono text-[11px] leading-relaxed border border-indigo-700/60 shadow-inner space-y-2 animate-pulse">
+                      <div class="flex items-center justify-between text-indigo-300 font-bold border-b border-indigo-800/80 pb-1.5">
+                        <span class="flex items-center gap-1.5">
+                          <svg class="w-3.5 h-3.5 text-indigo-400 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+                          <span>🧠 大模型实时推导思维链 (Thinking Chain) · 现场深度推理中...</span>
+                        </span>
+                        <span class="text-[10px] text-indigo-400 font-normal px-1.5 py-0.5 bg-indigo-900/80 rounded border border-indigo-700/50">DeepSeek-R1 思考中</span>
+                      </div>
+                      <div class="text-indigo-200/90 text-[11px] leading-relaxed">
+                        &gt; 正在针对候选人真实履历执行 ReAct 交叉尽调，唤起 timeline_cross_auditor 与 project_substance_evaluator 进行学历、工龄真实性核验与项目指标深度测谎...
+                      </div>
+                    </div>
+
+                    <!-- 2. 已有或推导完成时的思维链展示 -->
+                    <div v-else-if="currentDetail.deep_audit?.reasoning_chain" 
                          class="bg-indigo-950/95 text-indigo-100 rounded-xl p-3.5 font-mono text-[11px] leading-relaxed border border-indigo-700/60 shadow-inner space-y-1.5">
                       <div class="flex items-center justify-between text-indigo-300 font-bold border-b border-indigo-800/80 pb-1.5">
                         <span class="flex items-center gap-1.5">
@@ -2705,6 +2721,7 @@
           currentDetail.value = c;
           detailTab.value = 'resume';
           openThinkings.value = {};
+          showTraceLog.value = true;
           showDetailDrawer.value = true;
         };
 
@@ -2715,6 +2732,7 @@
           currentDetail.value = c;
           detailTab.value = 'resume';
           openThinkings.value = {};
+          showTraceLog.value = true;
           showChatModal.value = false; // 隐藏微聊窗口，彻底清除背景模糊与居中遮挡
           showDetailDrawer.value = true;
         };
