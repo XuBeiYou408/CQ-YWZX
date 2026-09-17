@@ -206,21 +206,31 @@ async def generate_chat(
         ollama_url = local_cfg.get("ollama_url", "http://127.0.0.1:11434/v1")
 
         probe = await probe_local_models(lm_url=lm_url, ollama_url=ollama_url)
-        if probe.get("provider") == "ollama":
-            base_url = ollama_url
-        else:
-            base_url = lm_url
+        # 智能双模守护：若本地端侧未启动（如云服务器临时部署环境）且已配置云端 API Key，
+        # 自动无缝路由至云端大模型，彻底杜绝因本地未开启而退回到静态硬编码兜底！
+        cloud_cfg = cfg.get("cloud_model", {})
+        has_cloud_key = bool(str(cloud_cfg.get("api_key", "")).strip())
 
-        model = local_cfg.get("model_name", "qwen3.8-27b")
-        model = await _resolve_local_model(base_url, model)
-        timeout = float(local_cfg.get("timeout", 45))
-        headers = {"Content-Type": "application/json"}
-    else:
+        if not probe.get("available") and has_cloud_key:
+            print(f"[RecruitAI LLM] 本地推理服务离线，检测到云端模型配置已就绪，自动平滑路由至云端: {cloud_cfg.get('model_name')}")
+            active_provider = "cloud"
+        else:
+            if probe.get("provider") == "ollama":
+                base_url = ollama_url
+            else:
+                base_url = lm_url
+
+            model = local_cfg.get("model_name", "qwen3.8-27b")
+            model = await _resolve_local_model(base_url, model)
+            timeout = float(local_cfg.get("timeout", 45))
+            headers = {"Content-Type": "application/json"}
+
+    if active_provider != "local":
         cloud_cfg = cfg.get("cloud_model", {})
         base_url = cloud_cfg.get("base_url", "https://api.deepseek.com/v1")
         api_key = cloud_cfg.get("api_key", "")
         model = cloud_cfg.get("model_name", "deepseek-chat")
-        timeout = float(cloud_cfg.get("timeout", 60))
+        timeout = max(float(cloud_cfg.get("timeout", 60)), 90.0)
         headers = {
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
@@ -238,12 +248,15 @@ async def generate_chat(
     payload = {
         "model": model,
         "messages": messages,
+        "temperature": 0.7,
+        "max_tokens": 800,
     }
 
     url = f"{base_url.rstrip('/')}/chat/completions"
+    req_timeout = httpx.Timeout(120.0, connect=20.0, read=120.0, write=30.0)
 
     try:
-        async with httpx.AsyncClient(timeout=timeout) as client:
+        async with httpx.AsyncClient(timeout=req_timeout) as client:
             resp = await client.post(url, headers=headers, json=payload)
             if resp.status_code != 200:
                 raise RuntimeError(

@@ -429,33 +429,32 @@ async def regenerate_questions(candidate_id: str):
         if resp:
             work_highlights.append(f"项目【{pname}】：{resp}")
     
-    exp_summary = "\n".join(work_highlights) if work_highlights else c.get("ai_reason", "具备相关大厂技术研发资历")
+    # 精炼履历实战与JD，避免无意义冗长字符导致推理模型思考超时
+    concise_exp = "\n".join(work_highlights[:3]) if work_highlights else c.get("ai_reason", "具备大厂研发背景")
+    if len(concise_exp) > 400:
+        concise_exp = concise_exp[:400] + "..."
     
     cfg = load_config()
     system_prompt = (
-        "你是一位严谨苛刻、具备深厚大厂技术背景的资深技术面试专家与架构师。"
-        "请根据候选人的真实履历背景与应聘岗位需求，量身定制 3 道具有深度、针对性强、直击技术痛点的实战面试追问。\n"
-        "【设计要求】：\n"
-        "1. 绝不要使用生硬死板的填空模板（严禁使用【】中括号或斜杠罗列技能），语言必须自然、犀利、符合现场真人技术面试官发问风格；\n"
-        "2. 紧扣候选人真实主导的项目难点、高并发/微前端/稳定性瓶颈与关键架构权衡；\n"
-        "3. 严格输出合法 JSON 格式，包含 interview_questions 数组（恰好3道字符串）。"
+        "你是一位严谨苛刻的大厂资深技术面试官与系统架构师。"
+        "请根据候选人的真实履历背景、项目难点与技术栈，量身定制 3 道犀利、直击工程实战难点的深度技术追问。\n"
+        "【严格要求】：\n"
+        "1. 严禁使用任何模板插槽或空泛套话，每道题目必须紧扣候选人主导的具体业务场景（如微前端解耦、高并发排障、链路降级、架构权衡）；\n"
+        "2. 语言必须自然生动，符合大厂技术专家真实发问口吻，每道问题 40~90 字；\n"
+        "3. 必须输出包含 3 道完整提问句子的合法 JSON，格式：{\"interview_questions\": [\"完整问题内容1\", \"完整问题内容2\", \"完整问题内容3\"]}。"
     )
     prompt = f"""【应聘岗位】: {job_title}
-【岗位要求/JD】: {job_jd}
+【候选人画像】: {name} · {company} · {title}（{exp}年经验）
+【核心技术栈】: {skills}
+【核心项目与实战细节】:
+{concise_exp}
 
-【候选人背景画像】:
-- 姓名: {name}
-- 当前职位: {company} · {title}（{exp}年经验）
-- 核心技术栈: {skills}
-- 核心履历与实战细节:
-{exp_summary}
-
-请生成 3 道全新的针对性技术面试追问，严格以 JSON 格式输出：
+请针对候选人的上述具体经历，量身提炼生成 3 道具备大厂实战深度的具体面试追问。严格只返回合法 JSON：
 {{
   "interview_questions": [
-    "针对其核心架构设计或技术难点的深度实战追问1",
-    "针对其生产环境性能瓶颈或攻防测谎的场景追问2",
-    "针对其技术选型权衡或团队落地的工程追问3"
+    "<针对其主导项目核心难点或高并发瓶颈的具体实战追问>",
+    "<针对其技术栈选型权衡或排障定位过程的实战追问>",
+    "<针对系统稳定性、容灾解耦或落地难点的实战追问>"
   ]
 }}"""
 
@@ -463,22 +462,40 @@ async def regenerate_questions(candidate_id: str):
     try:
         raw = await generate_chat(prompt, system_prompt=system_prompt, cfg=cfg, json_mode=True)
         cleaned = raw.strip()
-        if cleaned.startswith("```"):
-            cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned, flags=re.IGNORECASE)
-            cleaned = re.sub(r"\s*```$", "", cleaned)
-        data = json.loads(cleaned)
-        qs = data.get("interview_questions", [])
-        if isinstance(qs, list) and len(qs) >= 1:
-            new_questions = [str(q).strip() for q in qs if str(q).strip()][:3]
-    except Exception as e:
-        logger.warning(f"大模型生成追问失败，启用高保真规则引擎降级: {e}")
+        # 1. 尝试从文本中精准提取 JSON 块
+        json_match = re.search(r"\{[\s\S]*\}", cleaned)
+        if json_match:
+            try:
+                data = json.loads(json_match.group(0))
+                qs = data.get("interview_questions", [])
+                if isinstance(qs, list) and len(qs) >= 1:
+                    valid_qs = [
+                        str(q).strip() for q in qs 
+                        if str(q).strip() and len(str(q).strip()) > 15 and not str(q).strip().startswith("追问")
+                    ]
+                    if valid_qs:
+                        new_questions = valid_qs[:3]
+            except Exception:
+                pass
 
-    # 若模型输出不满足 3 道，用无模板痕迹的高质量专业问题补齐
+        # 2. 若模型未按 JSON 输出，按行提取 Q1/Q2/Q3 或 1./2./3.
+        if not new_questions:
+            lines = [l.strip() for l in cleaned.splitlines() if l.strip()]
+            for l in lines:
+                m = re.match(r"^(?:Q\d+[\.、:：]|\d+[\.、:：]|[-*])\s*(.+)", l)
+                if m and len(m.group(1).strip()) > 10:
+                    new_questions.append(m.group(1).strip())
+            new_questions = new_questions[:3]
+    except Exception as e:
+        logger.error(f"大模型生成追问异常: {e}", exc_info=True)
+
+    # 3. 兜底保护：若离线断网且无云端配置，基于候选人具体项目做量身深度提炼
     if len(new_questions) < 3:
+        primary_skill = skills.split(",")[0].strip() if skills else "核心技术"
         fallback_pool = [
-            f"请结合你在{company}主导核心系统的经历，详细谈谈在面对突发高并发流量或突发故障时，你们是如何做系统解耦与容灾降级的？",
-            f"针对你技术栈中的核心领域，在过往生产环境中遇到的最棘手性能瓶颈是什么，具体是如何定位排障并量化验证收益的？",
-            f"如果要将你过往最成功的一套技术架构方案迁移到我们{job_title}所负责的业务场景中，你认为最大的落地风险和前30天的实施里程碑是什么？"
+            f"你在{company}主导核心模块期间，面对复杂业务场景与突发流量冲击时，具体采取了哪些解耦、容灾与服务降级策略？",
+            f"结合你在{primary_skill}领域的实战攻防经验，过往在线上遇到过最棘手的疑难排障案例是什么，排障路径与复盘收益如何？",
+            f"如果将你过往在{company}沉淀的工程方案迁移至我们{job_title}团队的业务场景，你预判前30天最关键的技术里程碑与落地卡点是什么？"
         ]
         for q in fallback_pool:
             if len(new_questions) < 3 and q not in new_questions:
