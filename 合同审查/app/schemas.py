@@ -37,3 +37,24 @@ class ContractDraftRequest(BaseModel):
     special_terms: Optional[str] = Field("", description="特别商业约定或补充要求")
     client_role: Optional[str] = Field("甲方", description="起草立场偏向：甲方、乙方、中立对等")
     model_name: Optional[str] = Field(None, description="指定模型名称")
+
+# ==================== 模型管理 ====================
+class ModelSection(BaseModel):
+    """本地 / 云端 任一侧的连接参数（未提供的字段保持原值不动）"""
+    base_url: Optional[str] = Field(None, description="OpenAI 兼容端点，如 http://127.0.0.1:1234/v1")
+    model: Optional[str] = Field(None, description="模型 id；本地留空表示走自动优选")
+    api_key: Optional[str] = Field(None, description="API Key（留空字符串表示不改动已存的密钥）")
+    preset: Optional[str] = Field(None, description="云端预设标识：deepseek/kimi/qwen/zhipu/custom")
+
+class ModelConfigRequest(BaseModel):
+    provider: Optional[str] = Field(None, description="服务类型：local（本地 LM Studio）或 cloud（云端 API）")
+    local: Optional[ModelSection] = None
+    cloud: Optional[ModelSection] = None
+
+class ModelTestRequest(BaseModel):
+    """连通性测试：不传则用当前已保存的生效配置测试"""
+    provider: Optional[str] = Field(None, description="local / cloud；留空用当前生效配置")
+    base_url: Optional[str] = None
+    api_key: Optional[str] = None
+    model: Optional[str] = None
+    preset: Optional[str] = None

@@ -39,11 +39,39 @@ def rule_based_contract_scan(contract_text: str, contract_type: str, client_role
 
 class ContractReviewEngine:
     def __init__(self):
+        # 默认客户端（本地 LM Studio）。真正的连接参数由模型管理配置决定，
+        # 每次进入审查入口时通过 _ensure_client() 按需重建（见 model_config.py）。
         self.client = AsyncOpenAI(
             base_url=config.LM_STUDIO_BASE_URL,
             api_key=config.LM_STUDIO_API_KEY,
             timeout=180.0
         )
+        self._client_key = (config.LM_STUDIO_BASE_URL, config.LM_STUDIO_API_KEY)
+
+    def _ensure_client(self) -> AsyncOpenAI:
+        """
+        按「模型管理」里的当前生效配置准备 OpenAI 客户端。
+
+        · 本地模式 → 指向 LM Studio（用户可在面板里改端口/地址）
+        · 云端模式 → 指向所选云端服务（DeepSeek / Kimi / 通义 / 智谱 / 自定义）
+        仅当 (base_url, api_key) 发生变化时才重建实例，避免每次审查重复建连。
+        """
+        try:
+            from contract import model_config
+            eff = model_config.get_effective()
+        except Exception as e:
+            logger.debug(f"读取模型配置失败（沿用当前客户端）: {e}")
+            return self.client
+
+        new_key = (eff["base_url"], eff["api_key"])
+        if new_key != self._client_key:
+            self.client = AsyncOpenAI(base_url=eff["base_url"], api_key=eff["api_key"], timeout=180.0)
+            self._client_key = new_key
+            logger.info(
+                f"模型客户端已切换: provider={eff['provider']} base_url={eff['base_url']} "
+                f"model={eff['model']}（密钥{'已配置' if eff['api_key'] and not eff['api_key'].startswith('sk-missing') else '缺失'}）"
+            )
+        return self.client
 
     async def _list_loaded_models(self) -> List[str]:
         """
@@ -66,19 +94,41 @@ class ContractReviewEngine:
 
     async def get_active_model_name(self, preferred_model: str = None) -> str:
         """
-        动态感知 LM Studio 当前可用的模型。
+        动态感知当前生效的审查模型（模型管理面板 > 环境变量 > 自动优选）。
 
-        优选顺序（融合终版计划书「端侧小模型失效时下限不降低」原则的工程延伸）：
-          1. 显式指定（入参 / AGENT_MODEL 环境变量）
-          2. 已加载 且 非 reasoning 的 qwen 模型（instruct 类，结构化输出稳定且快）
-          3. 已加载的其它 qwen 模型
-          4. 已加载的任意模型
-          5. 通用模型列表中的 qwen 模型 / 第一个模型 / 默认配置
+        优选顺序：
+          1. 显式指定（调用方入参，如前端单次请求指定）
+          2. 环境变量 AGENT_MODEL（管理员级硬锁定，默认留空即不生效）
+          3. **模型管理面板里用户配置的模型**（云端模式必取其云端模型；
+             本地模式取面板里选定的本地模型）
+          4. 本地模式且面板未指定模型时，回退原有的自动优选：
+             跟随 WorkBuddy 会话本地模型 → 已加载且非 reasoning 的 qwen → 已加载任意模型
+             → 模型列表中的 qwen → 列表第一个 → DEFAULT_MODEL
         """
+        self._ensure_client()
+
         if preferred_model:
             return preferred_model
         if config.AGENT_MODEL:
             return config.AGENT_MODEL
+
+        # —— 模型管理面板的配置（用户显式选择，优先级仅低于环境变量硬锁定）——
+        try:
+            from contract import model_config
+            cfg = model_config.load()
+            eff = model_config.get_effective()
+            if not eff.get("is_local"):
+                # 云端模式：直接使用云端模型，不走任何本地 LM Studio 优选逻辑
+                picked = (eff.get("model") or "").strip() or "deepseek-chat"
+                logger.info(f"按模型管理配置使用云端模型: {picked}（{eff.get('base_url')}）")
+                return picked
+            pinned_local = (cfg.get("local", {}).get("model") or "").strip()
+            if pinned_local:
+                logger.info(f"按模型管理配置使用本地模型: {pinned_local}")
+                return pinned_local
+            logger.info("模型管理未指定本地模型，回退自动优选（跟随会话 / 已加载模型）")
+        except Exception as e:
+            logger.debug(f"读取模型管理配置失败（回退自动优选）: {e}")
 
         def _pick(cands: List[str], strict_non_reasoning: bool = True) -> str:
             """从候选里挑优：先排除 reasoning 类；再优先 instruct 类"""
@@ -461,9 +511,12 @@ class ContractReviewEngine:
                 rule_report = rule_based_contract_scan(contract_text, contract_type, client_role, review_stance)
                 if rule_report:
                     full_report = rule_report
+                    # 修复：原代码此处引用了未定义的 prefill_header（规则兜底报告里并无该前缀），
+                    # 一旦走到"模型输出过短 → 规则引擎兜底"这条路径就会 NameError 崩溃。
+                    # 规则报告本身已自带标题，直接整段下发即可。
                     yield {
                         "type": "content",
-                        "delta": "\n" + rule_report.replace(prefill_header, "")
+                        "delta": "\n" + rule_report
                     }
                 else:
                     err_hint = "\n### ⚠️ 审查中断提示\n端侧大模型服务未返回完整内容，请检查本地 LM Studio 运行状态后点击重试。"

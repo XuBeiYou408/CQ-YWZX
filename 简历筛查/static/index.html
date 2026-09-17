@@ -539,7 +539,7 @@
                       <span class="text-base font-bold text-slate-900">{{ c.name }}</span>
                       
                       <!-- Verified Badge -->
-                      <span v-if="c.verified" class="inline-flex items-center text-[#008770]" title="企业实名及学历官方双核验">
+                      <span v-if="c.verified" class="inline-flex items-center text-[#008770]" title="简历内一致性 + 公开渠道核查通过（未做官方实名/学历核验）">
                         <svg class="icon w-4 h-4 text-[#008770]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 3.26 4.41.45.9 4.34 3.6 2.65-2.07 3.99.78 4.37-4.39 1.13-2.32 3.81L12 22l-3.09-3.26-4.41-.45-.9-4.34L0 11.3l2.07-3.99-.78-4.37 4.39-1.13L8.91 2z"/><polyline points="9 12 11 14 15 10"/></svg>
                       </span>
 
@@ -640,8 +640,8 @@
                     </span>
                     <span v-else-if="c.deep_audit?.verified_highlights?.length"
                       class="font-bold px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-300 flex items-center gap-1"
-                      title="AI 尽调交叉取证全量保真">
-                      ✓ 经尽调核实验真
+                      title="按简历内一致性 + 公开渠道交叉取证（非官方实名核验）">
+                      ✓ 简历内一致性核查通过
                     </span>
                   </div>
 
@@ -891,7 +891,7 @@
                     <div class="text-xs text-slate-600 space-y-1 sm:text-right bg-slate-50 p-3 rounded-xl border border-slate-100">
                       <div><span class="text-slate-400">期望职位：</span><span class="font-bold text-slate-800">{{ currentDetail.full_resume?.basic_info?.target_title || '资深前端开发 / 全栈工程师' }}</span></div>
                       <div><span class="text-slate-400">期望薪酬：</span><span class="font-bold text-[#008770]">{{ currentDetail.salary_expect }}</span></div>
-                      <div><span class="text-slate-400">联系电话：</span><span class="font-mono text-slate-700">{{ currentDetail.full_resume?.basic_info?.phone || '138-****-8888 (已实名核验)' }}</span></div>
+                      <div><span class="text-slate-400">联系电话：</span><span class="font-mono text-slate-700">{{ currentDetail.full_resume?.basic_info?.phone || '138-****-8888' }}</span></div>
                       <div><span class="text-slate-400">电子邮箱：</span><span class="font-mono text-slate-700">{{ currentDetail.full_resume?.basic_info?.email || 'candidate@recruitai.com' }}</span></div>
                     </div>
                   </div>
@@ -1110,7 +1110,7 @@
                 <div v-if="currentDetail.deep_audit?.verified_highlights && currentDetail.deep_audit.verified_highlights.length" class="space-y-1.5">
                   <div class="text-xs font-bold text-emerald-800 flex items-center gap-1.5">
                     <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
-                    <span>✓ 官方资质与工具链核验实锤：</span>
+                    <span>✓ 系统可核验项（简历内一致性 / 公开渠道，非官方实名核验）：</span>
                   </div>
                   <div class="space-y-1.5 pl-3 border-l-2 border-emerald-300">
                     <div v-for="(vh, vhIdx) in currentDetail.deep_audit.verified_highlights" :key="vhIdx"
@@ -1125,7 +1125,7 @@
                   <div class="text-xs font-bold text-slate-800 flex items-center justify-between">
                     <span class="flex items-center gap-1.5">
                       <svg class="w-3.5 h-3.5 text-[#008770]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                      <span>智能体自主探查与反思时间线轨迹：</span>
+                      <span>智能体执行轨迹记录（系统编排与工具取证，非模型原始思维链）：</span>
                     </span>
                     <div class="flex items-center gap-2">
                       <!-- 重新尽调推测按钮 -->

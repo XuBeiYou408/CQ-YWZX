@@ -206,14 +206,13 @@ document.title = '企业本地知识库'
           <span v-else>{{ store.currentChatTitle }}</span>
         </h1>
         <div class="chat-subtitle-box">
-          <span class="chat-subtitle">LangChain + BGE + FAISS</span>
           <el-tag
             :type="modelStore.provider === 'local' ? 'success' : 'primary'"
             size="small"
             effect="light"
             class="model-active-tag"
             @click="router.push('/settings')"
-            style="cursor: pointer; margin-left: 8px;"
+            style="cursor: pointer; margin-top: 4px;"
           >
             {{ modelStore.provider === 'local' ? '🏠 本地部署: ' : '☁️ 云端 API: ' }}{{ modelStore.activeModelName }}
           </el-tag>
@@ -225,10 +224,6 @@ document.title = '企业本地知识库'
             <el-icon :size="18"><Setting /></el-icon>
           </el-button>
         </el-tooltip>
-        <el-button text>
-          <el-icon :size="16" style="margin-right:4px"><Download /></el-icon>
-          导出数据
-        </el-button>
       </div>
     </header>
 
@@ -329,15 +324,6 @@ document.title = '企业本地知识库'
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.chat-subtitle {
-  font: var(--text-metadata);
-  color: var(--color-secondary);
-  margin-top: 2px;
-  display: block;
-  text-transform: none;
-  letter-spacing: 0;
 }
 
 .header-right {

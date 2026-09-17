@@ -572,12 +572,21 @@
               </div>
             </div>
             <div class="flex items-center space-x-3">
-              <span
-                v-if="activeModel"
-                class="px-1.5 py-0.5 rounded text-[10px] font-mono border border-slate-200 bg-slate-50 text-slate-500"
-                title="当前本地推理模型（LM Studio）">
-                {{ activeModel }}
-              </span>
+              <!-- 模型管理入口：显示当前审查用的模型（本地/云端） -->
+              <button
+                @click="openModelPanel"
+                class="px-2 py-0.5 rounded text-[10px] font-mono border flex items-center gap-1 cursor-pointer active:scale-95 transition-all"
+                :class="modelConfig.effective.is_local
+                  ? 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                  : 'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100'"
+                :title="'当前审查模型：' + (activeModel || modelConfig.effective.model || '未设置') + '｜点击管理模型'">
+                <span class="font-semibold">{{ modelConfig.effective.is_local ? '本地' : '云端' }}</span>
+                <span class="max-w-[190px] truncate">{{ activeModel || modelConfig.effective.model || '选择模型' }}</span>
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+              </button>
               <button
                 v-if="agentPerceive || agentPlan.length || agentTraces.length || agentReflection"
                 @click="agentPanelOpen = !agentPanelOpen"
@@ -1034,6 +1043,153 @@
         </div>
       </section>
     </main>
+
+  <!-- ================= 模型管理弹窗：选择本地模型 / 云端模型 ================= -->
+  <!-- 注意：本弹窗必须位于 #app 根节点**内部**，否则 Vue 不编译模板（{{ }} 会原样显示、v-if 失效） -->
+  <div v-if="modelPanelOpen" class="fixed inset-0 z-[60] flex items-center justify-center p-4">
+    <div class="absolute inset-0 bg-slate-900/40" @click="closeModelPanel"></div>
+    <div class="relative w-full max-w-2xl bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
+      <!-- 标题 -->
+      <div class="px-5 py-3.5 border-b border-slate-200 flex items-center justify-between">
+        <div class="flex items-center space-x-2">
+          <span class="w-6 h-6 rounded-lg bg-blue-600 flex items-center justify-center">
+            <svg class="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+            </svg>
+          </span>
+          <div>
+            <div class="text-sm font-bold text-slate-800">模型管理</div>
+            <div class="text-[11px] text-slate-500">选择审查所用的模型：本地 LM Studio 或云端 API，保存后立即生效</div>
+          </div>
+        </div>
+        <div class="text-right">
+          <div class="text-[10px] text-slate-400">当前生效</div>
+          <div class="text-[11px] font-mono font-semibold"
+               :class="modelConfig.effective.is_local ? 'text-emerald-600' : 'text-blue-600'">
+            {{ modelConfig.effective.is_local ? '本地' : '云端' }} · {{ modelConfig.effective.model }}
+          </div>
+        </div>
+      </div>
+
+      <div class="px-5 py-4 overflow-y-auto custom-scroll space-y-4">
+        <!-- 服务类型选择 -->
+        <div class="grid grid-cols-2 gap-2.5">
+          <button @click="modelForm.provider = 'local'"
+            class="text-left px-3 py-2.5 rounded-xl border transition-all cursor-pointer"
+            :class="modelForm.provider === 'local' ? 'border-emerald-400 bg-emerald-50/70 ring-1 ring-emerald-300' : 'border-slate-200 hover:bg-slate-50'">
+            <div class="flex items-center space-x-1.5">
+              <span class="w-2 h-2 rounded-full" :class="modelForm.provider === 'local' ? 'bg-emerald-500' : 'bg-slate-300'"></span>
+              <span class="text-xs font-bold text-slate-800">本地模型（LM Studio）</span>
+            </div>
+            <div class="text-[11px] text-slate-500 mt-1">纯离线推理，数据不出本机，适合敏感合同</div>
+          </button>
+          <button @click="modelForm.provider = 'cloud'"
+            class="text-left px-3 py-2.5 rounded-xl border transition-all cursor-pointer"
+            :class="modelForm.provider === 'cloud' ? 'border-blue-400 bg-blue-50/70 ring-1 ring-blue-300' : 'border-slate-200 hover:bg-slate-50'">
+            <div class="flex items-center space-x-1.5">
+              <span class="w-2 h-2 rounded-full" :class="modelForm.provider === 'cloud' ? 'bg-blue-500' : 'bg-slate-300'"></span>
+              <span class="text-xs font-bold text-slate-800">云端模型（API）</span>
+            </div>
+            <div class="text-[11px] text-slate-500 mt-1">DeepSeek / Kimi / 通义 / 智谱，能力更强</div>
+          </button>
+        </div>
+
+        <!-- 本地区块 -->
+        <div v-if="modelForm.provider === 'local'" class="space-y-3 border border-slate-200 rounded-xl p-3.5 bg-slate-50/40">
+          <div>
+            <label class="text-[11px] font-semibold text-slate-600">LM Studio 服务地址</label>
+            <div class="flex items-center space-x-2 mt-1">
+              <input v-model="modelForm.localBaseUrl" placeholder="http://127.0.0.1:1234/v1"
+                class="flex-1 text-xs font-mono px-2.5 py-1.5 border border-slate-200 rounded-lg outline-none focus:border-emerald-400" />
+              <button @click="loadLocalModels" :disabled="modelBusy"
+                class="px-2.5 py-1.5 text-[11px] rounded-lg border border-slate-200 bg-white hover:bg-slate-50 cursor-pointer disabled:opacity-50">
+                刷新模型列表
+              </button>
+            </div>
+          </div>
+          <div>
+            <label class="text-[11px] font-semibold text-slate-600">审查使用的本地模型</label>
+            <select v-model="modelForm.localModel"
+              class="w-full mt-1 text-xs px-2.5 py-1.5 border border-slate-200 rounded-lg outline-none focus:border-emerald-400 bg-white">
+              <option value="">自动优选（跟随当前会话模型 / 已加载模型）</option>
+              <optgroup v-if="localModels.loaded.length" label="已加载（可直接使用，无需等待）">
+                <option v-for="m in localModels.loaded" :key="'L-' + m" :value="m">{{ m }} · 已加载</option>
+              </optgroup>
+              <optgroup label="全部可用模型">
+                <option v-for="m in localModels.models.filter(x => !localModels.loaded.includes(x))" :key="'A-' + m" :value="m">{{ m }}</option>
+              </optgroup>
+            </select>
+            <div class="text-[10px] mt-1" :class="localModels.connected ? 'text-emerald-600' : 'text-amber-600'">
+              <span v-if="localModels.connected">已连接：共 {{ localModels.models.length }} 个模型，其中 {{ localModels.loaded.length }} 个已加载</span>
+              <span v-else>未连接：{{ localModels.error || '请确认 LM Studio 已开启 Local Server' }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 云端区块 -->
+        <div v-else class="space-y-3 border border-slate-200 rounded-xl p-3.5 bg-blue-50/30">
+          <div class="grid grid-cols-2 gap-2.5">
+            <div>
+              <label class="text-[11px] font-semibold text-slate-600">云端服务商</label>
+              <select v-model="modelForm.cloudPreset" @change="applyCloudPreset"
+                class="w-full mt-1 text-xs px-2.5 py-1.5 border border-slate-200 rounded-lg outline-none focus:border-blue-400 bg-white">
+                <option v-for="p in modelConfig.presets" :key="p.id" :value="p.id">{{ p.label }}</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-[11px] font-semibold text-slate-600">模型</label>
+              <input v-model="modelForm.cloudModel" list="cloud-model-options" placeholder="deepseek-chat"
+                class="w-full mt-1 text-xs font-mono px-2.5 py-1.5 border border-slate-200 rounded-lg outline-none focus:border-blue-400" />
+              <datalist id="cloud-model-options">
+                <option v-for="m in (modelConfig.presets.find(p => p.id === modelForm.cloudPreset) || {}).models || []" :key="m" :value="m"></option>
+              </datalist>
+            </div>
+          </div>
+          <div>
+            <label class="text-[11px] font-semibold text-slate-600">接口地址（OpenAI 兼容）</label>
+            <input v-model="modelForm.cloudBaseUrl" placeholder="https://api.deepseek.com/v1"
+              class="w-full mt-1 text-xs font-mono px-2.5 py-1.5 border border-slate-200 rounded-lg outline-none focus:border-blue-400" />
+          </div>
+          <div>
+            <label class="text-[11px] font-semibold text-slate-600">API Key</label>
+            <input v-model="modelForm.cloudApiKey" type="password"
+              :placeholder="modelConfig.cloud.has_key ? ('已保存：' + modelConfig.cloud.key_masked + '（留空表示不修改）') : '粘贴你的 API Key'"
+              class="w-full mt-1 text-xs font-mono px-2.5 py-1.5 border border-slate-200 rounded-lg outline-none focus:border-blue-400" />
+            <div class="text-[10px] text-slate-500 mt-1">
+              密钥仅保存在本机 <span class="font-mono">model_config.json</span>（已加入 .gitignore，不会提交到仓库）。
+              <span v-if="modelConfig.cloud.key_from_env" class="text-emerald-600">当前取自环境变量。</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 测试结果 -->
+        <div v-if="modelTestResult" class="text-[11px] px-3 py-2 rounded-lg border"
+          :class="modelTestResult.ok ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-rose-50 border-rose-200 text-rose-700'">
+          <div class="font-semibold">{{ modelTestResult.ok ? '✓ 连接成功' : '✗ 连接失败' }}
+            <span v-if="modelTestResult.latency_ms" class="font-normal">（{{ modelTestResult.latency_ms }} ms）</span>
+          </div>
+          <div class="mt-0.5 break-all">{{ modelTestResult.message }}</div>
+        </div>
+        <div v-if="modelNotice" class="text-[11px] px-3 py-2 rounded-lg bg-slate-100 border border-slate-200 text-slate-700">{{ modelNotice }}</div>
+      </div>
+
+      <!-- 底部操作 -->
+      <div class="px-5 py-3 border-t border-slate-200 flex items-center justify-between bg-slate-50/60">
+        <button @click="testModel" :disabled="modelBusy"
+          class="px-3 py-1.5 text-xs rounded-lg border border-slate-200 bg-white hover:bg-slate-50 cursor-pointer disabled:opacity-50">
+          {{ modelBusy ? '测试中…' : '测试连接' }}
+        </button>
+        <div class="flex items-center space-x-2">
+          <button @click="closeModelPanel"
+            class="px-3 py-1.5 text-xs rounded-lg border border-slate-200 bg-white hover:bg-slate-50 cursor-pointer">取消</button>
+          <button @click="saveModelConfig" :disabled="modelBusy"
+            class="px-3.5 py-1.5 text-xs rounded-lg bg-blue-600 text-white hover:bg-blue-700 cursor-pointer disabled:opacity-50 font-semibold">
+            保存并生效
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
   </div>
 
   <script>
@@ -1067,6 +1223,133 @@
 
         // 当前推理模型（由后端 status 帧透传，便于用户判断性能与耗时）
         const activeModel = ref('');
+
+        // ===== 模型管理（本地 LM Studio / 云端 API）=====
+        const modelPanelOpen = ref(false);
+        const modelBusy = ref(false);
+        const modelNotice = ref('');
+        const modelTestResult = ref(null);
+        const localModels = ref({ connected: false, loaded: [], models: [], error: null });
+        const modelConfig = ref({
+          provider: 'local',
+          local: { base_url: '', model: '', model_is_auto: true, has_key: false, key_masked: '' },
+          cloud: { preset: 'deepseek', base_url: '', model: '', has_key: false, key_masked: '', key_from_env: false },
+          effective: { provider: 'local', base_url: '', model: '', is_local: true },
+          presets: [],
+        });
+        const modelForm = reactive({
+          provider: 'local',
+          localBaseUrl: 'http://127.0.0.1:1234/v1',
+          localModel: '',
+          cloudPreset: 'deepseek',
+          cloudBaseUrl: 'https://api.deepseek.com/v1',
+          cloudModel: 'deepseek-chat',
+          cloudApiKey: '',
+        });
+
+        const loadModelConfig = async () => {
+          try {
+            const res = await fetch('/api/model/config');
+            const j = await res.json();
+            if (j.code === 200 && j.data) {
+              const d = j.data;
+              modelConfig.value = d;
+              modelForm.provider = d.provider || 'local';
+              modelForm.localBaseUrl = d.local.base_url || 'http://127.0.0.1:1234/v1';
+              modelForm.localModel = d.local.model || '';
+              modelForm.cloudPreset = d.cloud.preset || 'deepseek';
+              modelForm.cloudBaseUrl = d.cloud.base_url || '';
+              modelForm.cloudModel = d.cloud.model || '';
+              modelForm.cloudApiKey = '';   // 密钥不回显，留空表示"不修改"
+              if (!activeModel.value) activeModel.value = d.effective.model || '';
+            }
+          } catch (e) {
+            console.warn('拉取模型配置失败', e);
+          }
+        };
+
+        const loadLocalModels = async () => {
+          modelBusy.value = true;
+          try {
+            const res = await fetch('/api/model/local/list?base_url=' + encodeURIComponent(modelForm.localBaseUrl || ''));
+            const j = await res.json();
+            if (j.code === 200) localModels.value = j.data;
+            else localModels.value = { connected: false, loaded: [], models: [], error: j.message };
+          } catch (e) {
+            localModels.value = { connected: false, loaded: [], models: [], error: String(e) };
+          } finally {
+            modelBusy.value = false;
+          }
+        };
+
+        const applyCloudPreset = () => {
+          const p = (modelConfig.value.presets || []).find((x) => x.id === modelForm.cloudPreset);
+          if (!p) return;
+          if (p.base_url) modelForm.cloudBaseUrl = p.base_url;
+          if (p.models && p.models.length && !p.models.includes(modelForm.cloudModel)) {
+            modelForm.cloudModel = p.models[0];
+          }
+        };
+
+        const openModelPanel = async () => {
+          modelNotice.value = '';
+          modelTestResult.value = null;
+          await loadModelConfig();
+          modelPanelOpen.value = true;
+          if (modelForm.provider === 'local') loadLocalModels();
+        };
+
+        const closeModelPanel = () => { modelPanelOpen.value = false; };
+
+        const testModel = async () => {
+          modelBusy.value = true;
+          modelTestResult.value = null;
+          try {
+            const body = modelForm.provider === 'cloud'
+              ? { provider: 'cloud', preset: modelForm.cloudPreset, base_url: modelForm.cloudBaseUrl,
+                  model: modelForm.cloudModel, api_key: modelForm.cloudApiKey || undefined }
+              : { provider: 'local', base_url: modelForm.localBaseUrl, model: modelForm.localModel || undefined };
+            const res = await fetch('/api/model/test', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+            });
+            const j = await res.json();
+            modelTestResult.value = j.data || { ok: false, message: j.message };
+          } catch (e) {
+            modelTestResult.value = { ok: false, message: String(e) };
+          } finally {
+            modelBusy.value = false;
+          }
+        };
+
+        const saveModelConfig = async () => {
+          modelBusy.value = true;
+          modelNotice.value = '';
+          try {
+            // api_key 使用 undefined 时 JSON 里不出现该字段 → 后端保持原密钥不变
+            const payload = modelForm.provider === 'cloud'
+              ? { provider: 'cloud', cloud: { preset: modelForm.cloudPreset, base_url: modelForm.cloudBaseUrl,
+                  model: modelForm.cloudModel, api_key: modelForm.cloudApiKey || undefined } }
+              : { provider: 'local', local: { base_url: modelForm.localBaseUrl, model: modelForm.localModel } };
+            const res = await fetch('/api/model/config', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+            });
+            const j = await res.json();
+            if (j.code === 200 && j.data) {
+              modelConfig.value = j.data;
+              activeModel.value = j.data.effective.model || activeModel.value;
+              modelNotice.value = j.message || '已保存并生效';
+            } else {
+              modelNotice.value = j.message || '保存失败';
+            }
+          } catch (e) {
+            modelNotice.value = '保存失败：' + e;
+          } finally {
+            modelBusy.value = false;
+          }
+        };
+
+        // 启动时同步一次，让头部胶囊在审查前就显示"当前审查模型"
+        loadModelConfig();
 
         // ===== Agent 轨迹（感知→规划→行动→反思 四阶段可视化）=====
         const agentPanelOpen = ref(true);          // 轨迹面板折叠开关
@@ -2285,6 +2568,20 @@
           toggleSampleMenu,
           closeSampleMenu,
           activeModel,
+          // 模型管理
+          modelPanelOpen,
+          modelBusy,
+          modelNotice,
+          modelTestResult,
+          modelConfig,
+          modelForm,
+          localModels,
+          openModelPanel,
+          closeModelPanel,
+          loadLocalModels,
+          applyCloudPreset,
+          testModel,
+          saveModelConfig,
           clearAll,
           startReview,
           copyReviewReport,

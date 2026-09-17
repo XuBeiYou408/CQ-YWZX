@@ -1,5 +1,6 @@
 ﻿import os
 import shutil
+import asyncio
 import logging
 from datetime import datetime
 from typing import List, Dict, Any
@@ -7,7 +8,7 @@ from fastapi import APIRouter, UploadFile, File, HTTPException
 
 from app.schemas import APIResponse
 from config import folder_path
-from rag.vector_store import reload_vector_store
+from rag.vector_store import reload_vector_store, verify_file_indexed
 
 logger = logging.getLogger(__name__)
 
@@ -86,6 +87,11 @@ async def upload_document(file: UploadFile = File(...)):
         
     try:
         reload_vector_store()
+        # 修复 H：重载后立即预热新版检索器（向量 + BM25）。
+        # 一方面确保上传后第一次提问就能命中新文档，另一方面避免首个请求
+        # 独自承担 BM25 重建耗时而被 Agent 的 5 秒工具超时熔断。
+        from rag.retriever import get_retrievers
+        await asyncio.to_thread(get_retrievers)
         logger.info(f"文档 {filename} 已成功入库并建立向量索引")
     except Exception as e:
         logger.error(f"构建向量索引异常: {e}")
@@ -94,7 +100,23 @@ async def upload_document(file: UploadFile = File(...)):
             message="文件已保存，但向量索引更新中，请稍后刷新",
             data={"filename": filename, "status": "saved"}
         )
-        
+
+    # 端到端自检：确认正文分块已真实进入向量库。
+    # 若文件是扫描件/纯图片等解析不出文本的格式，此处会如实告知，
+    # 不再对外宣称"已入库"却在提问时凭空检索不到。
+    if not verify_file_indexed(save_path):
+        logger.warning(f"文档 {filename} 未在向量库中检出正文分块（可能为扫描件或空文档）")
+        return APIResponse(
+            code=200,
+            message=f"文件已保存，但未解析出可检索正文（可能为扫描件/纯图片文档），请检查内容后重试",
+            data={
+                "filename": filename,
+                "type": ext.lstrip(".").upper(),
+                "size": _format_size(file_size),
+                "status": "empty_content"
+            }
+        )
+
     return APIResponse(
         code=200,
         message=f"文档 {filename} 解析与向量入库完成！",
@@ -107,7 +129,7 @@ async def upload_document(file: UploadFile = File(...)):
     )
 
 @router.delete("/{file_name}", response_model=APIResponse)
-def delete_document(file_name: str):
+async def delete_document(file_name: str):
     """删除知识库文档并重新同步向量索引"""
     target_path = os.path.join(folder_path, file_name)
     if not os.path.exists(target_path):
@@ -122,6 +144,10 @@ def delete_document(file_name: str):
         
     try:
         reload_vector_store()
+        # 修复 H：删除后同步预热检索器，确保被删文档立即从混合召回中消失
+        # （向量索引与 BM25 索引都必须基于最新文档集重建）
+        from rag.retriever import get_retrievers
+        await asyncio.to_thread(get_retrievers)
         logger.info("删除文档后向量数据库重建同步成功")
     except Exception as e:
         logger.warning(f"向量库同步警告: {e}")

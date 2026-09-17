@@ -223,12 +223,46 @@ def get_vector_store() -> Tuple[FAISS, List[Document]]:
                 _db_instance, _safe_docs_cache = qi_dong_lu_jin()
     return _db_instance, _safe_docs_cache
 
+# 修复 H：向量库版本号。每次增删改后自增，供检索层判定自己缓存的检索器是否已过期。
+# 背景：上传新文档后 reload_vector_store() 只替换了本模块的 _db_instance，
+# 而 rag/retriever.py 的 _retriever_cache 仍持有旧 FAISS 对象引用与旧 BM25 索引，
+# 导致新入库文档在问答时永远召回不到，必须重启服务才生效。
+_db_generation: int = 0
+
+def get_db_generation() -> int:
+    """返回当前向量库版本号（只读，检索层用于判断缓存是否过期）"""
+    return _db_generation
+
 def reload_vector_store() -> Tuple[FAISS, List[Document]]:
-    """强制重新检测素材目录并刷新全局向量库及BM25缓存"""
-    global _db_instance, _safe_docs_cache
+    """强制重新检测素材目录并刷新全局向量库，同时推进版本号使检索层缓存自动失效"""
+    global _db_instance, _safe_docs_cache, _db_generation
     with _vs_lock:
         _db_instance, _safe_docs_cache = qi_dong_lu_jin()
+        _db_generation += 1
+    logger.info(f"向量库已重载，当前版本 v{_db_generation}")
     return _db_instance, _safe_docs_cache
+
+def verify_file_indexed(file_path: str) -> bool:
+    """校验指定文件的正文分块是否已真实进入当前向量库。
+    用于上传接口的端到端自检：避免"文件已保存"但解析为空（如扫描件/纯图片 docx）
+    却对外报"已入库"，造成后续提问凭空检索不到。"""
+    try:
+        db, _ = get_vector_store()
+        target = os.path.abspath(file_path)
+        for doc_id in list(db.index_to_docstore_id.values()):
+            try:
+                doc = db.docstore.search(doc_id)
+            except Exception:
+                continue
+            if not doc:
+                continue
+            src = doc.metadata.get("source", "") if hasattr(doc, "metadata") else ""
+            if src and os.path.abspath(str(src)) == target:
+                return True
+    except Exception as e:
+        logger.warning(f"索引自检异常: {e}")
+        return False
+    return False
 
 # 动态属性/魔术加载以兼容原有的全局变量引用
 class _LazyVectorDBProxy:
@@ -239,10 +273,15 @@ class _LazyVectorDBProxy:
 class _LazyDocsProxy(list):
     def __init__(self):
         super().__init__()
+        self._src_obj = None
     def _ensure_loaded(self):
-        if not self:
+        # 修复 H：reload_vector_store() 会整体替换 _safe_docs_cache，
+        # 此处按对象身份判断并同步刷新，避免代理长期缓存旧文档集（新入库文档不可见）。
+        if self._src_obj is not _safe_docs_cache:
             _, docs = get_vector_store()
-            self.extend(docs)
+            super().clear()
+            super().extend(docs)
+            self._src_obj = _safe_docs_cache
     def __iter__(self):
         self._ensure_loaded()
         return super().__iter__()

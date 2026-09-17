@@ -576,9 +576,9 @@ def rescreen_candidate(candidate: Dict[str, Any], job: Dict[str, Any]) -> Dict[s
         ]
         deep_audit["risk_warnings"] = []
         deep_audit["verified_highlights"] = [
-            "✓ 浙大985硕士学历真实，8年工龄连贯无断档",
+            "✓ 简历自述：浙大985硕士、8年工龄，时间线衔接自洽（未做官方学历/身份核验）",
             "✓ 命中微前端沙箱/千万级QPS等深度指标，自研度95%+",
-            "✓ 经实名背景调查，字节+腾讯履历全部属实"
+            "✓ （演示样本设定）字节+腾讯履历自洽；真实背景调查需走线下实名核验流程",
         ]
         candidate["deep_audit"] = deep_audit
 
@@ -633,7 +633,7 @@ def rescreen_candidate(candidate: Dict[str, Any], job: Dict[str, Any]) -> Dict[s
             "⚠️ 技术栈偏离：近3年主攻移动端跨端开发，Web前端/Node.js全栈存在技术生疏风险",
             "⚠️ 项目量化指标不足，多为业务层封装"
         ]
-        deep_audit["verified_highlights"] = ["✓ 电子科大985学历真实，美团大厂履历属实"]
+        deep_audit["verified_highlights"] = ["✓ 简历自述：电子科大985学历、美团履历，文本表述自洽（未做官方核验）"]
         candidate["deep_audit"] = deep_audit
 
     elif cand_id == "preset-004":
@@ -786,7 +786,7 @@ def recall_talent_to_candidates(talent: Dict[str, Any], job: Dict[str, Any]) -> 
             "risk_warnings": [],
             "verified_highlights": [
                 "✓ 满足当前岗位最新门槛要求（工龄与学历完全达标）",
-                "✓ 履历真实度与企业经历经实名核验"
+                "✓ 简历内一致性核查通过（未做实名核验；实名背调需候选人授权后线下执行）"
             ],
             "targeted_interview_focus": [
                 "重点评估其技能栈与本业务线架构演进路线的契合度"

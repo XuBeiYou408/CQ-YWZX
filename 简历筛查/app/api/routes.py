@@ -627,6 +627,24 @@ async def regenerate_questions(candidate_id: str):
     }
 
 
+def _normalize_trace(raw_trace) -> list:
+    """如实规整"执行轨迹"数组。
+
+    设计原则（去伪保真）：
+    1. 模型给几条就展示几条——旧实现要求"不足四条就用模板补齐四条"，会把并非模型
+       实际走过的步骤、乃至与上方思维链结论相反的评语（如"无虚假注水…评定为优秀推荐"）
+       展示成智能体的推导过程；
+    2. 模型完全没返回结构化轨迹时，只给一条如实的系统说明，绝不编造推理与结论。
+    """
+    clean = [str(t).strip() for t in (raw_trace or []) if str(t).strip()]
+    if clean:
+        return clean
+    return [
+        "【系统说明】本次模型未返回结构化执行轨迹（可能不支持 JSON 输出或调用异常）。"
+        "上方思维链与下方评分依据均为真实结果，本模块不做任何推断性补写。"
+    ]
+
+
 @router.post("/api/candidates/{candidate_id}/rededuce-trace")
 async def rededuce_trace(candidate_id: str):
     """根据候选人背景调用大模型重新推导 ReAct 尽调时间线轨迹，并返回大模型现场推导思维链"""
@@ -668,15 +686,16 @@ async def rededuce_trace(candidate_id: str):
     system_prompt = (
         "你是一位严谨苛刻的大厂资深技术尽调官与猎头复合智能体（ReAct 架构）。"
         "请根据候选人真实履历、学历、工龄、跳槽时序与主导项目，重新执行一次端到端的交叉尽调与反思推理，"
-        "输出其四大阶段轨迹（感知 Perceive → 规划 Plan → 行动 Act → 反思 Reflect）与大模型推导思维链。\n"
+        "输出你**实际走过的执行步骤轨迹**与大模型推导思维链。\n"
+        "【关于步骤轨迹的硬性要求】：步骤数量由你根据实际推理过程自行判断，**通常为 2~5 条，不必凑满四条**；"
+        "某一步（如需要外部取证）若实际未发生就不要写；每一条都要对应你真实做过的判断或核查，不得写空话套话。"
+        "若你确实按「感知 Perceive → 规划 Plan → 行动 Act → 反思 Reflect」推进，可沿用该命名，但不强制。\n"
         "【严格输出合法 JSON 格式】：\n"
         "{\n"
         "  \"reasoning_chain\": \"在此输出大模型实时推导思维链（120~250字）：从其毕业学校、跳槽时间线衔接、大厂核心业务含金量、是否存在量化指标造假水分、以及与岗位的真实匹配风险进行层层拆解。\",\n"
         "  \"investigation_trace\": [\n"
-        "    \"【阶段 1: 感知 (Perceive)】...\",\n"
-        "    \"【阶段 2: 规划 (Plan)】...\",\n"
-        "    \"【阶段 3: 行动 (Act)】...\",\n"
-        "    \"【阶段 4: 反思 (Reflect)】...\"\n"
+        "    \"【步骤 1: ...】...\",\n"
+        "    \"【步骤 2: ...】...（按你实际走过的步骤数输出，可多于或少于 4 条）\"\n"
         "  ],\n"
         "  \"targeted_interview_focus\": [\n"
         "    \"面试官重点防线1...\",\n"
@@ -729,27 +748,22 @@ async def rededuce_trace(candidate_id: str):
             except Exception:
                 pass
 
-        # 兜底保障：若模型未输出流式思考（例如普通模型）或处于离线断网环境
-        # 依候选人真实画像，逐字流式打字机推送到前端
+        # 兜底保障：若模型未输出流式思考（例如普通模型）或处于离线断网环境，
+        # 如实说明"本次没有模型思维链"，**不再用模板拼接一段冒充模型推理的文字**
+        # （旧实现会生成"核对就职周期无异常、推断结果可信"这类未经核查的结论）。
         if not has_streamed_reasoning:
             if not reasoning_chain:
                 reasoning_chain = (
-                    f"针对候选人【{name}】的履历重新推断：\n"
-                    f"1. 时序自洽性：毕业于{school}，总工龄{exp}年，核对{company}等就职周期无重叠冲突或异常空白期；\n"
-                    f"2. 工程硬核度：技术栈集中于{skills}，项目描述体现了真实业务场景的架构权衡，非速成班典型套路；\n"
-                    f"3. 岗位匹配度：针对当前【{job_title}】的岗位诉求，候选人在大型系统可用性与工程规范方面具备良好沉淀，推断结果可信。"
+                    f"【系统说明】当前模型未返回思维链（reasoning）内容，本次不展示逐步推理过程。"
+                    f"已知客观信息：{school} {edu}、总工龄约 {exp} 年、现任 {company} · {title}，"
+                    f"应聘岗位【{job_title}】。结论请以下方执行轨迹与评分依据为准，本处不做推断性叙述。"
                 )
             for ch in reasoning_chain:
                 yield f"data: {json.dumps({'type': 'reasoning', 'delta': ch}, ensure_ascii=False)}\n\n"
                 await asyncio.sleep(0.012)
 
-        if not new_trace or len(new_trace) < 4:
-            new_trace = [
-                f"【阶段 1: 感知 (Perceive)】扫描到候选人 {name} 履历：{school} {edu}背景，{exp}年资历，现任 {company} · {title}。",
-                f"【阶段 2: 规划 (Plan)】启动 timeline_cross_auditor 进行履历时序与社保工龄比对；调用 project_substance_evaluator 核验 {skills[:25]} 项目指标真伪。",
-                f"【阶段 3: 行动 (Act)】深度核查反馈：项目经历与履历工龄连贯，在 {company} 主导模块技术特征清晰，核心指标具备可信度。",
-                f"【阶段 4: 反思 (Reflect)】综合核验无简历虚假注水痕迹，技术架构深度与【{job_title}】高度吻合，评定为优秀推荐。"
-            ]
+        # 如实规整执行轨迹：保留模型给出的实际条数，不再"不足四条就编造补齐"
+        new_trace = _normalize_trace(new_trace)
 
         # 依次流式推送各个 ReAct 轨迹阶段
         for s_idx, step in enumerate(new_trace):

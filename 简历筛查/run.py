@@ -28,6 +28,11 @@ if str(CURRENT_DIR) not in sys.path:
 HOST = os.getenv('HOST', '0.0.0.0')
 PORT = int(os.getenv('PORT', '8030'))
 
+# 修复：0.0.0.0 / :: 是"监听所有网卡"的**绑定地址**，不能当作访问目标，
+# 否则浏览器会直接报 ERR_ADDRESS_INVALID（实测 Edge：无法访问此页面）。
+# 服务仍按 HOST 绑定（保留局域网访问能力），但打开浏览器一律用本机回环地址。
+BROWSER_HOST = '127.0.0.1' if HOST in ('0.0.0.0', '::', '[::]', '') else HOST
+
 def is_port_in_use(port: int) -> bool:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.settimeout(0.5)
@@ -86,12 +91,13 @@ def main():
 
     if is_port_in_use(PORT):
         print(f'[!] 警告: 端口 {PORT} 已被占用，可能已有一个实例正在运行。')
-        print(f'    请直接在浏览器中打开: http://{HOST}:{PORT}')
+        print(f'    请直接在浏览器中打开: http://{BROWSER_HOST}:{PORT}')
         sys.exit(1)
 
-    url = f'http://{HOST}:{PORT}'
+    url = f'http://{BROWSER_HOST}:{PORT}'
     print(f'[*] 正在启动 FastAPI 服务...')
-    print(f'[*] 访问地址: {url}')
+    print(f'[*] 服务监听地址: http://{HOST}:{PORT}  (绑定所有网卡，供局域网访问)')
+    print(f'[*] 本机访问地址: {url}')
     print('=' * 65)
 
     threading.Thread(target=open_browser, args=(url,), daemon=True).start()

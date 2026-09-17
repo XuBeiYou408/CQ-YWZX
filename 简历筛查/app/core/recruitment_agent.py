@@ -47,7 +47,10 @@ class RecruitmentAgent:
         # 阶段 1: 感知 (Perceive)
         # =====================================================================
         truncated_resume = resume_text[:3500]
-        investigation_trace.append("【阶段 1: 感知 (Perceive)】解析候选人履历特征与目标岗位JD契合点，初始化尽调任务...")
+        investigation_trace.append(
+            f"【阶段 1: 感知 (Perceive)】已载入候选人履历原文 {len(resume_text)} 字"
+            f"（其中 {len(truncated_resume)} 字进入模型分析），目标岗位《{job.get('title', '技术岗位')}》。"
+        )
 
         # =====================================================================
         # 阶段 2: 规划 (Plan)
@@ -55,15 +58,20 @@ class RecruitmentAgent:
         has_url_hint = any(k in resume_text.lower() for k in ["github.com", "gitee.com", "http", "blog", "juejin", "csdn"])
         plan_desc = [
             "1. 启动 timeline_cross_auditor 进行受教育与工作起止时间自洽性测谎",
-            "2. 启动 external_asset_probe 探查公开开源项目与技术博客含金量" if has_url_hint else "2. 检索外链技术资产（若无则记录空档）",
+            "2. 启动 external_asset_probe 探查公开开源项目与技术博客含金量" if has_url_hint else "2. 检索外链技术资产（本份简历未披露公开链接，将记录空档）",
             "3. 启动 project_substance_evaluator 过滤模糊动词，核查硬核架构指标与真实产出",
         ]
-        investigation_trace.append(f"【阶段 2: 规划 (Plan)】制定多维尽调路径：\n  - " + "\n  - ".join(plan_desc))
+        investigation_trace.append(
+            "【阶段 2: 规划 (Plan)】本阶段为**待执行的计划**，共安排 "
+            f"{len(plan_desc)} 项核查（实际执行结果见阶段 3）：\n  - " + "\n  - ".join(plan_desc)
+        )
 
         # =====================================================================
         # 阶段 3: 行动 (Act) - 调用工具箱取证
         # =====================================================================
-        investigation_trace.append("【阶段 3: 行动 (Act)】依序调用工具箱开展多点交叉取证...")
+        investigation_trace.append(
+            f"【阶段 3: 行动 (Act)】按计划顺序调用工具箱开展交叉取证，共 {len(plan_desc)} 项，下方逐条列出真实返回："
+        )
 
         # 工具 1：时间线审计
         t_result = timeline_cross_auditor(resume_text)
@@ -104,7 +112,12 @@ class RecruitmentAgent:
         # =====================================================================
         # 阶段 4: 反思与校准 (Reflect & Calibrate)
         # =====================================================================
-        investigation_trace.append("【阶段 4: 反思与校准 (Reflect)】将全部取证物料注入大模型，启动深度反思与评级修正...")
+        # 说明（去伪保真）：此条是**计划描述**；真实执行结果由下方成功分支的
+        # 【反思定案结论】或失败分支的【降级说明】追加，二者不会同时缺失。
+        investigation_trace.append(
+            "【阶段 4: 反思与校准 (Reflect)】（计划）将阶段 1~3 的取证物料注入大模型，由其反思定案并给出评级与面试题；"
+            "若模型调用或解析失败，将如实降级为工具层确定性评分（结果见随后的结论行）。"
+        )
 
         tool_evidence_summary = (
             f"- 时间线自洽性状态: {'通过' if t_result['passed'] else '异常告警'}\n"
@@ -219,7 +232,10 @@ class RecruitmentAgent:
             if reflection:
                 investigation_trace.append(f"【反思定案结论】{reflection}")
             else:
-                investigation_trace.append("【反思定案结论】综合时间线、代码资产与技术指标，形成客观公正的初筛定级。")
+                investigation_trace.append(
+                    "【反思定案结论】本次模型未单独返回反思轨迹字段；评级与评语由阶段 1~3 的工具取证物料"
+                    "（时间线自洽性 / 外链资产 / 项目含金量）配合模型结论字段生成。"
+                )
 
             targeted_focus = eval_data.get("targeted_interview_focus", [])
             if not isinstance(targeted_focus, list) or not targeted_focus:

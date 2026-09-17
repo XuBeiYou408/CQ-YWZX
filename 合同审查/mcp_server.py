@@ -359,9 +359,30 @@ def ping() -> str:
     else:
         probe_url = base + "/v1/models"
     lines.append(f"LM Studio 地址：{base}")
-    lines.append(f"配置模型（DEFAULT_MODEL）：{_cfg.DEFAULT_MODEL}")
+    # 模型管理（model_config.json）优先：报告真正生效的审查模型
+    try:
+        from contract import model_config as _mc
+
+        _eff = _mc.get_effective()
+        _cfgfile = _mc.load()
+        lines.append(
+            f"模型管理：provider={_eff['provider']}"
+            f"（{'本地 LM Studio' if _eff['is_local'] else '云端 API'}）"
+        )
+        lines.append(f"  ▸ 生效地址：{_eff['base_url']}")
+        lines.append(f"  ▸ 生效模型：{_eff['model']}")
+        if not _eff["is_local"]:
+            lines.append(f"  ▸ 云端密钥：{'已配置' if _eff['api_key'] and not _eff['api_key'].startswith('sk-missing') else '缺失（请在界面上填写）'}")
+        elif _cfgfile.get("local", {}).get("model"):
+            lines.append("  ▸ 说明：面板已指定本地模型，审查将固定使用它（不再跟随会话）")
+        else:
+            lines.append("  ▸ 说明：面板未指定本地模型，审查走自动优选（跟随会话 / 已加载模型）")
+    except Exception as _e:
+        lines.append(f"模型管理：读取失败（{_e}），回退配置默认值")
+
+    lines.append(f"兜底默认模型（DEFAULT_MODEL）：{_cfg.DEFAULT_MODEL}")
     if _cfg.AGENT_MODEL:
-        lines.append(f"指定模型（AGENT_MODEL）：{_cfg.AGENT_MODEL}（优先生效）")
+        lines.append(f"硬锁定模型（AGENT_MODEL）：{_cfg.AGENT_MODEL}（优先级高于模型管理面板）")
 
     # 会话本地模型提示：当前会话用的本地模型若已加载，审查会优先复用它（避免换模型带来的时延）
     try:

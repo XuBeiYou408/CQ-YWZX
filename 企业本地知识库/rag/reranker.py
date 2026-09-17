@@ -43,6 +43,13 @@ def _ensure_reranker_loaded() -> None:
         _reranker_disabled = True
 
 # ==================== 定义重排（Rerank）行为 ====================
+def is_reranker_enabled() -> bool:
+    """是否已装配可用的重排模型。
+    检索层据此决定融合策略：有重排则交给重排精排，无重排则改用 RRF 排名融合
+    （否则双路召回会被"拼接后直接截断"饿死后排的 BM25 通道）。"""
+    _ensure_reranker_loaded()
+    return reranker is not None
+
 def reranker_doc(question: str, docs: List[Document], reranker_limit: int = 60) -> List[Document]:
     _ensure_reranker_loaded()
     if len(docs) > reranker_limit:

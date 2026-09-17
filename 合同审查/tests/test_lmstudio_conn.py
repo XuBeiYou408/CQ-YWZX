@@ -19,8 +19,9 @@ async def test_lmstudio_connection():
     for m in models.data:
         print(f"   - 模型 ID: {m.id}")
         
-    # 2. 测试流式调用
-    target_model = models.data[0].id if models.data else "qwen2.5-14b-instruct"
+    # 2. 测试流式调用（无模型列表时回退到项目当前固定使用的审查模型）
+    from config import config as _cfg
+    target_model = models.data[0].id if models.data else (_cfg.AGENT_MODEL or _cfg.DEFAULT_MODEL)
     print(f">> 正在对模型 [{target_model}] 发起法务打招呼流式推理测试...")
     start_t = time.time()
     response = await client.chat.completions.create(

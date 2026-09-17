@@ -12,6 +12,7 @@ from fastapi.responses import FileResponse
 
 from app.schemas import APIResponse
 from app.routes.contract import router as contract_router
+from app.routes.model_admin import router as model_admin_router
 from config import config
 
 app = FastAPI(
@@ -31,6 +32,7 @@ app.add_middleware(
 
 # 挂载 API 路由
 app.include_router(contract_router, prefix="/api/contract", tags=["合同审查"])
+app.include_router(model_admin_router, prefix="/api/model", tags=["模型管理"])
 
 @app.get("/health", response_model=APIResponse)
 def health():

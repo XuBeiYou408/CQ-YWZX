@@ -5,6 +5,10 @@
 .env.*
 !.env.example
 
+# 模型管理配置（含云端 API Key，绝不能提交到公开仓库）
+model_config.json
+model_config.json.*
+
 # Python
 __pycache__/
 *.py[cod]

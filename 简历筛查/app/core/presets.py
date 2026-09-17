@@ -82,9 +82,9 @@ PRESET_CANDIDATES: List[Dict[str, Any]] = [
             ],
             "risk_warnings": [],
             "verified_highlights": [
-                "✓ 浙大985硕士学历真实，8年工龄连贯无断档",
-                "✓ 命中微前端沙箱/千万级QPS等深度指标，自研度95%+",
-                "✓ 经实名背景调查，字节+腾讯履历全部属实"
+                "✓ 简历自述：浙大985硕士、8年工龄，时间线衔接自洽（未做官方学历/身份核验）",
+                "✓ 命中微前端沙箱/千万级QPS等深度指标，自研度95%+（系统按简历文本评分）",
+                "✓ （演示样本设定）字节+腾讯履历自洽；真实背景调查需走线下实名核验流程"
             ],
             "targeted_interview_focus": [
                 "建议重点考查微应用预加载策略与微前端容器崩溃时的容灾切流中枢",
@@ -145,7 +145,7 @@ PRESET_CANDIDATES: List[Dict[str, Any]] = [
                 "age": 31,
                 "work_years": 8,
                 "city": "广东 · 深圳",
-                "phone": "138-0018-8888 (已实名核验)",
+                "phone": "138-0018-8888",
                 "email": "linyuanzhi.arch@gmail.com",
                 "political_status": "中共党员",
                 "target_title": "资深前端开发专家 / 全栈架构师",
@@ -291,7 +291,7 @@ PRESET_CANDIDATES: List[Dict[str, Any]] = [
                 "age": 28,
                 "work_years": 5,
                 "city": "广东 · 广州",
-                "phone": "139-0022-7777 (已实名核验)",
+                "phone": "139-0022-7777",
                 "email": "shuting.chen@shopee-alumni.com",
                 "political_status": "共青团员",
                 "target_title": "资深全栈开发工程师 / 前端技术专家",
@@ -368,7 +368,7 @@ PRESET_CANDIDATES: List[Dict[str, Any]] = [
                 "⚠️ 项目量化指标不足，多为业务层封装"
         ],
         "verified_highlights": [
-                "✓ 电子科大985学历真实，美团大厂履历属实"
+                "✓ 简历自述：电子科大985学历、美团履历，文本表述自洽（未做官方核验）"
         ],
         "targeted_interview_focus": [
                 "面试重点考查其是否具备将跨端技术栈快速切换回React18/Node全栈的能力",
