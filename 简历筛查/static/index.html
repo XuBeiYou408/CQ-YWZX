@@ -1120,21 +1120,46 @@
                   </div>
                 </div>
 
-                <!-- 3. ReAct 完整调查时间线日志 (Trace Logs) -->
+                <!-- 3. ReAct 完整调查时间线日志 (Trace Logs) 与大模型推导思维链 -->
                 <div v-if="currentDetail.deep_audit.investigation_trace && currentDetail.deep_audit.investigation_trace.length" class="space-y-2 pt-1">
                   <div class="text-xs font-bold text-slate-800 flex items-center justify-between">
                     <span class="flex items-center gap-1.5">
                       <svg class="w-3.5 h-3.5 text-[#008770]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
                       <span>智能体自主探查与反思时间线轨迹：</span>
                     </span>
-                    <button @click="showTraceLog = !showTraceLog" class="text-[11px] text-[#008770] hover:underline font-medium cursor-pointer">
-                      {{ showTraceLog ? '收起日志 ▲' : '展开完整尽调日志 ▼' }}
-                    </button>
+                    <div class="flex items-center gap-2">
+                      <!-- 重新尽调推测按钮 -->
+                      <button @click="rededuceTrace(currentDetail.id)" :disabled="rededucingTrace"
+                        class="text-[11px] text-[#008770] hover:text-[#006f5c] hover:bg-emerald-100/80 font-semibold flex items-center gap-1 cursor-pointer bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200 transition-colors shadow-2xs">
+                        <svg class="w-3 h-3" :class="{'animate-spin': rededucingTrace}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+                        <span>{{ rededucingTrace ? '大模型现场推导中...' : '重新尽调推测' }}</span>
+                      </button>
+                      <button @click="showTraceLog = !showTraceLog" class="text-[11px] text-[#008770] hover:underline font-medium cursor-pointer">
+                        {{ showTraceLog ? '收起日志 ▲' : '展开完整尽调日志 ▼' }}
+                      </button>
+                    </div>
                   </div>
-                  <div v-show="showTraceLog" class="bg-slate-900 text-slate-200 rounded-xl p-3.5 font-mono text-[11px] leading-relaxed space-y-1.5 max-h-60 overflow-y-auto border border-slate-800 shadow-inner">
-                    <div v-for="(step, sIdx) in currentDetail.deep_audit.investigation_trace" :key="sIdx" class="flex items-start gap-2">
-                      <span class="text-[#00C5A8] font-bold select-none">&gt;</span>
-                      <span class="whitespace-pre-wrap">{{ step }}</span>
+
+                  <div v-show="showTraceLog" class="space-y-2">
+                    <!-- 大模型实时推导思维链卡片 (Reasoning Process) -->
+                    <div v-if="currentDetail.deep_audit.reasoning_chain" 
+                         class="bg-indigo-950/95 text-indigo-100 rounded-xl p-3.5 font-mono text-[11px] leading-relaxed border border-indigo-700/60 shadow-inner space-y-1.5">
+                      <div class="flex items-center justify-between text-indigo-300 font-bold border-b border-indigo-800/80 pb-1.5">
+                        <span class="flex items-center gap-1.5">
+                          <svg class="w-3.5 h-3.5 text-indigo-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a8 8 0 0 0-8 8c0 3.31 2.01 6.16 5 7.37V19a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2v-1.63c2.99-1.21 5-4.06 5-7.37a8 8 0 0 0-8-8z"/><line x1="9" y1="22" x2="15" y2="22"/></svg>
+                          <span>🧠 大模型实时推导思维链 (Thinking Chain)</span>
+                        </span>
+                        <span class="text-[10px] text-indigo-400 font-normal px-1.5 py-0.5 bg-indigo-900/80 rounded border border-indigo-700/50">DeepSeek-R1 CoT 推断</span>
+                      </div>
+                      <div class="whitespace-pre-wrap text-indigo-100/95 text-[11px] max-h-52 overflow-y-auto leading-relaxed selection:bg-indigo-700">{{ currentDetail.deep_audit.reasoning_chain }}</div>
+                    </div>
+
+                    <!-- 4大 ReAct 阶段日志 -->
+                    <div class="bg-slate-900 text-slate-200 rounded-xl p-3.5 font-mono text-[11px] leading-relaxed space-y-1.5 max-h-60 overflow-y-auto border border-slate-800 shadow-inner">
+                      <div v-for="(step, sIdx) in currentDetail.deep_audit.investigation_trace" :key="sIdx" class="flex items-start gap-2">
+                        <span class="text-[#00C5A8] font-bold select-none">&gt;</span>
+                        <span class="whitespace-pre-wrap">{{ step }}</span>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1191,23 +1216,53 @@
               </div>
 
               <!-- Tailored Interview Questions with REGENERATE BUTTON -->
-              <div class="bg-white rounded-2xl p-5 space-y-3 border border-slate-200 shadow-xs">
+              <div class="bg-white rounded-2xl p-5 space-y-3.5 border border-slate-200 shadow-xs">
                 <div class="flex items-center justify-between">
-                  <h3 class="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                    <svg class="icon w-4 h-4 text-[#008770]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-                    <span>AI 针对性面试追问题库（基于履历薄弱点与深度挑战）</span>
-                  </h3>
+                  <div class="flex items-center gap-2">
+                    <h3 class="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                      <svg class="icon w-4 h-4 text-[#008770]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                      <span>AI 针对性面试追问题库（基于履历薄弱点与深度挑战）</span>
+                    </h3>
+                    <span v-if="currentDetail.question_theme" class="text-[10px] font-bold px-2 py-0.5 rounded-md bg-purple-50 text-[#5039f6] border border-purple-200">
+                      当前维度：{{ currentDetail.question_theme }}
+                    </span>
+                  </div>
                   <button @click="regenerateQuestions(currentDetail.id)" :disabled="regeneratingQuestions"
-                    class="text-xs font-semibold text-[#008770] hover:underline flex items-center gap-1 cursor-pointer">
+                    class="text-xs font-semibold text-[#008770] hover:text-[#006f5c] hover:underline flex items-center gap-1 cursor-pointer bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200 transition-colors shadow-2xs">
                     <svg class="icon w-3.5 h-3.5" :class="{'animate-spin': regeneratingQuestions}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
-                    <span>AI换一批追问</span>
+                    <span>{{ regeneratingQuestions ? 'AI 多维度思考命题中...' : 'AI换一批追问' }}</span>
                   </button>
                 </div>
 
-                <div class="space-y-2.5">
-                  <div v-for="(q, idx) in (currentDetail.interview_questions || [])" :key="idx" class="p-3 bg-slate-50 rounded-xl text-xs leading-relaxed flex gap-2.5 border border-slate-200">
-                    <span class="font-bold text-[#008770] flex-shrink-0">Q{{ idx + 1 }}.</span>
-                    <span class="text-slate-800">{{ q }}</span>
+                <div class="space-y-3">
+                  <div v-for="(qItem, idx) in (currentDetail.interview_questions || [])" :key="idx" 
+                       class="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden transition-all duration-200 hover:border-slate-300">
+                    
+                    <!-- 1. 顶部折叠触发条（默认折叠状态） -->
+                    <div @click="toggleQuestionThinking(idx)" 
+                         class="px-3.5 py-2 bg-slate-50/90 border-b border-slate-100 flex items-center justify-between cursor-pointer select-none hover:bg-slate-100/80 transition-colors">
+                      <div class="flex items-center gap-1.5 text-[11px] font-medium text-slate-600">
+                        <svg class="w-3.5 h-3.5 text-indigo-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a8 8 0 0 0-8 8c0 3.31 2.01 6.16 5 7.37V19a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2v-1.63c2.99-1.21 5-4.06 5-7.37a8 8 0 0 0-8-8z"/><line x1="9" y1="22" x2="15" y2="22"/></svg>
+                        <span class="font-bold text-slate-700">Q{{ idx + 1 }} · AI 命题推导思维链 (Thinking Chain)</span>
+                        <span class="text-[10px] text-slate-400 font-normal">({{ isThinkingOpen(idx) ? '点击收起' : '默认折叠 · 点击展开出题依据' }})</span>
+                      </div>
+                      <span class="text-[11px] text-slate-400 font-bold hover:text-slate-600">{{ isThinkingOpen(idx) ? '▲' : '▼' }}</span>
+                    </div>
+
+                    <!-- 2. 思维链展开内容（折叠层，内部打印推导思维链） -->
+                    <div v-show="isThinkingOpen(idx)" class="px-3.5 py-2.5 bg-indigo-50/60 border-b border-indigo-100/70 text-[11px] leading-relaxed text-indigo-950 font-mono">
+                      <div class="flex items-start gap-1.5">
+                        <span class="text-indigo-600 font-bold flex-shrink-0">💭 考察动因：</span>
+                        <span class="text-slate-700 whitespace-pre-wrap leading-relaxed">{{ getQuestionThinking(qItem, idx) }}</span>
+                      </div>
+                    </div>
+
+                    <!-- 3. 具体面试发问内容 -->
+                    <div class="p-3.5 flex gap-2.5 text-xs leading-relaxed bg-white">
+                      <span class="font-bold text-[#008770] flex-shrink-0 pt-0.5">Q{{ idx + 1 }}.</span>
+                      <span class="text-slate-800 font-medium select-text">{{ getQuestionText(qItem) }}</span>
+                    </div>
+
                   </div>
                 </div>
               </div>
@@ -2423,6 +2478,8 @@
         const showTraceLog = ref(true); // 'resume' (完整原版简历) | 'ai' (AI评估报告)
         const openedFromChat = ref(false); // 标记是否从微聊沟通窗口中唤起简历
         const regeneratingQuestions = ref(false);
+        const rededucingTrace = ref(false);
+        const openThinkings = ref({});
         const newSkillInput = ref('');
         const showUploadModal = ref(false);
         const uploadJobId = ref('fe-fullstack');
@@ -2643,6 +2700,7 @@
           openedFromChat.value = false;
           currentDetail.value = c;
           detailTab.value = 'resume';
+          openThinkings.value = {};
           showDetailDrawer.value = true;
         };
 
@@ -2652,6 +2710,7 @@
           openedFromChat.value = true;
           currentDetail.value = c;
           detailTab.value = 'resume';
+          openThinkings.value = {};
           showChatModal.value = false; // 隐藏微聊窗口，彻底清除背景模糊与居中遮挡
           showDetailDrawer.value = true;
         };
@@ -2706,6 +2765,50 @@
           else if (range === '10年以上') editJob.value.experience_years = 10;
         };
 
+        const getQuestionText = (q) => {
+          if (!q) return '';
+          if (typeof q === 'string') return q;
+          return q.question || '';
+        };
+
+        const getQuestionThinking = (q, idx) => {
+          if (!q) return '';
+          if (typeof q === 'object' && q.thinking) return q.thinking;
+          return '针对该候选人核心履历与技术栈，重点考察其底层原理掌握度、实战复杂场景设计与技术选型权衡能力。';
+        };
+
+        const isThinkingOpen = (idx) => {
+          return !!openThinkings.value[idx];
+        };
+
+        const toggleQuestionThinking = (idx) => {
+          openThinkings.value[idx] = !openThinkings.value[idx];
+        };
+
+        const rededuceTrace = async (candidateId) => {
+          rededucingTrace.value = true;
+          try {
+            const res = await fetch(`/api/candidates/${candidateId}/rededuce-trace`, { method: 'POST' });
+            const json = await res.json();
+            if (json.ok) {
+              if (currentDetail.value) {
+                currentDetail.value.deep_audit = json.data.deep_audit;
+              }
+              const item = (candidates.value || []).find(c => c.id === candidateId);
+              if (item) {
+                item.deep_audit = json.data.deep_audit;
+              }
+              showToast('已完成大模型实时推导思维链与 ReAct 全流程重新尽调！');
+            } else {
+              showToast('重新推测失败: ' + (json.error || '未知错误'));
+            }
+          } catch (e) {
+            showToast('重新推测异常: ' + e);
+          } finally {
+            rededucingTrace.value = false;
+          }
+        };
+
         const regenerateQuestions = async (candidateId) => {
           regeneratingQuestions.value = true;
           try {
@@ -2713,7 +2816,13 @@
             const json = await res.json();
             if (json.ok) {
               currentDetail.value.interview_questions = json.data.interview_questions;
-              showToast('已基于最新画像重新生成 3 道针对性面试追问！');
+              if (json.data.theme) {
+                currentDetail.value.question_theme = json.data.theme;
+              }
+              openThinkings.value = {}; // 重新生成后保持折叠
+              showToast(`已切换至【${json.data.theme || '新实战维度'}】，并基于画像重新出题！`);
+            } else {
+              showToast('出题失败: ' + (json.error || '未知错误'));
             }
           } catch (e) {
             showToast('生成追问异常: ' + e);
@@ -2734,7 +2843,11 @@
             `\n## 五维能力拟合度`,
             ...Object.entries(c.radar || {}).map(([k, v]) => `- ${k}: ${v}/100`),
             `\n## 针对性面试建议题`,
-            ...(c.interview_questions || []).map((q, i) => `${i+1}. ${q}`)
+            ...(c.interview_questions || []).map((q, i) => {
+              const text = typeof q === 'string' ? q : (q.question || '');
+              const think = typeof q === 'object' && q.thinking ? `\n   > 考察动因: ${q.thinking}` : '';
+              return `${i+1}. ${text}${think}`;
+            })
           ];
           const blob = new Blob([lines.join('\n')], { type: 'text/markdown;charset=utf-8;' });
           const url = URL.createObjectURL(blob);
@@ -3563,6 +3676,13 @@
           toggleSelect,
           toggleSelectAll,
           openDetail,
+          rededucingTrace,
+          openThinkings,
+          getQuestionText,
+          getQuestionThinking,
+          isThinkingOpen,
+          toggleQuestionThinking,
+          rededuceTrace,
           regenerateQuestions,
           exportSingleReport,
           openChatWindow,

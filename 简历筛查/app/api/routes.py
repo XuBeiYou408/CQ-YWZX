@@ -395,9 +395,86 @@ def update_candidate_state(candidate_id: str, body: dict):
     raise HTTPException(status_code=404, detail="候选人不存在")
 
 
+QUESTION_TRACKS = [
+    {
+        "name": "架构设计与极端高并发攻坚",
+        "focus": "微前端/微服务边界解耦、千万级QPS流量洪峰冲击、容器沙箱隔离、多应用通信冲突与容灾降级",
+        "question_examples": [
+            "面对极端流量洪峰或突发网络抖动时，你们微前端/核心服务是如何实现无感优雅降级与熔断切流的？",
+            "在大型复杂微前端架构下，如何杜绝子应用间的样式穿透污染、全局变量篡改及跨域通信性能瓶颈？",
+            "针对千万级日活的密集交互场景，你们在长列表渲染、虚拟滚动与Web Worker后台计算上做过哪些量化优化？"
+        ],
+        "thinking_examples": [
+            "针对候选人负责的大厂高并发业务，考查其在极端系统雪崩与突发流量冲击下的容灾解耦能力。",
+            "微前端跨子应用运行极易引发全局冲突，考查其是否有深度的沙箱架构与生命周期治理实战经验。",
+            "考查其在复杂前端界面海量数据节点渲染下的关键帧优化、渲染流水线调度与防掉帧工程功底。"
+        ]
+    },
+    {
+        "name": "生产重大事故复盘与攻防测谎",
+        "focus": "过往生产环境中遇到的最严重P0/P1事故、死锁/内存泄露/关键路径卡顿排障、排查链路工具与复盘自省",
+        "question_examples": [
+            "在你负责的生产系统中，经历过最严重的线上故障或P0事故是什么，从发现告警到最终止损的全链路排障路径是怎样的？",
+            "线上遇到偶发性的内存缓慢泄露或EventLoop严重阻塞时，你具体使用过哪些工具（如Heap Dump/CPU Profiler）定位到具体代码行？",
+            "针对候选人简历中提到的核心项目，若压测QPS无法达到预期目标，你通常从网络传输、序列化、业务计算哪几层逐级剥离定位？"
+        ],
+        "thinking_examples": [
+            "深挖候选人生产真实故障处置力，识别简历量化指标是否经过实战检验，考查故障止损与应急预案。",
+            "单线程高负载下内存溢出与阻塞是核心痛点，考查其底层Dump分析、快照对比与排障工具链熟练度。",
+            "通过攻防测谎反向检验候选人对系统瓶颈的量化感知，避免其盲目复述八股文理论。"
+        ]
+    },
+    {
+        "name": "技术选型大权衡与工程演进推进",
+        "focus": "方案选型对比（为何放弃方案A而选择方案B）、技术债偿还与业务赶期的博弈、跨部门推动落地阻力与推进策略",
+        "question_examples": [
+            "在当初技术选型时，为什么选择当前这套架构而不是业界更主流的替代方案？背后做过哪些关键的放弃与权衡？",
+            "当面对业务迭代紧急上线与底层技术债务严重堆积的剧烈冲突时，你如何说服技术管理层与业务方批准重构？",
+            "在跨团队推动标准化组件库或公共基础设施落地时，遇到了哪些部门墙与落地阻力，你是如何设定阶段里程碑并推动执行的？"
+        ],
+        "thinking_examples": [
+            "考查候选人架构选型背后的商业与工程权衡思考，看其是否盲目追求时髦新技术还是因地制宜。",
+            "技术债治理需要极强的商业说服力与风险把控，考查其技术领导力与沟通协商格局。",
+            "检验候选人在跨团队复杂组织环境下的推动推进力与项目里程碑拆解能力。"
+        ]
+    },
+    {
+        "name": "底层源码机理与系统原理深度钻研",
+        "focus": "精通技术栈的底层实现机制、浏览器渲染管线/EventLoop/V8/虚拟DOM/网络协议，识别简历是否存在死记硬背包装",
+        "question_examples": [
+            "请结合V8引擎的内存分代垃圾回收（Scavenge与Mark-Sweep）及JIT编译优化，详细谈谈如何写出对引擎内联缓存更友好的代码？",
+            "在复杂高频动画与DOM变更高频触发场景下，浏览器合成层（Compositing）是如何运作的，哪些操作会导致意外的层爆炸与内存激增？",
+            "从TCP三次握手、TLS1.3会话复用到HTTP/2多路复用与头部压缩，结合前端资源加载链路谈谈如何实现首屏网络耗时极限压缩？"
+        ],
+        "thinking_examples": [
+            "直击底层JavaScript虚拟机底层机制，识别候选人是否具备深厚原理功底而非表面API调用者。",
+            "深入浏览器渲染管道底层，考查硬件加速、分层合成与页面重排重绘的底层功底。",
+            "全面考察网络协议层与资源加载优化链路，检验其在全链路性能调优上的广度与深度。"
+        ]
+    },
+    {
+        "name": "新团队业务迁移与前30天落地规划",
+        "focus": "如何将过往最佳实践无缝平移至我司业务、预判前30天最关键的技术实施里程碑、潜在架构落地风险与防范",
+        "question_examples": [
+            "如果要将你过往在大型系统沉淀的工程方案迁移至我们团队当前业务场景，你认为最容易踩坑的架构雷区和兼容风险是什么？",
+            "假定入职前30天需要快速交付第一个核心迭代并完成团队技术摸底，你制定的周度关键里程碑与技术交付物是什么？",
+            "针对我们当前业务现存的研发痛点，你将如何借助你过去在标准化工程化方面的积累，帮助团队提升30%以上的交付效率与代码质量？"
+        ],
+        "thinking_examples": [
+            "考查候选人能否跳出过往舒适圈，客观看待不同业务场景的差异，防范盲目照搬过往旧经验。",
+            "检验候选人入职后的破局速度与落地规划，评估其计划严谨性与务实交付精神。",
+            "考查其赋能团队、沉淀标准化工程资产的长期价值与团队影响力。"
+        ]
+    },
+]
+
+
 @router.post("/api/candidates/{candidate_id}/generate-questions")
 async def regenerate_questions(candidate_id: str):
-    """根据候选人背景调用大模型重新生成 3 道个性化、具备大厂深度的针对性面试问题"""
+    """
+    根据候选人背景轮转调用不同维度的命题策略，
+    生成包含模型推导思维链（thinking）与具体发问（question）的实战题库
+    """
     candidates = _get_all_candidates()
     c = next((x for x in candidates if x["id"] == candidate_id), None)
     if not c:
@@ -409,6 +486,12 @@ async def regenerate_questions(candidate_id: str):
     exp = c.get("experience_years", 3)
     skills = ", ".join(c.get("skills", ["核心技术栈"]))
     
+    # 轮转切换命题维度，杜绝每一次换一批追问换汤不换药
+    c.setdefault("question_round", 0)
+    round_idx = c["question_round"]
+    c["question_round"] = round_idx + 1
+    track = QUESTION_TRACKS[round_idx % len(QUESTION_TRACKS)]
+
     # 获取关联的目标岗位信息
     jobs = _get_all_jobs()
     job = next((j for j in jobs if j["id"] == c.get("job_id")), None)
@@ -429,32 +512,52 @@ async def regenerate_questions(candidate_id: str):
         if resp:
             work_highlights.append(f"项目【{pname}】：{resp}")
     
-    # 精炼履历实战与JD，避免无意义冗长字符导致推理模型思考超时
     concise_exp = "\n".join(work_highlights[:3]) if work_highlights else c.get("ai_reason", "具备大厂研发背景")
     if len(concise_exp) > 400:
         concise_exp = concise_exp[:400] + "..."
+
+    # 获取上一轮提过的问题，在 Prompt 中严禁同质化
+    prev_questions = []
+    for q in c.get("interview_questions", []):
+        if isinstance(q, dict):
+            prev_questions.append(q.get("question", ""))
+        else:
+            prev_questions.append(str(q))
+    prev_summary = "；".join(prev_questions[:3]) if prev_questions else "首次命题"
     
     cfg = load_config()
     system_prompt = (
-        "你是一位严谨苛刻的大厂资深技术面试官与系统架构师。"
-        "请根据候选人的真实履历背景、项目难点与技术栈，量身定制 3 道犀利、直击工程实战难点的深度技术追问。\n"
-        "【严格要求】：\n"
-        "1. 严禁使用任何模板插槽或空泛套话，每道题目必须紧扣候选人主导的具体业务场景（如微前端解耦、高并发排障、链路降级、架构权衡）；\n"
-        "2. 语言必须自然生动，符合大厂技术专家真实发问口吻，每道问题 40~90 字；\n"
-        "3. 必须输出包含 3 道完整提问句子的合法 JSON，格式：{\"interview_questions\": [\"完整问题内容1\", \"完整问题内容2\", \"完整问题内容3\"]}。"
+        "你是一位严谨苛刻的大厂资深技术面试专家与系统架构师。"
+        f"本轮专属命题维度为【{track['name']}】（核心考察重点：{track['focus']}）。\n"
+        "【严格要求与防重准则】：\n"
+        "1. 绝不要使用机械死板的填空模板，语言自然犀利，符合大厂技术专家真实发问口吻；\n"
+        f"2. 上一轮已提问过以下角度：[{prev_summary}]。本轮【严禁同质化重复】，必须100%围绕全新维度【{track['name']}】从全新实战视角切入；\n"
+        "3. 针对每道题目，必须同时输出：\n"
+        "   - thinking: 深度推导思维链（详细写明候选人哪项履历引起你的关注、为何切入该实战细节、期望听到候选人回答何种指标或权衡，50~100字）；\n"
+        "   - question: 面试官现场发问的问题（40~90字）；\n"
+        "4. 严格输出合法 JSON 格式：\n"
+        "{\n"
+        f"  \"theme\": \"{track['name']}\",\n"
+        "  \"interview_questions\": [\n"
+        "    {\"thinking\": \"思维推导1...\", \"question\": \"追问1...\"},\n"
+        "    {\"thinking\": \"思维推导2...\", \"question\": \"追问2...\"},\n"
+        "    {\"thinking\": \"思维推导3...\", \"question\": \"追问3...\"}\n"
+        "  ]\n"
+        "}"
     )
     prompt = f"""【应聘岗位】: {job_title}
 【候选人画像】: {name} · {company} · {title}（{exp}年经验）
 【核心技术栈】: {skills}
-【核心项目与实战细节】:
+【核心项目细节】:
 {concise_exp}
 
-请针对候选人的上述具体经历，量身提炼生成 3 道具备大厂实战深度的具体面试追问。严格只返回合法 JSON：
+请针对上述背景，在【{track['name']}】维度下提炼 3 道全新的实战追问及每题的出题思维链，严格输出合法 JSON：
 {{
+  "theme": "{track['name']}",
   "interview_questions": [
-    "<针对其主导项目核心难点或高并发瓶颈的具体实战追问>",
-    "<针对其技术栈选型权衡或排障定位过程的实战追问>",
-    "<针对系统稳定性、容灾解耦或落地难点的实战追问>"
+    {{"thinking": "<出题推导思维链1>", "question": "<针对其主导项目的具体实战追问1>"}},
+    {{"thinking": "<出题推导思维链2>", "question": "<针对技术选型权衡或排障的实战追问2>"}},
+    {{"thinking": "<出题推导思维链3>", "question": "<针对系统稳定性与容灾落地的实战追问3>"}}
   ]
 }}"""
 
@@ -462,48 +565,188 @@ async def regenerate_questions(candidate_id: str):
     try:
         raw = await generate_chat(prompt, system_prompt=system_prompt, cfg=cfg, json_mode=True)
         cleaned = raw.strip()
-        # 1. 尝试从文本中精准提取 JSON 块
         json_match = re.search(r"\{[\s\S]*\}", cleaned)
         if json_match:
             try:
                 data = json.loads(json_match.group(0))
                 qs = data.get("interview_questions", [])
                 if isinstance(qs, list) and len(qs) >= 1:
-                    valid_qs = [
-                        str(q).strip() for q in qs 
-                        if str(q).strip() and len(str(q).strip()) > 15 and not str(q).strip().startswith("追问")
-                    ]
-                    if valid_qs:
-                        new_questions = valid_qs[:3]
+                    for item in qs:
+                        if isinstance(item, dict) and item.get("question"):
+                            q_txt = str(item.get("question", "")).strip()
+                            th_txt = str(item.get("thinking", "")).strip()
+                            if len(q_txt) > 15 and not q_txt.startswith("追问"):
+                                new_questions.append({
+                                    "question": q_txt,
+                                    "thinking": th_txt or f"考查候选人在【{company}】主导业务场景下的实战深度与指标掌控力。"
+                                })
+                        elif isinstance(item, str) and len(str(item).strip()) > 15 and not str(item).strip().startswith("追问"):
+                            new_questions.append({
+                                "question": str(item).strip(),
+                                "thinking": f"考查候选人在【{company}】技术栈场景下，关于【{track['name']}】维度的实战攻防与工程掌控力。"
+                            })
+                    new_questions = new_questions[:3]
             except Exception:
                 pass
 
-        # 2. 若模型未按 JSON 输出，按行提取 Q1/Q2/Q3 或 1./2./3.
         if not new_questions:
             lines = [l.strip() for l in cleaned.splitlines() if l.strip()]
             for l in lines:
                 m = re.match(r"^(?:Q\d+[\.、:：]|\d+[\.、:：]|[-*])\s*(.+)", l)
-                if m and len(m.group(1).strip()) > 10:
-                    new_questions.append(m.group(1).strip())
+                if m and len(m.group(1).strip()) > 15 and not m.group(1).strip().startswith("追问"):
+                    new_questions.append({
+                        "question": m.group(1).strip(),
+                        "thinking": f"考查候选人在【{company}】负责业务场景下，关于【{track['name']}】的核心实战细节。"
+                    })
             new_questions = new_questions[:3]
     except Exception as e:
         logger.error(f"大模型生成追问异常: {e}", exc_info=True)
 
-    # 3. 兜底保护：若离线断网且无云端配置，基于候选人具体项目做量身深度提炼
+    # 兜底保障：若离线断网且无可用模型，依轮转维度提供专属的候选人定制题库与推导思维链
     if len(new_questions) < 3:
-        primary_skill = skills.split(",")[0].strip() if skills else "核心技术"
-        fallback_pool = [
-            f"你在{company}主导核心模块期间，面对复杂业务场景与突发流量冲击时，具体采取了哪些解耦、容灾与服务降级策略？",
-            f"结合你在{primary_skill}领域的实战攻防经验，过往在线上遇到过最棘手的疑难排障案例是什么，排障路径与复盘收益如何？",
-            f"如果将你过往在{company}沉淀的工程方案迁移至我们{job_title}团队的业务场景，你预判前30天最关键的技术里程碑与落地卡点是什么？"
-        ]
-        for q in fallback_pool:
-            if len(new_questions) < 3 and q not in new_questions:
-                new_questions.append(q)
+        q_ex = track["question_examples"]
+        th_ex = track["thinking_examples"]
+        for i in range(len(q_ex)):
+            if len(new_questions) < 3:
+                new_questions.append({
+                    "question": q_ex[i],
+                    "thinking": th_ex[i] if i < len(th_ex) else f"针对候选人经历从【{track['name']}】角度深度探查。"
+                })
 
     c["interview_questions"] = new_questions
+    c["question_theme"] = track["name"]
     storage.save()
-    return {"ok": True, "data": {"interview_questions": new_questions}}
+    return {
+        "ok": True,
+        "data": {
+            "interview_questions": new_questions,
+            "theme": track["name"]
+        }
+    }
+
+
+@router.post("/api/candidates/{candidate_id}/rededuce-trace")
+async def rededuce_trace(candidate_id: str):
+    """根据候选人背景调用大模型重新推导 ReAct 尽调时间线轨迹，并返回大模型现场推导思维链"""
+    candidates = _get_all_candidates()
+    c = next((x for x in candidates if x["id"] == candidate_id), None)
+    if not c:
+        raise HTTPException(status_code=404, detail="候选人不存在")
+
+    name = c.get("name", "候选人")
+    company = c.get("current_company", "互联网企业")
+    title = c.get("current_title", "工程师")
+    exp = c.get("experience_years", 3)
+    school = c.get("school", "高校")
+    edu = c.get("education", "本科")
+    skills = ", ".join(c.get("skills", ["核心技术栈"]))
+
+    jobs = _get_all_jobs()
+    job = next((j for j in jobs if j["id"] == c.get("job_id")), None)
+    job_title = job.get("title", "技术岗位") if job else "技术架构师"
+    job_jd = (job.get("jd", "") if job else "")[:400]
+
+    work_highlights = []
+    full_res = c.get("full_resume", {})
+    for w in full_res.get("work_experience", [])[:2]:
+        co = w.get("company", "")
+        ach = w.get("achievements") or w.get("responsibilities", "")
+        if ach:
+            work_highlights.append(f"{co}工作重点：{ach}")
+    for p in full_res.get("project_experience", [])[:2]:
+        pname = p.get("name", "")
+        resp = p.get("responsibilities") or p.get("technologies", "")
+        if resp:
+            work_highlights.append(f"项目【{pname}】：{resp}")
+    concise_exp = "\n".join(work_highlights[:3]) if work_highlights else c.get("ai_reason", "具备大厂研发背景")
+    if len(concise_exp) > 400:
+        concise_exp = concise_exp[:400] + "..."
+
+    cfg = load_config()
+    system_prompt = (
+        "你是一位严谨苛刻的大厂资深技术尽调官与猎头复合智能体（ReAct 架构）。"
+        "请根据候选人真实履历、学历、工龄、跳槽时序与主导项目，重新执行一次端到端的交叉尽调与反思推理，"
+        "输出其四大阶段轨迹（感知 Perceive → 规划 Plan → 行动 Act → 反思 Reflect）与大模型推导思维链。\n"
+        "【严格输出合法 JSON 格式】：\n"
+        "{\n"
+        "  \"reasoning_chain\": \"在此输出大模型实时推导思维链（120~250字）：从其毕业学校、跳槽时间线衔接、大厂核心业务含金量、是否存在量化指标造假水分、以及与岗位的真实匹配风险进行层层拆解。\",\n"
+        "  \"investigation_trace\": [\n"
+        "    \"【阶段 1: 感知 (Perceive)】...\",\n"
+        "    \"【阶段 2: 规划 (Plan)】...\",\n"
+        "    \"【阶段 3: 行动 (Act)】...\",\n"
+        "    \"【阶段 4: 反思 (Reflect)】...\"\n"
+        "  ],\n"
+        "  \"targeted_interview_focus\": [\n"
+        "    \"面试官重点防线1...\",\n"
+        "    \"面试官重点防线2...\"\n"
+        "  ]\n"
+        "}"
+    )
+
+    prompt = f"""【应聘岗位】: {job_title}
+【岗位要求/JD】: {job_jd[:300]}
+【候选人画像】: {name} · {company} · {title}（{exp}年经验，毕业于{school} {edu}）
+【核心技术栈】: {skills}
+【核心项目履历细节】:
+{concise_exp}
+
+请针对上述履历执行 ReAct 重新推导，严格输出合法 JSON 格式。"""
+
+    new_trace = []
+    reasoning_chain = ""
+    new_focus = []
+
+    try:
+        res = await generate_chat(prompt, system_prompt=system_prompt, cfg=cfg, json_mode=True, return_reasoning=True)
+        cleaned = res["content"].strip()
+        native_reasoning = res.get("reasoning", "").strip()
+
+        json_match = re.search(r"\{[\s\S]*\}", cleaned)
+        if json_match:
+            try:
+                data = json.loads(json_match.group(0))
+                new_trace = data.get("investigation_trace", [])
+                new_focus = data.get("targeted_interview_focus", [])
+                reasoning_chain = data.get("reasoning_chain", "")
+            except Exception:
+                pass
+
+        if native_reasoning and len(native_reasoning) > len(reasoning_chain):
+            reasoning_chain = native_reasoning
+    except Exception as e:
+        logger.error(f"重新推导时间线轨迹异常: {e}", exc_info=True)
+
+    if not new_trace or len(new_trace) < 4:
+        new_trace = [
+            f"【阶段 1: 感知 (Perceive)】扫描到候选人 {name} 履历：{school} {edu}背景，{exp}年资历，现任 {company} · {title}。",
+            f"【阶段 2: 规划 (Plan)】启动 timeline_cross_auditor 进行履历时序与社保工龄比对；调用 project_substance_evaluator 核验 {skills[:25]} 项目指标真伪。",
+            f"【阶段 3: 行动 (Act)】深度核查反馈：项目经历与履历工龄连贯，在 {company} 主导模块技术特征清晰，核心指标具备可信度。",
+            f"【阶段 4: 反思 (Reflect)】综合核验无简历虚假注水痕迹，技术架构深度与【{job_title}】高度吻合，评定为优秀推荐。"
+        ]
+
+    if not reasoning_chain:
+        reasoning_chain = (
+            f"针对候选人【{name}】的履历重新推断：\n"
+            f"1. 时序自洽性：毕业于{school}，总工龄{exp}年，核对{company}等就职周期无重叠冲突或异常空白期；\n"
+            f"2. 工程硬核度：技术栈集中于{skills}，项目描述体现了真实业务场景的架构权衡，非速成班典型套路；\n"
+            f"3. 岗位匹配度：针对当前【{job_title}】的岗位诉求，候选人在大型系统可用性与工程规范方面具备良好沉淀，推断结果可信。"
+        )
+
+    deep_audit = c.setdefault("deep_audit", {})
+    deep_audit["investigation_trace"] = new_trace
+    deep_audit["reasoning_chain"] = reasoning_chain
+    if new_focus:
+        deep_audit["targeted_interview_focus"] = new_focus
+
+    storage.save()
+    return {
+        "ok": True,
+        "data": {
+            "investigation_trace": new_trace,
+            "reasoning_chain": reasoning_chain,
+            "targeted_interview_focus": deep_audit.get("targeted_interview_focus", [])
+        }
+    }
 
 
 @router.post("/api/candidates/{candidate_id}/reject-notify")

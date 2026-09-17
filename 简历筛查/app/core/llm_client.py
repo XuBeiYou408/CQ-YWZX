@@ -187,8 +187,12 @@ async def _resolve_local_model(base_url: str, configured: str) -> str:
 
 
 async def generate_chat(
-    prompt: str, system_prompt: str, cfg: Dict[str, Any], json_mode: bool = True
-) -> str:
+    prompt: str,
+    system_prompt: str,
+    cfg: Dict[str, Any],
+    json_mode: bool = True,
+    return_reasoning: bool = False,
+) -> Any:
     """
     ?? cfg["active_provider"] ???????????
     ???? lm_studio_url ? ollama_url????????? chat completion
@@ -267,14 +271,26 @@ async def generate_chat(
             if not choices:
                 raise RuntimeError(f"LLM returned no choices: {data}")
             msg = choices[0].get("message", {})
-            content = msg.get("content", "") or ""
+            raw_content = msg.get("content", "") or ""
             reasoning = msg.get("reasoning_content", "") or ""
-            if not content.strip() and reasoning.strip():
-                content = reasoning.strip()
+
+            # 若模型输出内含 <think> 标签，将其提炼为思维链 reasoning
+            think_match = re.search(r"<think>([\s\S]*?)</think>", raw_content, flags=re.IGNORECASE)
+            if think_match and not reasoning.strip():
+                reasoning = think_match.group(1).strip()
+
+            content = raw_content
             if content:
                 content = re.sub(r"<think>[\s\S]*?</think>", "", content, flags=re.IGNORECASE).strip()
                 content = re.sub(r"</?think>", "", content).strip()
-            return content if content is not None else ""
+
+            if not content.strip() and reasoning.strip():
+                content = reasoning.strip()
+
+            content = content if content is not None else ""
+            if return_reasoning:
+                return {"content": content, "reasoning": reasoning.strip()}
+            return content
     except Exception as e:
         if isinstance(e, RuntimeError):
             raise
