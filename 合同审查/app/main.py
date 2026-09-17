@@ -17,7 +17,7 @@ from config import config
 
 app = FastAPI(
     title="智审 Doc-Agent · 企业离线合同合规智能审查系统",
-    description="基于 Intel Core Ultra 7 与 LM Studio 本地端侧算力构建的纯离线商业级合同审查智能体",
+    description="基于 Intel Core Ultra 7 与 LM Studio 本地端侧算力构建的商业级合同审查智能体；审查模型可在界面「模型管理」面板切换为本地 LM Studio 或云端 API（选云端时合同文本经网络发往所选服务商）",
     version="1.0.0"
 )
 

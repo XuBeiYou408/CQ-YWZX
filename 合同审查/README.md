@@ -31,15 +31,20 @@ mcp.json 注册、Skill 部署（`deploy/skills/contract-review`）、用户记�
 > （实测症状：`'xx' is not recognized as an internal or external command`）。
 > 中文提示由安装脚本输出（bat 内已 `chcp 65001`）。
 
-### 审查用的模型：本机 LM Studio，优先复用会话正在用的本地模型
+### 审查用的模型：本地 LM Studio 或云端 API（界面可选）
 
-审查推理**始终跑在本机 LM Studio**（合同内容不出本机）。选模型规则：
+模型由**右上角「模型管理」面板**决定（2026-09-17 新增，见后文「模型管理」一节）。选定规则：
 
-1. `AGENT_MODEL` 环境变量（若设置）→ 固定用它；
-2. 否则**优先复用你当前会话正在使用的本地模型**——若你在 WorkBuddy 里选的是
-   `custom-local:xxx` 且它此刻**已加载**，审查就用它（既符合预期，也避免 LM Studio
-   为换模型而卸载/重载，那种开销可达分钟级）；
-3. 否则按原有逻辑优选已加载的模型（优先 instruct 类 qwen），避免触发即时加载。
+1. **单次请求显式指定**的模型（若有）→ 优先；
+2. 环境变量 `AGENT_MODEL`（**管理员级硬锁定**，默认留空）→ 用它；
+3. **模型管理面板的配置**：
+   - 面板选「本地模型」→ 用它指定的本地模型；本地模型留空时才走下面的自动优选；
+   - 面板选「云端模型」→ 整体走云端 API（**此时合同文本会发往所选服务商，数据出本机**）；
+4. 本地且未指定模型时的自动优选：**优先复用你当前会话正在使用的本地模型**
+   （若会话选的是 `custom-local:xxx` 且此刻**已加载**，直接用它可以避免 LM Studio 换模型的
+   分钟级卸载/重载开销）→ 否则按原逻辑优选已加载模型（优先 instruct 类 qwen）→ 最后兜底 `DEFAULT_MODEL`。
+
+> 隐私提示：**只有本地模型模式才是"合同不出本机"**；轻量轨的规则扫描/法条/判例检索始终在本地执行。
 
 > 会话用的是**云端模型**（deepseek-v4.1-flash / hy3 / kimi-* 等）时，工具进程拿不到
 > WorkBuddy 的云端凭据，**不做任何干预**，按第 3 条走本机模型。这是刻意的设计：
@@ -149,11 +154,16 @@ flowchart TD
 │   ├── main.py                    # API 路由装配、CORS 配置与前端静态资源挂载
 │   ├── schemas.py                 # Pydantic 请求与响应数据结构契约
 │   └── routes/
-│       └── contract.py            # 审查、流式推理、判例检索、示范起草与 Word 批注导出路由
+│       ├── contract.py            # 审查、流式推理、判例检索、示范起草与 Word 批注导出路由
+│       └── model_admin.py         # [模型管理] 本地/云端模型配置读写、本地模型列表与连通性测试路由
+│
+├── model_config.json              # 模型管理配置（含云端 API Key，已 gitignore；缺失则以本地 gemma 为默认）
 │
 ├── contract/                      # 智能体核心算法与风控逻辑层
 │   ├── draft_templates.py         # [范本引擎] 权威商事合同示范文本库与插槽快速合成引擎（7大类示范合同，毫秒级出稿）
 │   ├── mcp_tools.py               # [MCP] 轻量轨 5 工具（纯规则引擎，零 LLM 依赖）
+│   ├── model_config.py            # [模型管理] 配置持久化、生效值解析、密钥掩码与云端预设（DeepSeek/Kimi/通义/智谱/自定义）
+│   ├── session_model.py           # [模型优选] 读取 WorkBuddy 会话正在用的本地模型（custom-local:* 前缀）
 │   ├── agent.py                   # [Agent 核心] 感知→规划→行动→反思四阶段自主闭环状态机
 │   ├── planner.py                 # [规划层] 条款级分诊决策器（deep_dive / quick_scan / skip）
 │   ├── clause_splitter.py         # [感知层] 合同结构化拆条与特征提取引擎
@@ -307,6 +317,8 @@ python tests/verify_all.py
 - 选择本地模型后，**审查模型随即切换为面板中配置的那个本地模型**；切到云端则所有审查/初稿/起草入口整体走云端 API。
 - 选定优先级：**单次请求显式指定 > 环境变量 `AGENT_MODEL`（管理员硬锁定，默认留空）> 模型管理面板配置 > 本地自动优选 > `DEFAULT_MODEL` 兜底**。
 - 配置文件 `model_config.json`（项目根目录）**已加入 `.gitignore`**：API Key 只存本机，接口仅回显掩码，不会进公开仓库。
+- 相关接口：`GET /api/model/config`（当前配置，密钥脱敏）、`GET /api/model/local/list`（本机模型，区分已加载）、`POST /api/model/config`（保存即生效）、`POST /api/model/test`（连通性测试）。
+- ⚠️ **选云端 = 合同文本会发往云端服务商**；涉密/敏感合同请使用本地模型（轻量轨的规则扫描/法条/判例始终在本地执行）。
 - ⚠️ 本项目代码**不加载 `.env`**（`config.py` 直接读 `os.getenv`），`.env` 里的模型变量不生效——换模型请用界面，或把变量真正设进进程环境（`mcp.json` 的 `env` 块 / 启动脚本 `set` / 系统环境变量）。
 - 改完需**重启 8020 Web 服务**（加载新路由）；MCP 服务 `contract-reviewer` 也需重连才用上新引擎。
 

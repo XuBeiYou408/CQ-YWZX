@@ -115,8 +115,8 @@ flowchart TD
 │   ├── prompts.py                 # [v3.0] 动态系统运行上下文注入与软提示词模板
 │   ├── embeddings.py              # BGE Embedding 惰性延迟加载器
 │   ├── vector_store.py            # FAISS 向量库增量构建与损坏自愈
-│   ├── retriever.py               # 混合检索 (语义 + BM25 并行重排)
-│   ├── reranker.py                # BGE-Reranker 重排器
+│   ├── retriever.py               # 混合检索：向量+BM25 双路召回 → 融合排序(RRF/精排) → 父块展开 → 相关性门禁
+│   ├── reranker.py                # BGE-Reranker 重排器（未配置模型时自动降级，由 retriever 走 RRF 融合）
 │   ├── splitter.py / loader.py    # 文档切分与多格式解析 (父子块扩展)
 │   ├── dedup.py / rewriter.py     # 召回去重与查询改写
 │   └── tools/                     # 协同工具箱
@@ -143,7 +143,24 @@ flowchart TD
    * **主搜索引擎**：接入工业级 **Firecrawl 云端 search API** (`https://api.firecrawl.dev/v1/search`)，天然提取高纯度 Markdown 正文，100% 清除 ICP 备案、广告与导航噪声。
    * **后备与熔断器**：当网络波动时无缝降级至通用抽取器，并植入 **单轮调用物理熔断器 (`_check_and_increment_call`)**，同一个会话被调用超 2 次强行熔断，彻底斩断 ReAct 死循环。
 2. **`xiangliang_and_bm25_zhaohui` (FAISS RAG Tool)**：
-   * 本地 FAISS (稠密向量，Top-35) + BM25 (稀疏关键词，Top-6) 混合召回，经过 BGE-Reranker 重排截取 Top-15。支持父子块扩展机制（300 Tokens 子块检索命中自动扩展为 800 Tokens 父块）。
+   * 本地 FAISS (稠密向量，Top-35) + BM25 (稀疏关键词，Top-6) 双路混合召回，融合排序后返回上下文；支持父子块扩展机制（150~300 字子块命中自动扩展为 800 字父块，**最终条数 = 唯一父块数**）。
+   * **2026-09-17 检索链路修复（详见下节）**：BM25 接入中文分词、双路改用 RRF 融合、口语化问法增补多路视角、相关性门禁接受归一化问法。
+
+### 检索链路说明（2026-09-17 修订）
+
+> 本节描述的是**当前实际行为**，与旧版 README 的"经 BGE-Reranker 重排截取 Top-15"已不同 —— 重排模型需额外下载（`RERANKER_MODEL_PATH`），**默认未配置**，此时走 RRF 融合。
+
+| 环节 | 当前行为 |
+|---|---|
+| 召回 | 向量 Top-35 + BM25 Top-6，并行执行（本地模式约 20ms，不做 LLM 查询重写以省 3~6 秒） |
+| BM25 分词 | **中文二元组**（装了 jieba 则优先 jieba）。修前 langchain 默认 `text.split()` 会把整句中文切成 1 个 token，BM25 结果实为噪声 |
+| 融合 | **RRF（倒数排名融合，K=60）**：按通道内排名累加 `1/(K+rank)` 后取前 `TOP_K_RERANK`，避免"拼接后直接截断"把 BM25 一路整体饿死；重排模型可用时改为交给 BGE 精排 |
+| 多路视角 | 云端模式跑查询重写（最多 3 个视角）；本地模式**免 LLM**地用"口语→书面词"归一化视角补一路召回（如"在家上班"→"远程办公"） |
+| 父块展开 | 命中子块替换为父块正文后 `(source, content)` 去重 → **最终条数 = 唯一父块数**（通常 1~5 条，每条约 700 字，本身横跨多条条款） |
+| 相关性门禁 | 中文二元组门禁，挡跨领域误召回（如"不等式如何计算"→0 条）；若存在口语归一化问法，则"原问法 **或** 归一化问法命中即保留"（并集），避免口语提问被整条剔除 |
+| 条数上限 | 本地路径与 kb-tool 对齐为 `TOP_K_RERANK`（原为硬编码 2，跨主题提问会丢 2~3 个父块） |
+| 缓存失效 | 向量库增删改后 `_db_generation` 自增 → 检索器缓存自动重建；BM25 缓存 hash 已含分词器版本，分词策略变更会自动重建旧索引 |
+| 新文档可见性 | 上传接口内部链路：保存文件 → `reload_vector_store()` → 预热检索器 → `verify_file_indexed()` 自检 → 同一进程内**立刻可检索**（实测 Top-1 命中） |
 3. **`jisuanqi_tool` (Physical Sandbox Calculator)**：
    * 限制表达式 100 字符内，去除 `__builtins__` 的物理隔离安全沙箱计算器，解决大模型高维乘法与字节计算幻觉。
 4. **`wendang_zhaiyao_tool` (Summary Tool)**：

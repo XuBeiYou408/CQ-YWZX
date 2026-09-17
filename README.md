@@ -41,6 +41,7 @@
 | `data/sales_reports.db` | 销售周报 | SQLite 销售台账（含真实客户与金额）。启动时自动初始化并播种基线 |
 | `uploads/`、`exports/` | 简历筛查 / 销售周报 | 上传的原始附件、以及 Word/Markdown 导出产物 |
 | `.env` | 企业本地知识库 / kb-tool / 合同审查 | 真实云端密钥。脱敏范本 `.env.example` 已保留 |
+| `model_config.json` | 合同审查 | **模型管理配置（选择本地/云端模型）**；勾选云端时会写入 API Key，已 gitignore，缺失时自动以默认（本地 `google/gemma-4-e4b`）生成 |
 | `data/models/`、`data/faiss_db/` | 企业本地知识库 / kb-tool | BGE 模型权重（约 400MB）与 FAISS 索引；首次检索时自动下载 / 重建 |
 
 **保留在仓库中的数据**（属项目内容与可公开的测试数据）：企业知识库的制度文档
@@ -55,7 +56,8 @@
 每个子项目均为独立自治工程，请查阅对应项目目录下的 `README.md` 与前置配置：
 
 ### 1. [企业本地知识库](./企业本地知识库) (端口: `8010`)
-- **核心架构**：动态 LLM 工厂 + ReAct 自主规划环 + 混合检索 (Dense + Sparse) + 独立 Session 隔离。
+- **核心架构**：动态 LLM 工厂 + ReAct 自主规划环 + 混合检索 (Dense + Sparse，**双路 RRF 融合**) + 独立 Session 隔离。
+  > 检索链路 2026-09-17 已修订：BM25 接入中文分词、双路改用 RRF 融合（重排未配置时的默认路径）、口语化问法增补多路视角，细节见 `企业本地知识库/README.md` 的「检索链路说明」。
 - **前置条件与系统要求**：
   - **Python**：建议 3.11 – 3.13。
   - **Node.js 环境**：前端基于 Vue 3 + Vite 构建（**未附带 `dist` 构建产物**，首次使用需 `cd frontend && npm install && npm run build` 生成后再启动）。
@@ -69,7 +71,7 @@
 - **前置条件与系统要求**：
   - **Python**：建议 3.11 – 3.13。
   - **依赖管理**：双击 `一键启动.bat` 自动自举创建 `.venv` 并补全安装所有依赖（含 PyMuPDF、python-multipart、python-docx、FastAPI 等）。
-  - **大模型支持**：后台启动 LM Studio 并开启 Local Server（默认 `http://127.0.0.1:1234/v1`），或在工作台右上角切换并配置云端 API Key。
+  - **大模型支持**：后台启动 LM Studio 并开启 Local Server（默认 `http://127.0.0.1:1234/v1`），或在**右上角「模型管理」面板**切换云端 API（内置 DeepSeek / Kimi / 通义千问 / 智谱 GLM / 自定义，含连接测试）——面板保存后**立即生效**，无需重启；配置文件 `model_config.json`（已 gitignore）。
 - **启动方式**：进入 `合同审查/` 目录，双击运行 **`一键启动.bat`**。
 
 ### 3. [RecruitAI 简历初筛与深度尽调智能体](./简历筛查) (端口: `8030`)
